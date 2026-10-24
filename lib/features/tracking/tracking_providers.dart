@@ -23,6 +23,7 @@ import 'domain/foreground_service.dart';
 import 'domain/position_source.dart';
 import 'domain/tracking_engine.dart';
 import 'domain/trail_buffer.dart';
+import 'offline/offline_providers.dart';
 
 export 'data/geolocator_tracking_permission_gateway.dart';
 export 'domain/permission_flow.dart';
@@ -59,5 +60,6 @@ final Provider<TrackingEngine> trackingEngineProvider =
     batterySource: ref.watch(batterySourceProvider),
     serviceHandle: ref.watch(foregroundServiceProvider),
     trailBufferFactory: ref.watch(trailBufferFactoryProvider),
+    offlineWriteQueue: ref.watch(offlineWriteQueueProvider),
   ),
 );

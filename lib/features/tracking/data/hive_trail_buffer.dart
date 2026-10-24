@@ -33,7 +33,9 @@ class HiveTrailBuffer implements TrailBuffer {
   /// `Map<String/Object?>` with dynamic typing — normalize defensively.
   List<_StoredPoint> _read() {
     final raw = _box.get(trailBoxEntryKey);
-    if (raw is! List) return const <_StoredPoint>[];
+    // Growable: add()/putBackOldest() mutate the result — a const list made
+    // a FRESH box throw on its first add (silent zero-trail bug, F-D7).
+    if (raw is! List) return <_StoredPoint>[];
     return raw
         .whereType<Map>()
         .map((map) => Map<String, Object?>.from(map as Map<Object?, Object?>))
