@@ -20,5 +20,6 @@ Ambiguities surfaced by implementation. Defaults below follow the PRD wording; t
 | 14 | `gpsTrail.t` type / `batteryPct` type | Timestamp semantics / int 0–100. |
 | 15 | Doc `id` as a stored field | Mirrored in `toMap`; seeds keep doc id == stored `id` (as `vanSecrets` id implies). |
 | 16 | Trip watch query needs `(vanId, date)` composite index at scale | Flagged for Backend Owner; no contract-field additions. |
+| 17 | Mock-location latch mechanics | The `trips.mockLocationDetected` doc field IS the latch (read_model, kill/restart safe, idempotent writes); local engine flag only prevents redundant writes, cleared on hard write error → next mocked fix retries. App never writes `false`. Ruling 7 stands: no staff push. |
 
 ADR candidates still open: resume-vs-duplicate-trip (04), out-of-order ward marking (07).
