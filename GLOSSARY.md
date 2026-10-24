@@ -74,6 +74,7 @@ Deferred work parking lot. Sweep at wave boundaries; every item moves out only w
 - [ ] Test-timer collision relies on event-loop FIFO — could flake on slow CI; fix with flush-interval offsets if seen. *(me)*
 - [ ] Banner (mock-location) can render for seconds after End Shift while D2 stays mounted — D2 disposes on navigation; harmless, watch during rehearsal. *(me → 14)*
 - [ ] `connectivity_plus` reports interface presence, not internet reachability — harmless (failed writes re-queue); rehearsal must test real airplane-mode. *(me → 14)*
+- [ ] `LocaleController` restore is fire-and-forget — very slow disk can render `en` for the first frame(s) before a stored `gu` lands (self-correcting); watch during rehearsal. *(me → 14)*
 
 ### Improvement Bag
 - [ ] Locale flip `en` → `gu` before demo (grilled decision; arb files ready). *(me)*
@@ -88,6 +89,7 @@ Deferred work parking lot. Sweep at wave boundaries; every item moves out only w
 - [ ] Notices push parity — driver-device topic-only for now. *(Backend Owner)*
 - [ ] Deploy real `verifyDriverPin` callable + seed vans docs (shaped per 0.7; emulator port 5001 wired, code-mapping switch marked "refine with Backend Owner"). *(Backend Owner)*
 - [ ] `connectivity_plus` dependency sits outside the 0.6 package list — record sign-off. *(Backend Owner)*
+- [ ] `shared_preferences` dependency sits outside the 0.6 package list — record sign-off alongside `connectivity_plus`. *(Backend Owner)*
 
 ### Standing protocol (recorded 2026-10-24)
 1. Agent reports → gate (analyze + test in worktree) → merge → full-suite gate on main → rulings + glossary fold with bags updated.
