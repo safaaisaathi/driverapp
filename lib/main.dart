@@ -1,9 +1,23 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
 
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'core/config/firebase_bootstrap.dart';
 import 'core/l10n/app_localizations.dart';
 import 'core/theme/app_theme.dart';
 
-void main() => runApp(const DriverApp());
+Future<void> main() async {
+  // Boot wiring (Firebase init, emulator setup, anonymous session, FCM
+  // topic `all`) runs in the background and must NEVER hard-crash the app
+  // if Firebase/the emulator suite is unavailable (Ticket 02): failures
+  // degrade the app to silent retries, observable/awaitable through
+  // bootstrapProvider.
+  WidgetsFlutterBinding.ensureInitialized();
+  final container = ProviderContainer();
+  unawaited(runBootstrap(container));
+  runApp(UncontrolledProviderScope(container: container, child: const DriverApp()));
+}
 
 class DriverApp extends StatelessWidget {
   const DriverApp({super.key});
@@ -24,6 +38,7 @@ class DriverApp extends StatelessWidget {
 }
 
 /// Temporary Phase-0 placeholder. Replaced by D1 Shift Start (F-D1).
+/// Kept as-is per Ticket 02 (AAV rule: no UI work in this ticket).
 class _Phase0Placeholder extends StatelessWidget {
   const _Phase0Placeholder();
 
