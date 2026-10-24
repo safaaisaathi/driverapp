@@ -1,0 +1,9 @@
+{
+  "@@locale": "en",
+  "appTitle": "Driver App – Panchmahal",
+  "loading": "Loading…",
+  "empty": "Nothing here yet",
+  "error": "Something went wrong",
+  "offline": "You're offline",
+  "retry": "Retry"
+}
