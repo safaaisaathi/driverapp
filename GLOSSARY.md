@@ -43,3 +43,11 @@ _Avoid_: backlog, open ticket
 **Today**:
 The collection-day calendar date, resolved in Asia/Kolkata regardless of phone clock settings.
 _Avoid_: current date
+
+**Write Policy**:
+The rule that limits location writes: write only if the van moved at least 15 m since the last write, or 30 s passed since then, so a stopped van never looks dead.
+_Avoid_: throttle, GPS rule
+
+**Trail**:
+The ordered series of location points recorded during a Trip.
+_Avoid_: track log, route history
