@@ -56,6 +56,10 @@ _Avoid_: track log, route history
 A position fix the phone's provider marks as mocked (spoofed). Detection latches for the trip: `trips.mockLocationDetected` set true, never unset by the app; driver sees a warning banner.
 _Avoid_: fake GPS, spoofing
 
+**Shift Session**:
+The signed-in shift context the app holds in memory: vanId, tripId, routeId, startedAt (the `ShiftController` provider). Screens and the tracking engine read it; End Shift clears it.
+_Avoid_: login state, user data
+
 ## Bags (live state)
 
 Deferred work parking lot. Sweep at wave boundaries; every item moves out only when shipped, or ships as `shortcut:` code. Owner: me (agent), Backend Owner, or user.
@@ -81,6 +85,7 @@ Deferred work parking lot. Sweep at wave boundaries; every item moves out only w
 ### Feature Bag
 - [ ] Staff push on mock-location detection — no contract Cloud Function exists (ruling 7). *(Backend Owner)*
 - [ ] Notices push parity — driver-device topic-only for now. *(Backend Owner)*
+- [ ] Deploy real `verifyDriverPin` callable + seed vans docs (shaped per 0.7; emulator port 5001 wired, code-mapping switch marked "refine with Backend Owner"). *(Backend Owner)*
 
 ### Standing protocol (recorded 2026-10-24)
 1. Agent reports → gate (analyze + test in worktree) → merge → full-suite gate on main → rulings + glossary fold with bags updated.
