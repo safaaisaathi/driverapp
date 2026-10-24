@@ -526,6 +526,13 @@ class _FaultyVans implements VansRepository {
   @override
   Future<void> updateBatteryPct(String vanId, int batteryPct) =>
       _inner.updateBatteryPct(vanId, batteryPct);
+
+  @override
+  Future<Van?> readVan(String vanId) => _inner.readVan(vanId);
+
+  @override
+  Future<void> updateCurrentTripId(String vanId, String? tripId) =>
+      _inner.updateCurrentTripId(vanId, tripId);
 }
 
 class _FaultyTrips implements TripsRepository {
@@ -593,4 +600,7 @@ class _FaultyTrips implements TripsRepository {
     required String vanId,
     required DateTime date,
   }) => _inner.watchTripByVanIdAndDate(vanId: vanId, date: date);
+
+  @override
+  Future<Trip?> readTrip(String tripId) => _inner.readTrip(tripId);
 }

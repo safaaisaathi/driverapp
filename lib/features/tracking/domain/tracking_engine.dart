@@ -33,6 +33,7 @@ import 'package:driverapp/core/domain/write_policy.dart';
 import 'package:driverapp/core/models/models.dart';
 import 'package:driverapp/core/repositories/repositories.dart';
 
+import '../offline/offline_write_queue.dart';
 import 'battery_source.dart';
 import 'foreground_service.dart';
 import 'position_fix.dart';
@@ -147,6 +148,9 @@ class TrackingEngine {
     /// Test-only initial cadences; default to the contract constants.
     @visibleForTesting int? checkIntervalSec,
     @visibleForTesting int? flushIntervalSec,
+    /// F-D7: when wired, a failed location write queues the LATEST candidate
+    /// instead of being dropped (OfflineSyncService drains it on reconnect).
+    OfflineWriteQueue? offlineWriteQueue,
   })  : _vans = vansRepository,
         _trips = tripsRepository,
         _position = positionSource,
@@ -155,7 +159,8 @@ class TrackingEngine {
         _trailBufferFactory = trailBufferFactory, // ignore: prefer_initializing_formals
         _clock = clock ?? DateTime.now,
         _initialCheckInterval = checkIntervalSec ?? gpsIntervalSec,
-        _flushIntervalSec = flushIntervalSec ?? trailFlushIntervalSec;
+        _flushIntervalSec = flushIntervalSec ?? trailFlushIntervalSec,
+        _offlineWriteQueue = offlineWriteQueue; // ignore: prefer_initializing_formals
 
   final VansRepository _vans;
   final TripsRepository _trips;
@@ -170,6 +175,9 @@ class TrackingEngine {
   /// Test-only cadence overrides (see constructor).
   final int _initialCheckInterval;
   final int _flushIntervalSec;
+
+  /// F-D7 drain seam; null in tests that don't exercise the offline path.
+  final OfflineWriteQueue? _offlineWriteQueue;
 
   TrackingEngineState _state = TrackingEngineState.idle;
 
@@ -428,26 +436,39 @@ class TrackingEngine {
 
       if (!decision.shouldWrite) return;
 
-      await _vans.updateLastLocation(
-        vanId: vanId,
-        lat: fix.lat,
-        lng: fix.lng,
-        speedKmph: fix.speedKmph,
-      );
-      if (battery != null) {
-        await _vans.updateBatteryPct(vanId, battery);
+      try {
+        await _vans.updateLastLocation(
+          vanId: vanId,
+          lat: fix.lat,
+          lng: fix.lng,
+          speedKmph: fix.speedKmph,
+        );
+        if (battery != null) {
+          await _vans.updateBatteryPct(vanId, battery);
+        }
+        _lastWritten = (lat: fix.lat, lng: fix.lng);
+        _lastWriteAt = now;
+        // Revive only counts after a LANDED write (F-D7 note).
+        _reviveIfMarkedOffline(vanId);
+      } catch (error) {
+        // Dead zone (F-D7): queue the LATEST candidate; the queue's
+        // latest-only slot never re-sends older-than-newest positions.
+        final queue = _offlineWriteQueue;
+        if (queue == null) rethrow;
+        await queue.enqueueLastLocation(
+          vanId: vanId,
+          lat: fix.lat,
+          lng: fix.lng,
+          speedKmph: fix.speedKmph,
+          recordedAt: fix.t,
+        );
+      } finally {
+        // Trail point (0.13 Flow A): buffered EVEN when the write failed, so
+        // a dead zone loses no trail points; order = accept order.
+        await _trailBuffer?.add(
+          GpsPoint(lat: fix.lat, lng: fix.lng, t: fix.t),
+        );
       }
-
-      _lastWritten = (lat: fix.lat, lng: fix.lng);
-      _lastWriteAt = now;
-
-      // Trail point (0.13 Flow A): the accepted point is buffered for the
-      // next 30-second batch. Buffer order = accept order = trail order.
-      await _trailBuffer?.add(
-        GpsPoint(lat: fix.lat, lng: fix.lng, t: fix.t),
-      );
-
-      _reviveIfMarkedOffline(vanId);
     } catch (error) {
       debugPrint('tracking: cadence check failed (will retry): $error');
     }
