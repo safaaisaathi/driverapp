@@ -30,6 +30,9 @@ class FakeVansRepository implements VansRepository {
   Future<List<Van>> readVans() async => vans.values.toList();
 
   @override
+  Future<Van?> readVan(String vanId) async => vans[vanId];
+
+  @override
   Stream<Van?> watchVan(String vanId) {
     // Controller pattern, not async*: a suspended generator awaiting the
     // broadcast `_changes` stream keeps `pumpEventQueue()` from draining in
@@ -79,6 +82,13 @@ class FakeVansRepository implements VansRepository {
   @override
   Future<void> updateBatteryPct(String vanId, int batteryPct) async {
     final data = _requireVan(vanId).toMap()..['batteryPct'] = batteryPct;
+    vans[vanId] = Van.fromMap(data);
+    _changes.add(null);
+  }
+
+  @override
+  Future<void> updateCurrentTripId(String vanId, String? tripId) async {
+    final data = _requireVan(vanId).toMap()..['currentTripId'] = tripId;
     vans[vanId] = Van.fromMap(data);
     _changes.add(null);
   }
@@ -154,6 +164,9 @@ class FakeTripsRepository implements TripsRepository {
     trips[tripId] = Trip.fromMap(data);
     _changes.add(null);
   }
+
+  @override
+  Future<Trip?> readTrip(String tripId) async => trips[tripId];
 
   @override
   Stream<Trip?> watchTripByVanIdAndDate({

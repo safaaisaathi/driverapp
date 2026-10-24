@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/config/firebase_bootstrap.dart';
 import 'core/l10n/app_localizations.dart';
 import 'core/theme/app_theme.dart';
+import 'features/shift_start/ui/shift_start_screen.dart';
 
 Future<void> main() async {
   // Boot wiring (Firebase init, emulator setup, anonymous session, FCM
@@ -32,30 +33,9 @@ class DriverApp extends StatelessWidget {
       locale: const Locale('en'),
       supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
-      home: const _Phase0Placeholder(),
-    );
-  }
-}
-
-/// Temporary Phase-0 placeholder. Replaced by D1 Shift Start (F-D1).
-/// Kept as-is per Ticket 02 (AAV rule: no UI work in this ticket).
-class _Phase0Placeholder extends StatelessWidget {
-  const _Phase0Placeholder();
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.appTitle)),
-      body: Center(
-        child: Text(
-          l10n.loading,
-          style: Theme.of(context)
-              .textTheme
-              .bodyMedium!
-              .copyWith(color: AppTheme.colorTextMuted),
-        ),
-      ),
+      // D1 Shift Start is the app's home (F-D1); successful starts navigate
+      // to the BasicRoute placeholder (tracking engine = ticket 05).
+      home: const ShiftStartScreen(),
     );
   }
 }

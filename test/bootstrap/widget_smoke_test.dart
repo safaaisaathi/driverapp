@@ -23,11 +23,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    // Home is D1 Shift Start since ticket 04 (was the Phase-0 placeholder).
+    // Without Firebase the van read fails sync inside loadVans, so D1 shows
+    // its degraded (retryable) van-list state instead of crashing — the same
+    // degrade-don't-crash contract this smoke test checked on the placeholder.
     expect(find.byType(MaterialApp), findsOneWidget);
     expect(find.byType(Scaffold), findsOneWidget);
-    // The Phase-0 placeholder is intentionally unchanged (AAV rule).
-    expect(find.text('Driver App – Panchmahal'), findsOneWidget);
-    expect(find.text('Loading…'), findsOneWidget);
+    expect(find.text("Couldn't load vans"), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
   });
 
   testWidgets('bootstrap status reads degraded, never crashed', (tester) async {

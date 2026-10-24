@@ -195,10 +195,10 @@ Duration bootstrapRetryDelay(int attempt) =>
 /// Points Firestore/Auth at the local Emulator Suite (Ticket 02, PRD-2
 /// 0.10). Ports 8080 (Firestore) and 9099 (Auth) per Ticket 02; host via
 /// [kFirebaseEmulatorHost].
-// TODO(pin-ticket): wire Cloud Functions to port 5001 once `cloud_functions`
-// (verifyDriverPin, PRD-2 0.7) is added:
-//   FirebaseFunctions.instanceFor(app: app)
-//       .useFunctionsEmulator(kFirebaseEmulatorHost, kFunctionsEmulatorPort);
+///
+/// Cloud Functions (port 5001) is wired where the `verifyDriverPin`
+/// callable is constructed — `FirebaseCallablePinVerifier`
+/// (features/shift_start/data), F-D1 / Ticket 04.
 void _wireEmulators(FirebaseApp app) {
   FirebaseFirestore.instanceFor(app: app)
       .useFirestoreEmulator(kFirebaseEmulatorHost, kFirestoreEmulatorPort);
