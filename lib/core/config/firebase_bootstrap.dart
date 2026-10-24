@@ -23,9 +23,12 @@ library;
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:driverapp/features/tracking/offline/data/hive_firestore_timestamp_adapter.dart';
+import 'package:driverapp/features/tracking/offline/offline_providers.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
@@ -179,8 +182,22 @@ final class _BootProgress {
 
 /// Boot wiring entry point. Fire-and-forget from `main()` — never throws
 /// (Ticket 02); UI observes [bootstrapProvider] / awaits `done()`.
-Future<void> runBootstrap(ProviderContainer container) =>
-    container.read(bootstrapProvider.notifier).run();
+Future<void> runBootstrap(ProviderContainer container) async {
+  // F-D7 wiring lives here (not main.dart) because the boot container is
+  // the umbrella. Hive cannot serialize the Firestore `Timestamp` values
+  // carried by trail points — register once, before ANY feature box opens.
+  if (!Hive.isAdapterRegistered(207)) {
+    Hive.registerAdapter(FirestoreTimestampAdapter());
+  }
+  // The sync drain starts with boot and is idempotent; a host without
+  // platform channels (tests, CLI) just logs and boots on (ticket 02 rule).
+  try {
+    container.read(offlineSyncServiceProvider).start();
+  } catch (error) {
+    debugPrint('bootstrap: offline sync service not started: $error');
+  }
+  await container.read(bootstrapProvider.notifier).run();
+}
 
 /// Silent-retry backoff, `attempt` is 1-based. Cheap calls first so a
 /// missing emulator fails fast locally, but a flaky network on the road

@@ -24,6 +24,7 @@ import 'package:driverapp/features/tracking/domain/position_fix.dart';
 import 'package:driverapp/features/tracking/domain/position_source.dart';
 import 'package:driverapp/features/tracking/domain/tracking_engine.dart';
 import 'package:driverapp/features/tracking/domain/trail_buffer.dart';
+import 'package:driverapp/features/tracking/offline/offline_write_queue.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../repositories/fake_repositories.dart';
@@ -465,6 +466,44 @@ void main() {
       await engine.stop();
     });
   });
+
+  group('offline queue (F-D7)', () {
+    test('write failure → enqueue latest candidate; trail point still buffered',
+        () async {
+      final failingVans = _FailingVansRepository([van('van-01')]);
+      final queue = _RecordingOfflineQueue();
+      late final _FakeTrailBuffer buffer;
+      final engine = TrackingEngine(
+        vansRepository: failingVans,
+        tripsRepository: trips,
+        positionSource: positions,
+        batterySource: battery,
+        serviceHandle: service,
+        trailBufferFactory: (tripId) async => buffer = _FakeTrailBuffer(),
+        clock: () => clock,
+        checkIntervalSec: 1,
+        offlineWriteQueue: queue,
+      );
+      final started = await engine.start(
+        tripId: 'trip-1',
+        vanId: 'van-01',
+        notificationTitle: 'T',
+        notificationBody: '',
+      );
+      expect(started.isStarted, isTrue);
+
+      positions.emit(fixAt(22.6780));
+      await oneTick();
+
+      expect(queue.enqueued, hasLength(1));
+      expect(queue.enqueued.single, contains('van-01'));
+      expect(buffer.pendingCount, 1); // finally-branch buffered the point
+      expect(engine.state.status, TrackingRunStatus.running);
+
+      await engine.stop(); // final flush lands the buffered point
+      expect(trips.trips['trip-1']!.gpsTrail.length, 1);
+    });
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -537,4 +576,44 @@ class _FakeTrailBuffer implements TrailBuffer {
   @override
   Future<void> putBackOldest(List<GpsPoint> points) async =>
       _points.insertAll(0, points);
+}
+
+/// Vans repository whose location writes always fail (dead-zone fake).
+class _FailingVansRepository extends FakeVansRepository {
+  _FailingVansRepository(super.seed);
+
+  @override
+  Future<void> updateLastLocation({
+    required String vanId,
+    required double lat,
+    required double lng,
+    required double speedKmph,
+    DateTime? updatedAt,
+  }) async =>
+      throw StateError('offline');
+}
+
+/// Records enqueue calls as compact strings; the real drain is ticket 12's.
+class _RecordingOfflineQueue implements OfflineWriteQueue {
+  final List<String> enqueued = <String>[];
+
+  @override
+  Future<void> enqueueLastLocation({
+    required String vanId,
+    required double lat,
+    required double lng,
+    required double speedKmph,
+    required DateTime recordedAt,
+  }) async {
+    enqueued.add('$vanId@$lat');
+  }
+
+  @override
+  Future<QueuedLastLocation?> takeLastLocation() async => null;
+
+  @override
+  Future<void> putBackLastLocation(QueuedLastLocation item) async {}
+
+  @override
+  Future<int> get pendingLastLocationCount async => enqueued.length;
 }
