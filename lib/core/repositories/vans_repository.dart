@@ -31,4 +31,14 @@ abstract class VansRepository {
 
   /// Sets `vans.batteryPct` for the low-battery GPS interval (0.13).
   Future<void> updateBatteryPct(String vanId, int batteryPct);
+
+  /// Sets `vans.currentTripId` (0.2): written at shift start and cleared
+  /// at End Shift (behaviour rules 3 / 0.13 F-D1+F-D5). Resume never
+  /// duplicates trips reads it back.
+  ///
+  /// Contract note: the 0.8 rules summary lists only `lastLocation`,
+  /// `status`, `batteryPct` in the driver's write scope, but 0.13's
+  /// app behaviour requires writing `currentTripId` — recorded in the
+  /// F-D1 ticket report for the Backend Owner (0.8 update pending).
+  Future<void> updateCurrentTripId(String vanId, String? tripId);
 }

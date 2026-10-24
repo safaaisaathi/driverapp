@@ -83,6 +83,13 @@ class FakeVansRepository implements VansRepository {
     _changes.add(null);
   }
 
+  @override
+  Future<void> updateCurrentTripId(String vanId, String? tripId) async {
+    final data = _requireVan(vanId).toMap()..['currentTripId'] = tripId;
+    vans[vanId] = Van.fromMap(data);
+    _changes.add(null);
+  }
+
   Van _requireVan(String vanId) {
     final van = vans[vanId];
     if (van == null) {

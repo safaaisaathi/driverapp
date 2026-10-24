@@ -56,6 +56,11 @@ final class FirestoreVansRepository implements VansRepository {
   Future<void> updateBatteryPct(String vanId, int batteryPct) =>
       _vans.doc(vanId).update(<String, Object?>{'batteryPct': batteryPct});
 
+  @override
+  Future<void> updateCurrentTripId(String vanId, String? tripId) => _vans
+      .doc(vanId)
+      .update(<String, Object?>{'currentTripId': tripId});
+
   Van _vanFromDoc(QueryDocumentSnapshot<Map<String, Object?>> doc) =>
       Van.fromMap(_docDataWithId(doc.id, doc.data()));
 
