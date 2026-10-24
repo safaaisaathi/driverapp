@@ -181,6 +181,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Your van\'s location is shared while on shift.'**
   String get trackingNotificationBody;
+
+  /// No description provided for @mockLocationWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Your phone is faking its location. Tracking continues, and the office will see this notice.'**
+  String get mockLocationWarning;
 }
 
 class _AppLocalizationsDelegate
