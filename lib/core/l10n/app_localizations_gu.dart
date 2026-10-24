@@ -57,4 +57,8 @@ class AppLocalizationsGu extends AppLocalizations {
   @override
   String get trackingNotificationBody =>
       'શિફ્ટ દરમિયાન તમારી વેનની લોકેશન શેર થાય છે.';
+
+  @override
+  String get mockLocationWarning =>
+      'તમારો ફોન લોકેશન ખોટી રીતે બતાવી રહ્યો છે. ટ્રેકિંગ ચાલુ રહેશે, અને કચેરીને આ નોંધ દેખાશે.';
 }

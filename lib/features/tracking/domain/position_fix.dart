@@ -15,14 +15,20 @@ class VanFix {
   /// When the fix was taken (device clock; trail point `t`).
   final DateTime t;
 
+  /// Whether the Android position provider flagged this fix as a mock
+  /// (geolocator `Position.isMocked`) — intake for the F-D9 latch.
+  final bool isMocked;
+
   const VanFix({
     required this.lat,
     required this.lng,
     required this.speedKmph,
     required this.t,
+    this.isMocked = false,
   });
 
   @override
   String toString() =>
-      'VanFix(lat: $lat, lng: $lng, speedKmph: $speedKmph, t: $t)';
+      'VanFix(lat: $lat, lng: $lng, speedKmph: $speedKmph, t: $t, '
+      'isMocked: $isMocked)';
 }

@@ -195,6 +195,12 @@ class TrackingEngine {
   Van? _latestVan;
   bool _stopping = false;
 
+  /// F-D9 local latch: avoids re-calling the repository write for every mock
+  /// fix. NOT the ground truth — `trips.mockLocationDetected` in the trip doc
+  /// is (kill/restart safe, never unset by the app). Latched here after the
+  /// first mocked fix; a failed write re-arms the write for the next mock.
+  bool _mockLocationLatched = false;
+
   /// Starts tracking for a trip the caller (D1 Start Shift) has just created
   /// after switching the van on_shift.
   ///
@@ -246,6 +252,10 @@ class TrackingEngine {
     _intervalSec = _initialCheckInterval;
     _stopping = false;
 
+    // F-D9 latch is trip-scoped: a fresh run starts unlatched; the ground
+    // truth (`trips.mockLocationDetected`) is never unset by the app.
+    _mockLocationLatched = false;
+
     // Trail buffer for THIS trip ('trail-<tripId>').
     final buffer = await _trailBufferFactory(tripId);
     _trailBuffer = buffer;
@@ -256,10 +266,11 @@ class TrackingEngine {
 
     // distanceFilter = minMoveM (PRD-2 F-D2 step 3). Fixes only update the
     // latest candidate; writes happen on the policy cadence below
-    // (contract ruling: the interval is cadence-only).
+    // (contract ruling: the interval is cadence-only). The intake point also
+    // runs the F-D9 mock-location hook (see [_onFixIntake]).
     _fixSub = _position
         .fixes(distanceFilterM: minMoveM)
-        .listen((fix) => _latestFix = fix);
+        .listen(_onFixIntake);
 
     // Cadence check + trail flush timers.
     _checkTimer = Timer.periodic(
@@ -321,6 +332,35 @@ class TrackingEngine {
   // ---------------------------------------------------------------------------
   // internals
   // ---------------------------------------------------------------------------
+
+  /// Position intake (F-D2 step 3): every fix updates the write-policy
+  /// candidate. F-D9 rides on the same point: a mocked fix latches
+  /// `trips.mockLocationDetected = true` on the open trip, at most once per
+  /// run (the local latch; the app NEVER writes `false` — the doc field is
+  /// the latch the office and the banner read).
+  void _onFixIntake(VanFix fix) {
+    _latestFix = fix;
+    if (!fix.isMocked || _mockLocationLatched || _tripId == null) return;
+    _flagMockLocation();
+  }
+
+  /// Write the F-D9 latch through the repository (never direct Firestore).
+  /// A failed write re-arms the local latch so the next mocked fix retries;
+  /// offline connectivity alone cannot lose it, because (ruling 7) the repo
+  /// write is the only mutation and it only ever sets `true`.
+  void _flagMockLocation() {
+    final tripId = _tripId;
+    if (tripId == null) return;
+    _mockLocationLatched = true;
+    unawaited(
+      _trips.setMockLocationDetected(tripId, detected: true).catchError(
+            (Object error) {
+              debugPrint('tracking: mock-location flag failed: $error');
+              _mockLocationLatched = false; // retry on the next mock fix
+            },
+          ),
+    );
+  }
 
   Future<void> _applyStop() async {
     if (_tripId == null || _stopping) {

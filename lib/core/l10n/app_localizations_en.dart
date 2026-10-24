@@ -57,4 +57,8 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get trackingNotificationBody =>
       'Your van\'s location is shared while on shift.';
+
+  @override
+  String get mockLocationWarning =>
+      'Your phone is faking its location. Tracking continues, and the office will see this notice.';
 }

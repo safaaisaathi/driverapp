@@ -6,7 +6,8 @@
 /// writes, trail buffering/batching order, resume reattach, stop-flush,
 /// service-failure states, and the Flow F revive (offline → on_shift on
 /// next write). Real-device behaviour (permissions, service survival) is
-/// ticket 14.
+/// ticket 14. F-D9 (ticket 11): the mock/real intake hook latches
+/// `trips.mockLocationDetected` exactly once per trip run.
 ///
 /// Timer tests run on REAL timers with the test-only cadence overrides
 /// (`checkIntervalSec: 1`) instead of fakeAsync: fakeAsync cannot pump the
@@ -27,10 +28,28 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../repositories/fake_repositories.dart';
 
+/// The trips fake plus a call recorder: the latch acceptance is "the write
+/// happens at most once" — a doc-field read alone can't see repeat writes.
+class _RecordingTripsRepository extends FakeTripsRepository {
+  _RecordingTripsRepository([super.seed]);
+
+  /// Every `setMockLocationDetected` call, in order (latch ⇒ one call).
+  final List<bool> mockWrites = <bool>[];
+
+  @override
+  Future<void> setMockLocationDetected(
+    String tripId, {
+    required bool detected,
+  }) async {
+    mockWrites.add(detected);
+    await super.setMockLocationDetected(tripId, detected: detected);
+  }
+}
+
 void main() {
   // ---------------------------------------------------------------- fakes
   late FakeVansRepository vans;
-  late FakeTripsRepository trips;
+  late _RecordingTripsRepository trips;
   late _FakePositions positions;
   late _FakeBattery battery;
   late _FakeService service;
@@ -73,7 +92,7 @@ void main() {
 
   setUp(() {
     vans = FakeVansRepository([van('van-01')]);
-    trips = FakeTripsRepository([
+    trips = _RecordingTripsRepository([
       // The engine never creates trips — the trip doc exists before the
       // engine starts (Start Shift / D1 creates it; ticket 04).
       Trip(
@@ -367,6 +386,81 @@ void main() {
       await oneTick();
 
       expect(vans.vans['van-01']!.status, VanStatus.onShift);
+
+      await engine.stop();
+    });
+  });
+
+  // ---------------------------------------------------------------- F-D9
+  group('mock-location latch (ticket 11 / F-D9)', () {
+    VanFix mockAt(double lat) =>
+        VanFix(lat: lat, lng: 77.0, speedKmph: 12, t: clock, isMocked: true);
+
+    Future<TrackingEngine> runEngine() async {
+      final engine = buildEngine();
+      await engine.start(
+        tripId: 'trip-1',
+        vanId: 'van-01',
+        notificationTitle: 'T',
+        notificationBody: '',
+      );
+      return engine;
+    }
+
+    test('one mock fix latches trips.mockLocationDetected = true', () async {
+      final engine = await runEngine();
+
+      positions.emit(mockAt(22.6780));
+      await oneTick();
+
+      expect(trips.mockWrites, [true]); // set through the repository seam
+      expect(trips.trips['trip-1']!.mockLocationDetected, isTrue);
+
+      await engine.stop();
+    });
+
+    test('many mock fixes → the write happens ONCE (local latch)', () async {
+      final engine = await runEngine();
+
+      positions.emit(mockAt(22.6780));
+      await oneTick();
+      positions.emit(mockAt(22.67817));
+      await oneTick();
+      positions.emit(mockAt(22.6783));
+      await oneTick();
+
+      expect(trips.mockWrites, hasLength(1)); // never re-written per fix
+      await engine.stop();
+    });
+
+    test('real fixes never set the field', () async {
+      final engine = await runEngine();
+
+      positions.emit(fixAt(22.6780)); // real (isMocked defaults false)
+      await oneTick();
+      positions.emit(fixAt(22.67817));
+      await oneTick();
+
+      expect(trips.mockWrites, isEmpty);
+      expect(trips.trips['trip-1']!.mockLocationDetected, isFalse);
+
+      await engine.stop();
+    });
+
+    test('latch persists across later REAL fixes (never unset)', () async {
+      final engine = await runEngine();
+
+      positions.emit(mockAt(22.6780));
+      await oneTick();
+      expect(trips.trips['trip-1']!.mockLocationDetected, isTrue);
+
+      positions.emit(fixAt(22.67817)); // driver stops mocking; real GPS again
+      await oneTick();
+      positions.emit(fixAt(22.6783));
+      await oneTick();
+
+      expect(trips.mockWrites, hasLength(1)); // no write of false, ever
+      expect(trips.trips['trip-1']!.mockLocationDetected, isTrue);
 
       await engine.stop();
     });

@@ -32,6 +32,7 @@ VanFix positionToVanFix(Position position) => VanFix(
       lng: position.longitude,
       speedKmph: _clampSpeedKmph(position.speed),
       t: position.timestamp,
+      isMocked: position.isMocked,
     );
 
 VanFix _toVanFix(Position position) => positionToVanFix(position);

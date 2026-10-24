@@ -14,5 +14,7 @@
   "trackingPermissionDenied": "Tracking is off. You can start it again later – your shift is safe.",
   "trackingGpsOff": "Phone location (GPS) is turned off. Turn it on and try again.",
   "trackingNotificationTitle": "Tracking active",
-  "trackingNotificationBody": "Your van's location is shared while on shift."
+  "trackingNotificationBody": "Your van's location is shared while on shift.",
+
+  "mockLocationWarning": "Your phone is faking its location. Tracking continues, and the office will see this notice."
 }
