@@ -133,6 +133,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Retry'**
   String get retry;
+
+  /// No description provided for @trackingPermissionWhileInUseClaim.
+  ///
+  /// In en, this message translates to:
+  /// **'Tracking needs location access so your van can be seen on the live map.'**
+  String get trackingPermissionWhileInUseClaim;
+
+  /// No description provided for @trackingPermissionBackgroundClaim.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow ‘All the time’ so tracking keeps working after the screen turns off.'**
+  String get trackingPermissionBackgroundClaim;
+
+  /// No description provided for @trackingPermissionNotificationsClaim.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow notifications so the ‘Tracking active’ message stays visible.'**
+  String get trackingPermissionNotificationsClaim;
+
+  /// No description provided for @trackingPermissionBatteryClaim.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow battery exception so tracking lasts your whole shift.'**
+  String get trackingPermissionBatteryClaim;
+
+  /// No description provided for @trackingPermissionDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Tracking is off. You can start it again later – your shift is safe.'**
+  String get trackingPermissionDenied;
+
+  /// No description provided for @trackingGpsOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone location (GPS) is turned off. Turn it on and try again.'**
+  String get trackingGpsOff;
+
+  /// No description provided for @trackingNotificationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Tracking active'**
+  String get trackingNotificationTitle;
+
+  /// No description provided for @trackingNotificationBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your van\'s location is shared while on shift.'**
+  String get trackingNotificationBody;
 }
 
 class _AppLocalizationsDelegate
