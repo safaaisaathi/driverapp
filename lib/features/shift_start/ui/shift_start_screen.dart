@@ -51,16 +51,18 @@ class ShiftStartScreen extends ConsumerWidget {
         ref.read(shiftStartFlowProvider.notifier).clearNavigated();
       });
     }
-    return switch (flow.phase) {
-      ShiftFlowPhase.loadingVans => const _VanListLoading(),
-      ShiftFlowPhase.vanListFailed => const _VanListError(),
-      ShiftFlowPhase.onShift => const _VanListLoading(),
-      ShiftFlowPhase.pickVan ||
-      ShiftFlowPhase.verifyingPin ||
-      ShiftFlowPhase.readyToStart ||
-      ShiftFlowPhase.startingShift =>
-        const _VanPicker(),
-    };
+    return Scaffold(
+      body: switch (flow.phase) {
+        ShiftFlowPhase.loadingVans => const _VanListLoading(),
+        ShiftFlowPhase.vanListFailed => const _VanListError(),
+        ShiftFlowPhase.onShift => const _VanListLoading(),
+        ShiftFlowPhase.pickVan ||
+        ShiftFlowPhase.verifyingPin ||
+        ShiftFlowPhase.readyToStart ||
+        ShiftFlowPhase.startingShift =>
+          const _VanPicker(),
+      },
+    );
   }
 }
 

@@ -30,6 +30,11 @@ abstract class TripsRepository {
     required bool detected,
   });
 
+  /// Reads one trip doc once (`null` when it vanished). The resume branch
+  /// reattaches to the existing trip through this read (F-D1, ticket 04)
+  /// so the fresh `ShiftSession` carries the trip's exact identity.
+  Future<Trip?> readTrip(String tripId);
+
   /// Watch today's trip for [vanId]: the open (or just-closed) trip whose
   /// `date` is [date] — the resume-never-duplicate seam and the live route
   /// screen both read through this.

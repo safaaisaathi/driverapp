@@ -143,6 +143,9 @@ class FlakyVansRepository implements VansRepository {
   }
 
   @override
+  Future<Van?> readVan(String vanId) => inner.readVan(vanId);
+
+  @override
   Stream<Van?> watchVan(String vanId) => inner.watchVan(vanId);
 
   @override

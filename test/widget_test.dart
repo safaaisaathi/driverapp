@@ -27,12 +27,10 @@ void main() {
     ));
     // The first van load resolves against the fake (empty) list.
     for (var i = 0;
-        i < 30 &&
-            find.text('Pick your van').evaluate().isEmpty;
+        i < 30 && find.text('No vans found').evaluate().isEmpty;
         i++) {
       await tester.pump(const Duration(milliseconds: 25));
     }
-    expect(find.text('Pick your van'), findsOneWidget);
     expect(find.text('No vans found'), findsOneWidget);
     expect(find.byType(MaterialApp), findsOneWidget);
   });

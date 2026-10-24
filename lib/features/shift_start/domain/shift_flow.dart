@@ -162,18 +162,21 @@ class ShiftStartFlowController extends Notifier<ShiftFlowState> {
         phase: ShiftFlowPhase.loadingVans,
       );
 
-  VansRepository get _vans =>
-      ref.watch(vansRepositoryProvider);
+  // Imperative reads (not watches): this controller drives clicks and
+  // retriable loads; it must not be rebuilt when a repository provider is
+  // (re)created — a rebuild would reset `_initialLoadRun` and loop D1's
+  // loading state (seen live in the degraded/no-Firebase smoke test).
+  VansRepository get _vans => ref.read(vansRepositoryProvider);
 
-  TripsRepository get _trips => ref.watch(tripsRepositoryProvider);
+  TripsRepository get _trips => ref.read(tripsRepositoryProvider);
 
-  RoutesRepository get _routes => ref.watch(routesRepositoryProvider);
+  RoutesRepository get _routes => ref.read(routesRepositoryProvider);
 
-  DriverPinVerifier get _pinVerifier => ref.watch(pinVerifierProvider);
+  DriverPinVerifier get _pinVerifier => ref.read(pinVerifierProvider);
 
-  DriverAuthGateway get _auth => ref.watch(driverAuthGatewayProvider);
+  DriverAuthGateway get _auth => ref.read(driverAuthGatewayProvider);
 
-  MessagingGateway get _messaging => ref.watch(driverMessagingGatewayProvider);
+  MessagingGateway get _messaging => ref.read(driverMessagingGatewayProvider);
 
   /// Loads the van list + route names; retryable from the error state.
   Future<void> loadVans() async {
@@ -212,30 +215,18 @@ class ShiftStartFlowController extends Notifier<ShiftFlowState> {
   /// Verifies the PIN (callable) and signs in with the custom token.
   /// Wrong PIN / lockout surface as localized failure flags, never crash.
   Future<void> submitPin(String pin) async {
-    // ignore: avoid_print
-    print('FLOW submitPin enter pin=$pin');
     final selected = state.selectedVan;
     if (selected == null || pin.length != 4) return;
-    // ignore: avoid_print
-    print('FLOW submitPin guard-pass');
     state = state
         .copyWith(phase: ShiftFlowPhase.verifyingPin)
         .clearFailure();
     try {
       final token =
           await _pinVerifier.verifyPin(vanId: selected.van.id, pin: pin);
-      // ignore: avoid_print
-      print('FLOW verifier returned token=$token');
       await _auth.signInWithCustomToken(token);
-      // ignore: avoid_print
-      print('FLOW auth returned');
       // Refresh the van snapshot: it may already hold an open shift from
       // an earlier session — that picks the Resume branch later.
-      // ignore: avoid_print
-      print('FLOW before latestVan');
       final fresh = await _latestVan(selected.van.id);
-      // ignore: avoid_print
-      print('FLOW latestVan got ${fresh?.id}');
       if (fresh == null) {
         state = state.copyWith(
           phase: ShiftFlowPhase.pickVan,
@@ -249,11 +240,7 @@ class ShiftStartFlowController extends Notifier<ShiftFlowState> {
         vans: _replaceVan(fresh),
         resumable: resumable,
       );
-      // ignore: avoid_print
-      print('FLOW readyToStart set');
     } on DriverPinException catch (pinError) {
-      // ignore: avoid_print
-      print('FLOW DriverPinException ${pinError.kind}');
       state = state.copyWith(
         phase: ShiftFlowPhase.pickVan,
         failure: switch (pinError.kind) {
@@ -264,8 +251,6 @@ class ShiftStartFlowController extends Notifier<ShiftFlowState> {
         },
       );
     } on Exception {
-      // ignore: avoid_print
-      print('FLOW generic Exception in submitPin');
       state = state.copyWith(
         phase: ShiftFlowPhase.pickVan,
         failure: ShiftFlowFailure.verifyUnavailable,
@@ -350,7 +335,7 @@ class ShiftStartFlowController extends Notifier<ShiftFlowState> {
   bool _isResumable(Van van) =>
       van.currentTripId != null && van.status == VanStatus.onShift;
 
-  Future<Van?> _latestVan(String vanId) => _vans.watchVan(vanId).first;
+  Future<Van?> _latestVan(String vanId) => _vans.readVan(vanId);
 
   /// Fresh start (0.13 behaviour rules 3): trip doc + van marker writes,
   /// in that order, each through its repository.
@@ -385,24 +370,22 @@ class ShiftStartFlowController extends Notifier<ShiftFlowState> {
     );
   }
 
-  /// Resume branch: the existing trip's identity comes back untouched.
+  /// Resume branch: the existing trip's identity comes back untouched
+  /// (read, not watch — the resume reattach is a one-time decision).
   Future<ShiftSession> _resumeSession(Van van, DateTime now) async {
     final tripId = van.currentTripId!;
-    final date = utcStartOfIstDay(now);
-    final todayTrip = await _trips
-        .watchTripByVanIdAndDate(vanId: van.id, date: date)
-        .first;
-    final startedAt = todayTrip != null && todayTrip.id == tripId
-        ? todayTrip.startedAt
-        // Edge (trip from an earlier IST day left open): keep going with
-        // the local clock estimate — never block the driver.
-        : now;
+    final todayTrip = await _trips.readTrip(tripId);
+    if (todayTrip != null && todayTrip.vanId != van.id) {
+      // Defensive: the referenced trip belongs to another van — treat the
+      // marker as stale and fail the reattach surface, never invent state.
+      throw StateError('currentTripId "$tripId" does not match this van');
+    }
     return ShiftSession(
       vanId: van.id,
       tripId: tripId,
       routeId: van.routeId,
-      startedAt: startedAt,
-      date: todayTrip?.date ?? date,
+      startedAt: todayTrip?.startedAt ?? now,
+      date: todayTrip?.date ?? utcStartOfIstDay(now),
     );
   }
 

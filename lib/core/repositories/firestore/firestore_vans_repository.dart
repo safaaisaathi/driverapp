@@ -20,6 +20,14 @@ final class FirestoreVansRepository implements VansRepository {
   }
 
   @override
+  Future<Van?> readVan(String vanId) async {
+    final snapshot = await _vans.doc(vanId).get();
+    if (!snapshot.exists) return null;
+    final data = snapshot.data()!;
+    return Van.fromMap(_docDataWithId(snapshot.id, data));
+  }
+
+  @override
   Stream<Van?> watchVan(String vanId) => _vans.doc(vanId).snapshots().map((snap) {
         if (!snap.exists) return null;
         return Van.fromMap(_docDataWithId(snap.id, snap.data()!));
