@@ -295,6 +295,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Your phone is faking its location. Tracking continues, and the office will see this notice.'**
   String get mockLocationWarning;
+
+  /// No description provided for @languageChangeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Change language'**
+  String get languageChangeHint;
+
+  /// No description provided for @languageNameEn.
+  ///
+  /// In en, this message translates to:
+  /// **'English'**
+  String get languageNameEn;
+
+  /// No description provided for @languageNameGu.
+  ///
+  /// In en, this message translates to:
+  /// **'ગુજરાતી'**
+  String get languageNameGu;
 }
 
 class _AppLocalizationsDelegate

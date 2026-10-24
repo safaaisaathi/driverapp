@@ -55,10 +55,14 @@ void main() {
         overrides: [localeStoreProvider.overrideWithValue(store)],
       );
     });
-    tearDown(container.dispose);
+    tearDown(() {
+      container.dispose();
+    });
 
     test('fresh install: no stored pref → no stored choice (null state; '
         'the dev-phase fallback keeps the app on en)', () async {
+      // First read = the app mounting its watch (DriverApp); kicks restore.
+      container.read(localeControllerProvider);
       await flushRestore();
       expect(container.read(localeControllerProvider), isNull);
     });
@@ -66,6 +70,7 @@ void main() {
     test('restore: a stored choice re-applies on first read (no tap needed)',
         () async {
       store.values[localePrefKey] = 'gu';
+      container.read(localeControllerProvider);
       await flushRestore();
       expect(container.read(localeControllerProvider), const Locale('gu'));
     });
@@ -73,6 +78,7 @@ void main() {
     test('corrupt stored value → degrades to no choice (en fallback)',
         () async {
       store.values[localePrefKey] = 'hi';
+      container.read(localeControllerProvider);
       await flushRestore();
       expect(container.read(localeControllerProvider), isNull);
     });
@@ -102,6 +108,8 @@ void main() {
         overrides: [localeStoreProvider.overrideWithValue(store)],
       );
       addTearDown(restarted.dispose);
+      // First read = the fresh app mounting its watch; then let restore land.
+      restarted.read(localeControllerProvider);
       await flushRestore();
 
       expect(restarted.read(localeControllerProvider), const Locale('gu'));

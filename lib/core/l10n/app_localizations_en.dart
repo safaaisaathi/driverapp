@@ -118,4 +118,13 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get mockLocationWarning =>
       'Your phone is faking its location. Tracking continues, and the office will see this notice.';
+
+  @override
+  String get languageChangeHint => 'Change language';
+
+  @override
+  String get languageNameEn => 'English';
+
+  @override
+  String get languageNameGu => 'ગુજરાતી';
 }

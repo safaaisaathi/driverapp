@@ -35,5 +35,9 @@
   "trackingNotificationTitle": "Tracking active",
   "trackingNotificationBody": "Your van's location is shared while on shift.",
 
-  "mockLocationWarning": "Your phone is faking its location. Tracking continues, and the office will see this notice."
+  "mockLocationWarning": "Your phone is faking its location. Tracking continues, and the office will see this notice.",
+
+  "languageChangeHint": "Change language",
+  "languageNameEn": "English",
+  "languageNameGu": "ગુજરાતી"
 }

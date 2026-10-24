@@ -173,12 +173,15 @@ void main() {
     );
   });
 
-  testWidgets('a11y: the toggle exposes a localized change-language hint',
+  testWidgets(
+      'a11y: the toggle exposes a localized change-language hint',
       (tester) async {
     final semantics = tester.ensureSemantics();
-    addTearDown(semantics.dispose);
     await pumpDriverApp(tester, store: InMemoryLocaleStore());
     await pumpUntilFound(tester, find.bySemanticsLabel('Change language'));
+    // End-of-test verification requires every handle gone; dispose here
+    // (before the framework's checks) not in addTearDown.
+    semantics.dispose();
   });
 
   test('gu labels keep the Gujarati script shape (rendering gate for the '

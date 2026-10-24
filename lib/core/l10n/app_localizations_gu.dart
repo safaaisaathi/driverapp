@@ -117,4 +117,13 @@ class AppLocalizationsGu extends AppLocalizations {
   @override
   String get mockLocationWarning =>
       'તમારો ફોન લોકેશન ખોટી રીતે બતાવી રહ્યો છે. ટ્રેકિંગ ચાલુ રહેશે, અને કચેરીને આ નોંધ દેખાશે.';
+
+  @override
+  String get languageChangeHint => 'ભાષા બદલો';
+
+  @override
+  String get languageNameEn => 'English';
+
+  @override
+  String get languageNameGu => 'ગુજરાતી';
 }

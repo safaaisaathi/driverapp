@@ -13,6 +13,7 @@ import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/app_theme.dart';
 import '../domain/shift_flow.dart';
 import 'basic_route_placeholder.dart';
+import 'language_toggle.dart';
 
 /// D1 entry widget. `onShiftStarted` defaults to pushing the route
 /// placeholder (ticket 05 will replace the destination).
@@ -52,16 +53,38 @@ class ShiftStartScreen extends ConsumerWidget {
       });
     }
     return Scaffold(
-      body: switch (flow.phase) {
-        ShiftFlowPhase.loadingVans => const _VanListLoading(),
-        ShiftFlowPhase.vanListFailed => const _VanListError(),
-        ShiftFlowPhase.onShift => const _VanListLoading(),
-        ShiftFlowPhase.pickVan ||
-        ShiftFlowPhase.verifyingPin ||
-        ShiftFlowPhase.readyToStart ||
-        ShiftFlowPhase.startingShift =>
-          const _VanPicker(),
-      },
+      // F-D10 (ticket 13): a slim always-on row at the top end holds the
+      // language toggle — visible on every D1 phase, one hand's reach,
+      // never fighting the picker for attention.
+      body: Column(
+        children: [
+          SafeArea(
+            bottom: false,
+            child: Align(
+              alignment: AlignmentDirectional.topEnd,
+              heightFactor: 1,
+              child: const Padding(
+                padding: EdgeInsetsDirectional.only(
+                  end: AppTheme.spacingUnit * 2,
+                ),
+                child: LanguageToggleButton(),
+              ),
+            ),
+          ),
+          Expanded(
+            child: switch (flow.phase) {
+              ShiftFlowPhase.loadingVans => const _VanListLoading(),
+              ShiftFlowPhase.vanListFailed => const _VanListError(),
+              ShiftFlowPhase.onShift => const _VanListLoading(),
+              ShiftFlowPhase.pickVan ||
+              ShiftFlowPhase.verifyingPin ||
+              ShiftFlowPhase.readyToStart ||
+              ShiftFlowPhase.startingShift =>
+                const _VanPicker(),
+            },
+          ),
+        ],
+      ),
     );
   }
 }
