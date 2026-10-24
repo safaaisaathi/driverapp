@@ -83,4 +83,35 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get trackingPending => 'Van tracking will start automatically.';
+
+  @override
+  String get trackingPermissionWhileInUseClaim =>
+      'Tracking needs location access so your van can be seen on the live map.';
+
+  @override
+  String get trackingPermissionBackgroundClaim =>
+      'Allow ‘All the time’ so tracking keeps working after the screen turns off.';
+
+  @override
+  String get trackingPermissionNotificationsClaim =>
+      'Allow notifications so the ‘Tracking active’ message stays visible.';
+
+  @override
+  String get trackingPermissionBatteryClaim =>
+      'Allow battery exception so tracking lasts your whole shift.';
+
+  @override
+  String get trackingPermissionDenied =>
+      'Tracking is off. You can start it again later – your shift is safe.';
+
+  @override
+  String get trackingGpsOff =>
+      'Phone location (GPS) is turned off. Turn it on and try again.';
+
+  @override
+  String get trackingNotificationTitle => 'Tracking active';
+
+  @override
+  String get trackingNotificationBody =>
+      'Your van\'s location is shared while on shift.';
 }

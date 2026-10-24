@@ -82,4 +82,35 @@ class AppLocalizationsGu extends AppLocalizations {
 
   @override
   String get trackingPending => 'વેન ટ્રેકિંગ આપોઆપ શરૂ થશે.';
+
+  @override
+  String get trackingPermissionWhileInUseClaim =>
+      'ટ્રેકિંગ માટે લોકેશનની પરવાનગી આપો, જેથી તમારી વેન લાઇવ નકશામાં દેખાય.';
+
+  @override
+  String get trackingPermissionBackgroundClaim =>
+      'લોકેશનને ‘બધી વખત’ મંજૂરી આપો, જેથી સ્ક્રીન બંધ થાય પછી પણ ટ્રેકિંગ ચાલુ રહે.';
+
+  @override
+  String get trackingPermissionNotificationsClaim =>
+      '‘ટ્રેકિંગ ચાલુ છે’ સંદેશ દેખાય તે માટે નોટિફિકેશન મંજૂર કરો.';
+
+  @override
+  String get trackingPermissionBatteryClaim =>
+      'તમારી શિફ્ટ દરમિયાન ટ્રેકિંગ ચાલુ રહે તે માટે બેટરી બચતનો અપવાદ મંજૂર કરો.';
+
+  @override
+  String get trackingPermissionDenied =>
+      'ટ્રેકિંગ બંધ છે. તમે પછી ફરી શરૂ કરી શકશો – તમારી શિફ્ટ સુરક્ષિત છે.';
+
+  @override
+  String get trackingGpsOff =>
+      'ફોનનું લોકેશન (GPS) બંધ છે. તે ચાલુ કરો અને ફરી પ્રયાસ કરો.';
+
+  @override
+  String get trackingNotificationTitle => 'ટ્રેકિંગ ચાલુ છે';
+
+  @override
+  String get trackingNotificationBody =>
+      'શિફ્ટ દરમિયાન તમારી વેનની લોકેશન શેર થાય છે.';
 }

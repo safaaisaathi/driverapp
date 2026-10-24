@@ -24,5 +24,14 @@
   "verificationUnavailable": "Couldn't reach the office server. Check the connection and try again.",
   "shiftStarted": "Shift started",
   "basicRouteTitle": "Your route",
-  "trackingPending": "Van tracking will start automatically."
+  "trackingPending": "Van tracking will start automatically.",
+
+  "trackingPermissionWhileInUseClaim": "Tracking needs location access so your van can be seen on the live map.",
+  "trackingPermissionBackgroundClaim": "Allow \u2018All the time\u2019 so tracking keeps working after the screen turns off.",
+  "trackingPermissionNotificationsClaim": "Allow notifications so the \u2018Tracking active\u2019 message stays visible.",
+  "trackingPermissionBatteryClaim": "Allow battery exception so tracking lasts your whole shift.",
+  "trackingPermissionDenied": "Tracking is off. You can start it again later – your shift is safe.",
+  "trackingGpsOff": "Phone location (GPS) is turned off. Turn it on and try again.",
+  "trackingNotificationTitle": "Tracking active",
+  "trackingNotificationBody": "Your van's location is shared while on shift."
 }

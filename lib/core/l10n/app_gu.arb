@@ -24,5 +24,14 @@
   "verificationUnavailable": "ઓફિસ સર્વર સુધી પહોંચી શક્યા નથી. કનેક્શન તપાસીને ફરી પ્રયાસ કરો.",
   "shiftStarted": "શિફ્ટ શરૂ થઈ ગઈ",
   "basicRouteTitle": "તમારો રૂટ",
-  "trackingPending": "વેન ટ્રેકિંગ આપોઆપ શરૂ થશે."
+  "trackingPending": "વેન ટ્રેકિંગ આપોઆપ શરૂ થશે.",
+
+  "trackingPermissionWhileInUseClaim": "ટ્રેકિંગ માટે લોકેશનની પરવાનગી આપો, જેથી તમારી વેન લાઇવ નકશામાં દેખાય.",
+  "trackingPermissionBackgroundClaim": "લોકેશનને \u2018બધી વખત\u2019 મંજૂરી આપો, જેથી સ્ક્રીન બંધ થાય પછી પણ ટ્રેકિંગ ચાલુ રહે.",
+  "trackingPermissionNotificationsClaim": "\u2018ટ્રેકિંગ ચાલુ છે\u2019 સંદેશ દેખાય તે માટે નોટિફિકેશન મંજૂર કરો.",
+  "trackingPermissionBatteryClaim": "તમારી શિફ્ટ દરમિયાન ટ્રેકિંગ ચાલુ રહે તે માટે બેટરી બચતનો અપવાદ મંજૂર કરો.",
+  "trackingPermissionDenied": "ટ્રેકિંગ બંધ છે. તમે પછી ફરી શરૂ કરી શકશો – તમારી શિફ્ટ સુરક્ષિત છે.",
+  "trackingGpsOff": "ફોનનું લોકેશન (GPS) બંધ છે. તે ચાલુ કરો અને ફરી પ્રયાસ કરો.",
+  "trackingNotificationTitle": "ટ્રેકિંગ ચાલુ છે",
+  "trackingNotificationBody": "શિફ્ટ દરમિયાન તમારી વેનની લોકેશન શેર થાય છે."
 }
