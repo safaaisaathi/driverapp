@@ -36,6 +36,7 @@
   "trackingNotificationBody": "Your van's location is shared while on shift.",
 
 <<<<<<< HEAD
+<<<<<<< HEAD
   "mockLocationWarning": "Your phone is faking its location. Tracking continues, and the office will see this notice.",
 
   "languageChangeHint": "Change language",
@@ -63,4 +64,12 @@
   "routeEmptyMessage": "This route has no wards",
   "routeMissingMessage": "Route not found"
 >>>>>>> feat/driver-06-map-shell
+=======
+  "mockLocationWarning": "Your phone is faking its location. Tracking continues, and the office will see this notice.",
+
+  "pendingReportsTitle": "Pending reports",
+  "pendingReportsEmpty": "Nothing pending",
+  "willRevisit": "Will Revisit",
+  "markDone": "Done"
+>>>>>>> feat/driver-10-pending-reports
 }
