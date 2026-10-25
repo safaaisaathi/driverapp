@@ -93,7 +93,8 @@ Deferred work parking lot. Sweep at wave boundaries; every item moves out only w
 - [ ] `shared_preferences` dependency sits outside the 0.6 package list — record sign-off alongside `connectivity_plus`. *(Backend Owner)*
 
 ### Standing protocol (recorded 2026-10-24)
-1. Agent reports → gate (analyze + test in worktree) → merge → full-suite gate on main → rulings + glossary fold with bags updated.
+0. **USER VERIFICATION FIRST (directive 2026-10-25): after a feature (or the whole app) finishes building, verify it AS A USER WOULD — open the running app, click through the feature, judge by what appears on screen. Green tests/analyze are necessary but NOT verification.** Loop: launch window (or device) → screenshot → interact (xdotool clicks/taps on-adapted for desktop; real finger on device) → screenshot → assert visible behavior. Dev entrypoints drive feature-level checks offline (Firebase has no desktop plugin — main() shows a bootstrap error on Linux); full user-loop runs on Android device at ticket 14.
+1. Agent reports → gate (analyze + test in worktree) → merge → full-suite gate on main → **user verification of the merged feature (rule 0)** → rulings + glossary fold with bags updated.
 2. Next frontier wave launches immediately (dependency table in `.scratch/driver-app/README.md`).
 3. TDD from ticket 12 onward: failing tests first.
 4. Ticket 14 (serial, last): integration rehearsal, real-phone stabilization, delete dev entrypoints.
