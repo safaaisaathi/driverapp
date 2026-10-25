@@ -21,6 +21,8 @@ import 'package:driverapp/core/l10n/app_localizations.dart';
 import 'package:driverapp/core/theme/app_theme.dart';
 
 import 'package:driverapp/features/tracking/mock_location_banner.dart';
+import 'package:driverapp/features/notices/domain/notices_flow.dart';
+import 'package:driverapp/features/notices/ui/notices_screen.dart';
 
 import 'domain/live_route_state.dart';
 import 'live_route_providers.dart';
@@ -38,6 +40,10 @@ class LiveRouteScreen extends ConsumerWidget {
     final state = ref.watch(liveRouteStateProvider);
     final data = state is LiveRouteData ? state : null;
 
+    // Notices unread badge (ticket 09): the watch keeps the inbox listener
+    // alive while D2 is visible; badge hides at zero.
+    final unreadCount = ref.watch(unreadNoticesCountProvider);
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -47,13 +53,16 @@ class LiveRouteScreen extends ConsumerWidget {
         ),
         actions: [
           IconButton(
-            // Notices slot — badge placeholder; ticket 09 wires the inbox and
-            // the unread count. Keyed for the integration.
+            // Notices slot — badge count from the inbox flow; tap routes to
+            // the D3 inbox; keyed for tests.
             key: const Key('liveRoute.noticesPlaceholder'),
-            onPressed: null,
-            icon: const Badge(
-              isLabelVisible: false,
-              child: Icon(Icons.notifications),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const NoticesScreen()),
+            ),
+            icon: Badge(
+              isLabelVisible: unreadCount > 0,
+              label: Text('$unreadCount'),
+              child: const Icon(Icons.notifications),
             ),
             tooltip: AppLocalizations.of(context)!.noticesBadgeTooltip,
           ),
