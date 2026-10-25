@@ -177,4 +177,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get markDone => 'Done';
+
+  @override
+  String get noticesTitle => 'Notices';
+
+  @override
+  String get noticesEmpty => 'No notices';
 }

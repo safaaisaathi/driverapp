@@ -63,5 +63,8 @@
   "pendingReportsTitle": "Pending reports",
   "pendingReportsEmpty": "Nothing pending",
   "willRevisit": "Will Revisit",
-  "markDone": "Done"
+  "markDone": "Done",
+
+  "noticesTitle": "Notices",
+  "noticesEmpty": "No notices"
 }

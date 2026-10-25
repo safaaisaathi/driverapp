@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
 import 'package:driverapp/core/l10n/app_localizations.dart';
 import 'package:driverapp/core/models/models.dart';
@@ -160,12 +162,24 @@ final Notice pushedNotice = seedNotice(
 // -- scripted fakes (test-local, layered on the shared fakes) -----------------
 
 /// Records the exact repository watch arguments so tests can assert the
-/// query shape the controller asks for.
-class RecordingNoticesRepository extends FakeNoticesRepository {
-  RecordingNoticesRepository([super.seed]);
+/// query shape the controller asks for. Self-contained controller streams
+/// (not layered on the shared fake's private broadcast) so [addNotice] can
+/// push re-emissions to live listeners — the topic-push path's observable
+/// behaviour without touching the shared fakes.
+class RecordingNoticesRepository implements NoticesRepository {
+  RecordingNoticesRepository([Iterable<Notice>? seed])
+      : notices = {
+          for (final notice in seed ?? const <Notice>[]) notice.id: notice,
+        };
+
+  final Map<String, Notice> notices;
 
   /// Last watch arguments, verbatim from the controller.
   ({String vanId, List<String> wardIds})? lastQuery;
+
+  final _controllers =
+      <({StreamController<List<Notice>> controller, String vanId,
+          List<String> wardIds})>{};
 
   @override
   Stream<List<Notice>> watchNotices({
@@ -173,16 +187,57 @@ class RecordingNoticesRepository extends FakeNoticesRepository {
     required List<String> wardIds,
   }) {
     lastQuery = (vanId: vanId, wardIds: wardIds);
-    return super.watchNotices(vanId: vanId, wardIds: wardIds);
+    late StreamController<List<Notice>> controller;
+    controller = StreamController<List<Notice>>(
+      // Microtask, not synchronous: controller events may never be added
+      // from inside onListen (FakeAsync-safe flush semantics).
+      onListen: () {
+        scheduleMicrotask(
+          () => controller.add(_filtered(vanId, wardIds)),
+        );
+      },
+      onCancel: () => _controllers.remove(
+        (
+          controller: controller,
+          vanId: vanId,
+          wardIds: wardIds,
+        ),
+      ),
+    );
+    _controllers.add(
+      (
+        controller: controller,
+        vanId: vanId,
+        wardIds: wardIds,
+      ),
+    );
+    return controller.stream;
   }
 
-  /// Simulates a notice landing after the initial snapshot (the push path
-  /// is topic-subscription-only — the inbox sees it as a stream re-emission).
+  /// Simulates a notice landing after the initial snapshot (0.7 sendNotice
+  /// reaches the device via the van topic; the inbox observes it as a
+  /// stream re-emission).
   void addNotice(Notice notice) {
     notices[notice.id] = notice;
-    // Broadcast never resumes inside a test pump; the controller deliver
-    // goes through the controller stream, so notify listeners asynchronously.
-    scheduleMicrotask(() => _changes.add(null));
+    for (final live in _controllers) {
+      scheduleMicrotask(
+        () => live.controller.add(_filtered(live.vanId, live.wardIds)),
+      );
+    }
+  }
+
+  List<Notice> _filtered(String vanId, List<String> wardIds) {
+    final result = notices.values
+        .where(
+          (notice) => switch (notice.targetType) {
+            NoticeTargetType.all => true,
+            NoticeTargetType.van => notice.targetId == vanId,
+            NoticeTargetType.ward => wardIds.contains(notice.targetId),
+          },
+        )
+        .toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return result;
   }
 }
 
@@ -248,9 +303,12 @@ Future<ProviderContainer> pumpNotices(
   WidgetTester tester, {
   required NoticesRepository notices,
   bool activateShift = true,
+  RoutesRepository? routes,
 }) async {
   final container = ProviderContainer(overrides: [
     noticesRepositoryProvider.overrideWithValue(notices),
+    routesRepositoryProvider
+        .overrideWithValue(routes ?? FakeRoutesRepository([devRoute()])),
   ]);
   if (activateShift) {
     // D3 runs inside a started shift: activate the session up front so the
@@ -293,9 +351,9 @@ Future<void> pumpFrames(WidgetTester tester, [int pumps = 12]) async {
   }
 }
 
-const Key rowKey(String id) => ValueKey<String>('d3-row-$id');
-const Key tapKey(String id) => ValueKey<String>('d3-tap-$id');
-const Key unreadDotKey(String id) => ValueKey<String>('d3-unread-$id');
+Key rowKey(String id) => ValueKey<String>('d3-row-$id');
+Key tapKey(String id) => ValueKey<String>('d3-tap-$id');
+Key unreadDotKey(String id) => ValueKey<String>('d3-unread-$id');
 
 // -- tests --------------------------------------------------------------------
 

@@ -176,4 +176,10 @@ class AppLocalizationsGu extends AppLocalizations {
 
   @override
   String get markDone => 'પૂરું થયું';
+
+  @override
+  String get noticesTitle => 'નોટિસ';
+
+  @override
+  String get noticesEmpty => 'કોઈ નોટિસ નથી';
 }

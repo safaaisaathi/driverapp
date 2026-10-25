@@ -63,5 +63,8 @@
   "pendingReportsTitle": "પેંડિંગ રિપોર્ટ્સ",
   "pendingReportsEmpty": "કંઈ પેંડિંગ નથી",
   "willRevisit": "ફરી આવીશ",
-  "markDone": "પૂરું થયું"
+  "markDone": "પૂરું થયું",
+
+  "noticesTitle": "નોટિસ",
+  "noticesEmpty": "કોઈ નોટિસ નથી"
 }
