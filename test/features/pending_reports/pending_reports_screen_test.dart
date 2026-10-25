@@ -116,10 +116,12 @@ Complaint seedComplaint({
       escalationLevel: escalationLevel,
     ));
 
-/// The complaints the fake's day-window sees as "today" — constructed with
-/// the same local-zone semantics the fake window uses (local midnight of the
-/// passed day's calendar fields), so in/out determination holds on any
-/// test-runner zone.
+/// The complaints the fake's day-window sees as "today". The repository
+/// seam (fake and Firestore impl alike) brackets the day range from the
+/// passed value's calendar fields — `DateTime(day.year, day.month,
+/// day.day)` — so the seeds are constructed as local DateTimes of the
+/// IST collection day (2026-10-24, the IST day of the pinned shift start).
+/// In/out determination then holds on any test-runner zone.
 final DateTime todayReportAt = DateTime(2026, 10, 24, 10, 0);
 final DateTime yesterdayReportAt = DateTime(2026, 10, 23, 23, 59);
 final DateTime nextDayReportAt = DateTime(2026, 10, 25, 0, 1);
@@ -428,8 +430,13 @@ void main() {
     expect(query, isNotNull);
     expect(query!.wardIds, devWardIds,
         reason: 'the route wardIds in visiting order');
-    // Today (IST): the shift's collection-day window, IST-resolved.
-    expect(query.day, expectedDay);
+    // Today (IST): the collection-day calendar date the repository seam
+    // brackets — fields resolved by the domain clock (IST), never the
+    // runner's zone.
+    final istDay = todayIST(shiftStartedAt);
+    expect(query.day.year, istDay.year);
+    expect(query.day.month, istDay.month);
+    expect(query.day.day, istDay.day);
     expect(
       query.statuses,
       [ComplaintStatus.received, ComplaintStatus.assigned],

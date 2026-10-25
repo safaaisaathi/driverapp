@@ -118,4 +118,16 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get mockLocationWarning =>
       'Your phone is faking its location. Tracking continues, and the office will see this notice.';
+
+  @override
+  String get pendingReportsTitle => 'Pending reports';
+
+  @override
+  String get pendingReportsEmpty => 'Nothing pending';
+
+  @override
+  String get willRevisit => 'Will Revisit';
+
+  @override
+  String get markDone => 'Done';
 }

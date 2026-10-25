@@ -295,6 +295,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Your phone is faking its location. Tracking continues, and the office will see this notice.'**
   String get mockLocationWarning;
+
+  /// No description provided for @pendingReportsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending reports'**
+  String get pendingReportsTitle;
+
+  /// No description provided for @pendingReportsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing pending'**
+  String get pendingReportsEmpty;
+
+  /// No description provided for @willRevisit.
+  ///
+  /// In en, this message translates to:
+  /// **'Will Revisit'**
+  String get willRevisit;
+
+  /// No description provided for @markDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get markDone;
 }
 
 class _AppLocalizationsDelegate

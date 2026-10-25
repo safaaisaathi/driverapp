@@ -117,4 +117,16 @@ class AppLocalizationsGu extends AppLocalizations {
   @override
   String get mockLocationWarning =>
       'તમારો ફોન લોકેશન ખોટી રીતે બતાવી રહ્યો છે. ટ્રેકિંગ ચાલુ રહેશે, અને કચેરીને આ નોંધ દેખાશે.';
+
+  @override
+  String get pendingReportsTitle => 'પેંડિંગ રિપોર્ટ્સ';
+
+  @override
+  String get pendingReportsEmpty => 'કંઈ પેંડિંગ નથી';
+
+  @override
+  String get willRevisit => 'ફરી આવીશ';
+
+  @override
+  String get markDone => 'પૂરું થયું';
 }

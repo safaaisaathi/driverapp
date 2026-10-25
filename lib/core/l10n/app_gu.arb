@@ -35,5 +35,10 @@
   "trackingNotificationTitle": "ટ્રેકિંગ ચાલુ છે",
   "trackingNotificationBody": "શિફ્ટ દરમિયાન તમારી વેનની લોકેશન શેર થાય છે.",
 
-  "mockLocationWarning": "તમારો ફોન લોકેશન ખોટી રીતે બતાવી રહ્યો છે. ટ્રેકિંગ ચાલુ રહેશે, અને કચેરીને આ નોંધ દેખાશે."
+  "mockLocationWarning": "તમારો ફોન લોકેશન ખોટી રીતે બતાવી રહ્યો છે. ટ્રેકિંગ ચાલુ રહેશે, અને કચેરીને આ નોંધ દેખાશે.",
+
+  "pendingReportsTitle": "પેંડિંગ રિપોર્ટ્સ",
+  "pendingReportsEmpty": "કંઈ પેંડિંગ નથી",
+  "willRevisit": "ફરી આવીશ",
+  "markDone": "પૂરું થયું"
 }
