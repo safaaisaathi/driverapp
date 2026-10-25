@@ -23,7 +23,9 @@ import 'package:driverapp/core/theme/app_theme.dart';
 import 'package:driverapp/features/tracking/mock_location_banner.dart';
 
 import 'domain/live_route_state.dart';
+
 import 'live_route_providers.dart';
+import 'mark_ward_done_flow.dart';
 import 'ui/live_route_map.dart';
 import 'ui/state_views.dart';
 import 'ui/ward_list_panel.dart';
@@ -82,15 +84,22 @@ class LiveRouteScreen extends ConsumerWidget {
 }
 
 /// The data body: map + placeholders + ward list overlaid.
-class LiveRouteBody extends StatelessWidget {
+class LiveRouteBody extends ConsumerWidget {
   final LiveRouteData data;
 
   const LiveRouteBody({super.key, required this.data});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     final van = data.vanMarker;
+    // The mark flow's write-process state (in-flight / writeFailed) — the
+    // done state itself stays stream-only (ticket 07: no local "done").
+    final markFlow = ref.watch(markWardDoneFlowProvider);
+    // The open trip VALUE (never `.future`, the autoDispose stream wedge):
+    // the mark controls disable while today's trip doc is absent — nothing
+    // exists to append `wardsDone` into.
+    final markEnabled = ref.watch(openTripProvider).value != null;
 
     return Stack(
       children: [
@@ -185,6 +194,13 @@ class LiveRouteBody extends StatelessWidget {
             staleMinutes:
                 van != null && van.isStale ? van.minutesSinceUpdate : null,
             isOffline: data.isOffline,
+            markInFlight: markFlow.inFlight,
+            markWriteFailed: markFlow.writeFailed,
+            markEnabled: markEnabled,
+            // The mark event plumbs straight into the flow (dedupe, guard,
+            // flagged decision and the single appendWardDone live there).
+            onMark: (wardId) =>
+                ref.read(markWardDoneFlowProvider.notifier).mark(wardId),
           ),
         ),
       ],

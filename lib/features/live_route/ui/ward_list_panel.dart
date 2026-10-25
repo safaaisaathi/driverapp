@@ -3,8 +3,11 @@
 /// highlighted"). Overlays the bottom of the map, thumb-reachable, every row
 /// ≥ 56dp (contract section 6).
 ///
-/// Mark Ward Done (the button ticket 07 wires) is NOT here — the list is the
-/// D2 shell's route-progress view.
+/// Mark Ward Done (ticket 07): the NEXT ward's row carries the big ≥56dp
+/// button (one-handed, thumb zone); every other UNDONE ward renders a
+/// smaller control (out-of-order marks are allowed — grilled decision in the
+/// spec's Implementation Decisions, spec story 14). Done rows render their
+/// tick (+ flagged icon for admin-review marks, `trips.wardsDone.flagged`).
 library;
 
 import 'package:flutter/material.dart';
@@ -28,12 +31,31 @@ class WardListPanel extends StatelessWidget {
   /// with a note (Firestore persistence, F-D7).
   final bool isOffline;
 
+  /// Marks in flight (`live_route/mark_ward_done_flow.dart`): those rows'
+  /// controls disable so one tap cannot double-write.
+  final Set<String> markInFlight;
+
+  /// True when the LAST mark write failed — one boring retry line (the
+  /// screen's own global error state is NOT used for a failed append).
+  final bool markWriteFailed;
+
+  /// False while there is no open trip today: nothing can receive a
+  /// `wardsDone` append — controls disable with a one-line hint.
+  final bool markEnabled;
+
+  /// The mark event: `wardId` in, the flow handles dedupe/guard/decision.
+  final void Function(String wardId) onMark;
+
   const WardListPanel({
     super.key,
     required this.routeName,
     required this.wardSteps,
     required this.staleMinutes,
     required this.isOffline,
+    required this.markInFlight,
+    required this.markWriteFailed,
+    required this.markEnabled,
+    required this.onMark,
   });
 
   @override
@@ -100,6 +122,42 @@ class WardListPanel extends StatelessWidget {
                 ],
               ),
             ),
+          if (!markEnabled)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+              child: Row(
+                key: const Key('liveRoute.markNoTripHint'),
+                spacing: 4,
+                children: [
+                  Icon(Icons.info_outline,
+                      size: 16, color: AppTheme.colorTextMuted),
+                  Text(
+                    l10n.markWardDoneNoTrip,
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall!
+                        .copyWith(color: AppTheme.colorTextMuted),
+                  ),
+                ],
+              ),
+            ),
+          if (markWriteFailed)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+              child: Row(
+                key: const Key('liveRoute.markError'),
+                spacing: 4,
+                children: [
+                  Icon(Icons.error_outline,
+                      size: 16, color: AppTheme.colorStatusEscalated),
+                  Text(
+                    l10n.markWardDoneFailed,
+                    style: Theme.of(context).textTheme.bodySmall!.copyWith(
+                        color: AppTheme.colorStatusEscalated),
+                  ),
+                ],
+              ),
+            ),
           const Divider(height: 1),
           ConstrainedBox(
             constraints: BoxConstraints(
@@ -108,8 +166,12 @@ class WardListPanel extends StatelessWidget {
             child: ListView.builder(
               shrinkWrap: true,
               itemCount: wardSteps.length,
-              itemBuilder: (context, index) =>
-                  _WardRow(step: wardSteps[index]),
+              itemBuilder: (context, index) => _WardRow(
+                step: wardSteps[index],
+                markEnabled: markEnabled,
+                markInFlight: markInFlight,
+                onMark: onMark,
+              ),
             ),
           ),
         ],
@@ -121,56 +183,78 @@ class WardListPanel extends StatelessWidget {
 class _WardRow extends StatelessWidget {
   final WardStep step;
 
-  const _WardRow({required this.step});
+  final bool markEnabled;
+
+  final Set<String> markInFlight;
+
+  final void Function(String wardId) onMark;
+
+  const _WardRow({
+    required this.step,
+    required this.markEnabled,
+    required this.markInFlight,
+    required this.onMark,
+  });
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final highlighted = step.isNext;
+    final inFlight = markInFlight.contains(step.ward.id);
+    final canMark = !step.isDone && markEnabled && !inFlight;
+
+    // The NEXT ward's row carries the one-tap ≥56dp action (contract
+    // section 6, one-handed driver); other undone wards get the smaller
+    // out-of-order control; done rows render their record only.
+    if (highlighted) {
+      return Container(
+        key: Key('liveRoute.wardRow.${step.ward.id}'),
+        color: AppTheme.colorPrimary.withValues(alpha: 0.10),
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          spacing: 8,
+          children: [
+            _RowHead(step: step),
+            FilledButton(
+              key: const Key('liveRoute.markNextWard'),
+              onPressed: canMark ? () => onMark(step.ward.id) : null,
+              child: Text(
+                l10n.markWardDone,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     return Container(
       key: Key('liveRoute.wardRow.${step.ward.id}'),
-      color: highlighted
-          ? AppTheme.colorPrimary.withValues(alpha: 0.10)
-          : null,
       height: 64,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         spacing: 12,
         children: [
-          // Order badge — the visiting order despite sorting/filtering chips.
-          _OrderBadge(isDone: step.isDone, isNext: highlighted, index: step.orderIndex),
-          Expanded(
-            child: Text(
-              step.ward.name,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodyLarge!.copyWith(
-                    fontWeight: highlighted ? FontWeight.bold : null,
-                    color: AppTheme.colorTextPrimary,
-                  ),
-            ),
-          ),
-          if (step.isNext)
-            Container(
-              key: const Key('liveRoute.nextChip'),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: AppTheme.colorPrimary,
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                l10n.nextWardChip,
-                style: const TextStyle(
-                  color: AppTheme.colorOnPrimary,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+          Expanded(child: _RowHead(step: step)),
+          if (!step.isDone)
+            IconButton(
+              // The out-of-order control (spec story 14 — real routes
+              // rarely follow list order). Keyed per-ward; disabled while
+              // no trip can receive the append or a write is in flight.
+              key: Key('liveRoute.markWard.${step.ward.id}'),
+              tooltip: l10n.markWardDone,
+              onPressed: canMark ? () => onMark(step.ward.id) : null,
+              icon: const Icon(Icons.check_circle_outline),
+              color: AppTheme.colorPrimary,
             ),
           if (step.isDone)
             Icon(
               Icons.check_circle,
-              color: AppTheme.colorPrimary,
+              color: step.isFlagged
+                  ? AppTheme.colorStatusEscalated
+                  : AppTheme.colorPrimary,
               // Not const: the interpolated key depends on the ward id.
               key: Key('liveRoute.doneTick.${step.ward.id}'),
             ),
@@ -183,6 +267,53 @@ class _WardRow extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// The shared row head: order badge + ward name (+ the Next chip on the
+/// highlighted row). A plain Row — the wrapping row lays it out (Expanded
+/// in the fixed-height row, stretched in the next-ward column).
+class _RowHead extends StatelessWidget {
+  final WardStep step;
+
+  const _RowHead({required this.step});
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Row(
+      spacing: 12,
+      children: [
+        _OrderBadge(isDone: step.isDone, isNext: step.isNext, index: step.orderIndex),
+        Expanded(
+          child: Text(
+            step.ward.name,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodyLarge!.copyWith(
+                  fontWeight: step.isNext ? FontWeight.bold : null,
+                  color: AppTheme.colorTextPrimary,
+                ),
+          ),
+        ),
+        if (step.isNext)
+          Container(
+            key: const Key('liveRoute.nextChip'),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppTheme.colorPrimary,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              l10n.nextWardChip,
+              style: const TextStyle(
+                color: AppTheme.colorOnPrimary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
