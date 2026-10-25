@@ -69,5 +69,8 @@
 
   "markWardDone": "વોર્ડ પૂરું કરો",
   "markWardDoneFailed": "નોંધણી થઈ શકી નથી. ફરી પ્રયાસ કરો.",
-  "markWardDoneNoTrip": "કોઈ ખુલ્લી ટ્રિપ નથી"
+  "markWardDoneNoTrip": "કોઈ ખુલ્લી ટ્રિપ નથી",
+
+  "noticesTitle": "નોટિસ",
+  "noticesEmpty": "કોઈ નોટિસ નથી"
 }

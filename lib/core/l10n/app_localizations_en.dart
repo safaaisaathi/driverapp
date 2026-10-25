@@ -186,4 +186,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get markWardDoneNoTrip => 'No open shift trip';
+
+  @override
+  String get noticesTitle => 'Notices';
+
+  @override
+  String get noticesEmpty => 'No notices';
 }

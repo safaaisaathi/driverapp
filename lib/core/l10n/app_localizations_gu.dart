@@ -185,4 +185,10 @@ class AppLocalizationsGu extends AppLocalizations {
 
   @override
   String get markWardDoneNoTrip => 'કોઈ ખુલ્લી ટ્રિપ નથી';
+
+  @override
+  String get noticesTitle => 'નોટિસ';
+
+  @override
+  String get noticesEmpty => 'કોઈ નોટિસ નથી';
 }

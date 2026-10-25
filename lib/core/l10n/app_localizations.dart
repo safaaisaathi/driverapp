@@ -409,6 +409,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No open shift trip'**
   String get markWardDoneNoTrip;
+
+  /// No description provided for @noticesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Notices'**
+  String get noticesTitle;
+
+  /// No description provided for @noticesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No notices'**
+  String get noticesEmpty;
 }
 
 class _AppLocalizationsDelegate

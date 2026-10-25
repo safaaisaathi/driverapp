@@ -69,5 +69,8 @@
 
   "markWardDone": "Mark Ward Done",
   "markWardDoneFailed": "Couldn't record. Try again.",
-  "markWardDoneNoTrip": "No open shift trip"
+  "markWardDoneNoTrip": "No open shift trip",
+
+  "noticesTitle": "Notices",
+  "noticesEmpty": "No notices"
 }

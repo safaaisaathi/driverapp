@@ -11,6 +11,8 @@
 /// comes from D1 at integration (`currentVanIdProvider`).
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -25,13 +27,27 @@ import 'live_route_screen.dart';
 @visibleForTesting
 const String devLiveRouteVanId = 'van-01';
 
-/// `main()`-like entrypoint for the debug demo (never used by main.dart):
-/// boots Firebase, pins the demo van id, shows D2.
-Future<void> runDevLiveRouteApp() async {
+/// `main()` for the debug demo (never used by main.dart): pins the demo van
+/// id, fires the bootstrap WITHOUT awaiting it — `BootstrapController.run`
+/// retries forever when Firebase is unreachable (degraded-only on a host
+/// without Firebase plugins, e.g. the desktop preview), so awaiting would
+/// postpone the UI forever — then shows D2.
+Future<void> main() async {
   final container = ProviderContainer(
     overrides: [currentVanIdProvider.overrideWithValue(devLiveRouteVanId)],
   );
-  await runBootstrap(container); // degrades gracefully when emulators down
+  unawaited(runBootstrap(container));
+  runApp(UncontrolledProviderScope(
+    container: container,
+    child: const DevLiveRouteMaterialApp(),
+  ));
+}
+
+/// Entry for `main.dart`-integration use (the integration ticket decides:
+/// wire it in, or delete this file at ticket 14). Fire-and-forget bootstrap
+/// for the same reason as [main].
+Future<void> runDevLiveRouteApp(ProviderContainer container) async {
+  unawaited(runBootstrap(container));
   runApp(UncontrolledProviderScope(
     container: container,
     child: const DevLiveRouteMaterialApp(),

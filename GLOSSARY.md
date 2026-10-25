@@ -79,13 +79,14 @@ Deferred work parking lot. Sweep at wave boundaries; every item moves out only w
 ### Improvement Bag
 - [ ] Locale flip `en` → `gu` before demo (grilled decision; arb files ready). *(me)*
 - [ ] `whereIn` >30-ward chunking (ruling 12) — build when demo routes exceed 30 wards. *(me)*
-- [ ] Delete `dev_tracking.dart` + dev entrypoints at integration. *(me → 14)*
+- [ ] Delete dev entrypoints at integration: `dev_tracking.dart`, `dev_pending_reports.dart`, `dev_live_route.dart`, `dev_notices.dart`, `dev_min.dart`. *(me → 14)*
 - [ ] Index seeds for Backend Owner: notices OR-branch sort, pending-reports `(wardId, createdAt)`, trip `(vanId, date)` (rulings 10/11/16). *(Backend Owner)*
 - [ ] Real Firebase keys: paste at `sharedProjectFirebaseOptions()`, run `--dart-define=DRIVERAPP_USE_EMULATOR=false`. *(user)*
 - [x] Integration: insert `MockLocationWarningBanner(vanId: vanId)` at top of D2's body `Column` (ticket 11 report §c) when D2 merges. *(me — at 06 merge)* — DONE at the 06 merge; covered by full-suite gates.
 - [ ] Day-window seam semantics (from ticket 10): repo day/date params bracket by the passed value's LOCAL calendar fields; fed a `trips.date`-shaped instant (ruling 9) the range can land on the previous local day, and a stored `trip.date` can sit exactly on the exclusive `dayEnd` and never match (ticket-04 fake passes only by date-vs-date field equality). Decide: fix repo seam or rule it — LASTLY verify on device at rehearsal. *(me → 14 / Backend Owner)*
 
 ### Feature Bag
+- [ ] Notices read-state is session-local — the 0.2 `notices` shape has NO read field, so unread markers reset on restart/shift end (red test pins mark-read writes nothing). Persistent unread needs a contract field from Backend Owner. *(Backend Owner)*
 - [ ] Staff push on mock-location detection — no contract Cloud Function exists (ruling 7). *(Backend Owner)*
 - [ ] Notices push parity — driver-device topic-only for now. *(Backend Owner)*
 - [ ] Deploy real `verifyDriverPin` callable + seed vans docs (shaped per 0.7; emulator port 5001 wired, code-mapping switch marked "refine with Backend Owner"). *(Backend Owner)*
@@ -93,7 +94,8 @@ Deferred work parking lot. Sweep at wave boundaries; every item moves out only w
 - [ ] `shared_preferences` dependency sits outside the 0.6 package list — record sign-off alongside `connectivity_plus`. *(Backend Owner)*
 
 ### Standing protocol (recorded 2026-10-24)
-1. Agent reports → gate (analyze + test in worktree) → merge → full-suite gate on main → rulings + glossary fold with bags updated.
+0. **USER VERIFICATION FIRST (directive 2026-10-25): after a feature (or the whole app) finishes building, verify it AS A USER WOULD — open the running app, click through the feature, judge by what appears on screen. Green tests/analyze are necessary but NOT verification.** Loop: launch window (or device) → screenshot → interact (xdotool clicks/taps on-adapted for desktop; real finger on device) → screenshot → assert visible behavior. Dev entrypoints drive feature-level checks offline (Firebase has no desktop plugin — main() shows a bootstrap error on Linux); full user-loop runs on Android device at ticket 14.
+1. Agent reports → gate (analyze + test in worktree) → merge → full-suite gate on main → **user verification of the merged feature (rule 0)** → rulings + glossary fold with bags updated.
 2. Next frontier wave launches immediately (dependency table in `.scratch/driver-app/README.md`).
 3. TDD from ticket 12 onward: failing tests first.
 4. Ticket 14 (serial, last): integration rehearsal, real-phone stabilization, delete dev entrypoints.

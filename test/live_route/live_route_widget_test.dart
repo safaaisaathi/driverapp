@@ -75,6 +75,7 @@ class CountingVansRepository implements VansRepository {
   Future<void> updateBatteryPct(String vanId, int batteryPct) =>
       inner.updateBatteryPct(vanId, batteryPct);
 
+  // Seams added by the ticket-10 merge (interface grew) — forward through.
   @override
   Future<Van?> readVan(String vanId) => inner.readVan(vanId);
 
@@ -95,6 +96,14 @@ class ThrowingVansRepository implements VansRepository {
 
   @override
   Future<List<Van>> readVans() async => [];
+
+  // Seams added by the ticket-10 merge — this fake is error-first everywhere.
+  @override
+  Future<Van?> readVan(String vanId) async => throw Exception('down');
+
+  @override
+  Future<void> updateCurrentTripId(String vanId, String? tripId) async =>
+      throw Exception('down');
 
   @override
   Future<void> updateLastLocation({
