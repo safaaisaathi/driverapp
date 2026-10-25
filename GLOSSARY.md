@@ -82,7 +82,8 @@ Deferred work parking lot. Sweep at wave boundaries; every item moves out only w
 - [ ] Delete `dev_tracking.dart` + dev entrypoints at integration. *(me → 14)*
 - [ ] Index seeds for Backend Owner: notices OR-branch sort, pending-reports `(wardId, createdAt)`, trip `(vanId, date)` (rulings 10/11/16). *(Backend Owner)*
 - [ ] Real Firebase keys: paste at `sharedProjectFirebaseOptions()`, run `--dart-define=DRIVERAPP_USE_EMULATOR=false`. *(user)*
-- [ ] Integration: insert `MockLocationWarningBanner(vanId: vanId)` at top of D2's body `Column` (ticket 11 report §c) when D2 merges. *(me — at 06 merge)*
+- [x] Integration: insert `MockLocationWarningBanner(vanId: vanId)` at top of D2's body `Column` (ticket 11 report §c) when D2 merges. *(me — at 06 merge)* — DONE at the 06 merge; covered by full-suite gates.
+- [ ] Day-window seam semantics (from ticket 10): repo day/date params bracket by the passed value's LOCAL calendar fields; fed a `trips.date`-shaped instant (ruling 9) the range can land on the previous local day, and a stored `trip.date` can sit exactly on the exclusive `dayEnd` and never match (ticket-04 fake passes only by date-vs-date field equality). Decide: fix repo seam or rule it — LASTLY verify on device at rehearsal. *(me → 14 / Backend Owner)*
 
 ### Feature Bag
 - [ ] Staff push on mock-location detection — no contract Cloud Function exists (ruling 7). *(Backend Owner)*

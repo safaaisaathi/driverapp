@@ -20,6 +20,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:driverapp/core/l10n/app_localizations.dart';
 import 'package:driverapp/core/theme/app_theme.dart';
 
+import 'package:driverapp/features/tracking/mock_location_banner.dart';
+
 import 'domain/live_route_state.dart';
 import 'live_route_providers.dart';
 import 'ui/live_route_map.dart';
@@ -57,15 +59,24 @@ class LiveRouteScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: switch (state) {
-        LiveRouteLoading() => const LiveRouteLoadingView(),
-        LiveRouteError() => LiveRouteErrorView(
-            onRetry: () => ref.read(liveRouteRetryProvider)(),
+      body: Column(
+        children: [
+          // F-D9: mock-location warning — self-contained, renders nothing
+          // unless the van's trip doc latched a mock fix (ticket 11).
+          MockLocationWarningBanner(vanId: ref.watch(currentVanIdProvider)),
+          Expanded(
+            child: switch (state) {
+              LiveRouteLoading() => const LiveRouteLoadingView(),
+              LiveRouteError() => LiveRouteErrorView(
+                  onRetry: () => ref.read(liveRouteRetryProvider)(),
+                ),
+              LiveRouteEmpty(reason: final reason) =>
+                LiveRouteEmptyView(reason: reason),
+              LiveRouteData() => LiveRouteBody(data: data!),
+            },
           ),
-        LiveRouteEmpty(reason: final reason) =>
-          LiveRouteEmptyView(reason: reason),
-        LiveRouteData() => LiveRouteBody(data: data!),
-      },
+        ],
+      ),
     );
   }
 }
