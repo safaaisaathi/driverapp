@@ -35,14 +35,17 @@
   "trackingNotificationTitle": "Tracking active",
   "trackingNotificationBody": "Your van's location is shared while on shift.",
 
-<<<<<<< HEAD
-<<<<<<< HEAD
   "mockLocationWarning": "Your phone is faking its location. Tracking continues, and the office will see this notice.",
+
+  "pendingReportsTitle": "Pending reports",
+  "pendingReportsEmpty": "Nothing pending",
+  "willRevisit": "Will Revisit",
+  "markDone": "Done",
 
   "languageChangeHint": "Change language",
   "languageNameEn": "English",
-  "languageNameGu": "ગુજરાતી"
-=======
+  "languageNameGu": "ગુજરાતી",
+
   "liveRouteTitle": "Live Route",
   "noticesBadgeTooltip": "Notices",
   "endOfTripCardPlaceholder": "End-of-trip summary appears here",
@@ -62,14 +65,9 @@
   },
   "offlineShowingCached": "Showing saved map data",
   "routeEmptyMessage": "This route has no wards",
-  "routeMissingMessage": "Route not found"
->>>>>>> feat/driver-06-map-shell
-=======
-  "mockLocationWarning": "Your phone is faking its location. Tracking continues, and the office will see this notice.",
+  "routeMissingMessage": "Route not found",
 
-  "pendingReportsTitle": "Pending reports",
-  "pendingReportsEmpty": "Nothing pending",
-  "willRevisit": "Will Revisit",
-  "markDone": "Done"
->>>>>>> feat/driver-10-pending-reports
+  "markWardDone": "Mark Ward Done",
+  "markWardDoneFailed": "Couldn't record. Try again.",
+  "markWardDoneNoTrip": "No open shift trip"
 }

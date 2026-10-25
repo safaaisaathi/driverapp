@@ -296,6 +296,30 @@ abstract class AppLocalizations {
   /// **'Your phone is faking its location. Tracking continues, and the office will see this notice.'**
   String get mockLocationWarning;
 
+  /// No description provided for @pendingReportsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending reports'**
+  String get pendingReportsTitle;
+
+  /// No description provided for @pendingReportsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing pending'**
+  String get pendingReportsEmpty;
+
+  /// No description provided for @willRevisit.
+  ///
+  /// In en, this message translates to:
+  /// **'Will Revisit'**
+  String get willRevisit;
+
+  /// No description provided for @markDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get markDone;
+
   /// No description provided for @languageChangeHint.
   ///
   /// In en, this message translates to:
@@ -313,6 +337,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'ગુજરાતી'**
   String get languageNameGu;
+
+  /// No description provided for @liveRouteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Live Route'**
+  String get liveRouteTitle;
+
+  /// No description provided for @noticesBadgeTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Notices'**
+  String get noticesBadgeTooltip;
+
+  /// No description provided for @endOfTripCardPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'End-of-trip summary appears here'**
+  String get endOfTripCardPlaceholder;
+
+  /// No description provided for @routeProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'{done} of {total} wards done'**
+  String routeProgress(int done, int total);
+
+  /// No description provided for @nextWardChip.
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get nextWardChip;
+
+  /// No description provided for @vanLastSeen.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes, plural, =0{Location updated moments ago} =1{Location updated 1 min ago} other{Location updated {minutes} min ago}}'**
+  String vanLastSeen(int minutes);
+
+  /// No description provided for @offlineShowingCached.
+  ///
+  /// In en, this message translates to:
+  /// **'Showing saved map data'**
+  String get offlineShowingCached;
+
+  /// No description provided for @routeEmptyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This route has no wards'**
+  String get routeEmptyMessage;
+
+  /// No description provided for @routeMissingMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Route not found'**
+  String get routeMissingMessage;
+
+  /// No description provided for @markWardDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark Ward Done'**
+  String get markWardDone;
+
+  /// No description provided for @markWardDoneFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t record. Try again.'**
+  String get markWardDoneFailed;
+
+  /// No description provided for @markWardDoneNoTrip.
+  ///
+  /// In en, this message translates to:
+  /// **'No open shift trip'**
+  String get markWardDoneNoTrip;
 }
 
 class _AppLocalizationsDelegate

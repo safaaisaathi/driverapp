@@ -74,6 +74,13 @@ class CountingVansRepository implements VansRepository {
   @override
   Future<void> updateBatteryPct(String vanId, int batteryPct) =>
       inner.updateBatteryPct(vanId, batteryPct);
+
+  @override
+  Future<Van?> readVan(String vanId) => inner.readVan(vanId);
+
+  @override
+  Future<void> updateCurrentTripId(String vanId, String? tripId) =>
+      inner.updateCurrentTripId(vanId, tripId);
 }
 
 /// A vans repository that only errors — drives the error state. Emits null
@@ -103,6 +110,12 @@ class ThrowingVansRepository implements VansRepository {
 
   @override
   Future<void> updateBatteryPct(String vanId, int batteryPct) async {}
+
+  @override
+  Future<Van?> readVan(String vanId) async => null;
+
+  @override
+  Future<void> updateCurrentTripId(String vanId, String? tripId) async {}
 }
 
 void main() {

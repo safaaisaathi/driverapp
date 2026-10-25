@@ -120,6 +120,18 @@ class AppLocalizationsEn extends AppLocalizations {
       'Your phone is faking its location. Tracking continues, and the office will see this notice.';
 
   @override
+  String get pendingReportsTitle => 'Pending reports';
+
+  @override
+  String get pendingReportsEmpty => 'Nothing pending';
+
+  @override
+  String get willRevisit => 'Will Revisit';
+
+  @override
+  String get markDone => 'Done';
+
+  @override
   String get languageChangeHint => 'Change language';
 
   @override
@@ -127,4 +139,51 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get languageNameGu => 'ગુજરાતી';
+
+  @override
+  String get liveRouteTitle => 'Live Route';
+
+  @override
+  String get noticesBadgeTooltip => 'Notices';
+
+  @override
+  String get endOfTripCardPlaceholder => 'End-of-trip summary appears here';
+
+  @override
+  String routeProgress(int done, int total) {
+    return '$done of $total wards done';
+  }
+
+  @override
+  String get nextWardChip => 'Next';
+
+  @override
+  String vanLastSeen(int minutes) {
+    String _temp0 = intl.Intl.pluralLogic(
+      minutes,
+      locale: localeName,
+      other: 'Location updated $minutes min ago',
+      one: 'Location updated 1 min ago',
+      zero: 'Location updated moments ago',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get offlineShowingCached => 'Showing saved map data';
+
+  @override
+  String get routeEmptyMessage => 'This route has no wards';
+
+  @override
+  String get routeMissingMessage => 'Route not found';
+
+  @override
+  String get markWardDone => 'Mark Ward Done';
+
+  @override
+  String get markWardDoneFailed => 'Couldn\'t record. Try again.';
+
+  @override
+  String get markWardDoneNoTrip => 'No open shift trip';
 }
