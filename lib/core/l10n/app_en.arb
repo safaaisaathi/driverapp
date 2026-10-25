@@ -34,15 +34,11 @@
   "trackingGpsOff": "Phone location (GPS) is turned off. Turn it on and try again.",
   "trackingNotificationTitle": "Tracking active",
   "trackingNotificationBody": "Your van's location is shared while on shift.",
-
-<<<<<<< HEAD
-<<<<<<< HEAD
   "mockLocationWarning": "Your phone is faking its location. Tracking continues, and the office will see this notice.",
-
   "languageChangeHint": "Change language",
   "languageNameEn": "English",
   "languageNameGu": "ગુજરાતી"
-=======
+,
   "liveRouteTitle": "Live Route",
   "noticesBadgeTooltip": "Notices",
   "endOfTripCardPlaceholder": "End-of-trip summary appears here",
@@ -63,13 +59,9 @@
   "offlineShowingCached": "Showing saved map data",
   "routeEmptyMessage": "This route has no wards",
   "routeMissingMessage": "Route not found"
->>>>>>> feat/driver-06-map-shell
-=======
-  "mockLocationWarning": "Your phone is faking its location. Tracking continues, and the office will see this notice.",
-
+,
   "pendingReportsTitle": "Pending reports",
   "pendingReportsEmpty": "Nothing pending",
   "willRevisit": "Will Revisit",
   "markDone": "Done"
->>>>>>> feat/driver-10-pending-reports
 }

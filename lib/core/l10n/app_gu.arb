@@ -34,15 +34,11 @@
   "trackingGpsOff": "ફોનનું લોકેશન (GPS) બંધ છે. તે ચાલુ કરો અને ફરી પ્રયાસ કરો.",
   "trackingNotificationTitle": "ટ્રેકિંગ ચાલુ છે",
   "trackingNotificationBody": "શિફ્ટ દરમિયાન તમારી વેનની લોકેશન શેર થાય છે.",
-
-<<<<<<< HEAD
-<<<<<<< HEAD
   "mockLocationWarning": "તમારો ફોન લોકેશન ખોટી રીતે બતાવી રહ્યો છે. ટ્રેકિંગ ચાલુ રહેશે, અને કચેરીને આ નોંધ દેખાશે.",
-
   "languageChangeHint": "ભાષા બદલો",
   "languageNameEn": "English",
   "languageNameGu": "ગુજરાતી"
-=======
+,
   "liveRouteTitle": "લાઇવ રૂટ",
   "noticesBadgeTooltip": "નોટિસ",
   "endOfTripCardPlaceholder": "શિફ્ટ પૂરી વખતે સારાંશ અહીં દેખાય",
@@ -63,13 +59,9 @@
   "offlineShowingCached": "સેવ થયેલો નકશો દેખાય છે",
   "routeEmptyMessage": "આ રૂટમાં કોઈ વોર્ડ નથી",
   "routeMissingMessage": "રૂટ મળ્યો નથી"
->>>>>>> feat/driver-06-map-shell
-=======
-  "mockLocationWarning": "તમારો ફોન લોકેશન ખોટી રીતે બતાવી રહ્યો છે. ટ્રેકિંગ ચાલુ રહેશે, અને કચેરીને આ નોંધ દેખાશે.",
-
+,
   "pendingReportsTitle": "પેંડિંગ રિપોર્ટ્સ",
   "pendingReportsEmpty": "કંઈ પેંડિંગ નથી",
   "willRevisit": "ફરી આવીશ",
   "markDone": "પૂરું થયું"
->>>>>>> feat/driver-10-pending-reports
 }
