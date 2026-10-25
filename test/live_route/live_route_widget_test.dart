@@ -119,12 +119,6 @@ class ThrowingVansRepository implements VansRepository {
 
   @override
   Future<void> updateBatteryPct(String vanId, int batteryPct) async {}
-
-  @override
-  Future<Van?> readVan(String vanId) async => null;
-
-  @override
-  Future<void> updateCurrentTripId(String vanId, String? tripId) async {}
 }
 
 void main() {
