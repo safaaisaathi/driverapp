@@ -14,5 +14,26 @@
   "trackingPermissionDenied": "Tracking is off. You can start it again later – your shift is safe.",
   "trackingGpsOff": "Phone location (GPS) is turned off. Turn it on and try again.",
   "trackingNotificationTitle": "Tracking active",
-  "trackingNotificationBody": "Your van's location is shared while on shift."
+  "trackingNotificationBody": "Your van's location is shared while on shift.",
+
+  "liveRouteTitle": "Live Route",
+  "noticesBadgeTooltip": "Notices",
+  "endOfTripCardPlaceholder": "End-of-trip summary appears here",
+  "routeProgress": "{done} of {total} wards done",
+  "@routeProgress": {
+    "placeholders": {
+      "done": { "type": "int" },
+      "total": { "type": "int" }
+    }
+  },
+  "nextWardChip": "Next",
+  "vanLastSeen": "{minutes, plural, =0{Location updated moments ago} =1{Location updated 1 min ago} other{Location updated {minutes} min ago}}",
+  "@vanLastSeen": {
+    "placeholders": {
+      "minutes": { "type": "int" }
+    }
+  },
+  "offlineShowingCached": "Showing saved map data",
+  "routeEmptyMessage": "This route has no wards",
+  "routeMissingMessage": "Route not found"
 }

@@ -181,6 +181,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Your van\'s location is shared while on shift.'**
   String get trackingNotificationBody;
+
+  /// No description provided for @liveRouteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Live Route'**
+  String get liveRouteTitle;
+
+  /// No description provided for @noticesBadgeTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Notices'**
+  String get noticesBadgeTooltip;
+
+  /// No description provided for @endOfTripCardPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'End-of-trip summary appears here'**
+  String get endOfTripCardPlaceholder;
+
+  /// No description provided for @routeProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'{done} of {total} wards done'**
+  String routeProgress(int done, int total);
+
+  /// No description provided for @nextWardChip.
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get nextWardChip;
+
+  /// No description provided for @vanLastSeen.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes, plural, =0{Location updated moments ago} =1{Location updated 1 min ago} other{Location updated {minutes} min ago}}'**
+  String vanLastSeen(int minutes);
+
+  /// No description provided for @offlineShowingCached.
+  ///
+  /// In en, this message translates to:
+  /// **'Showing saved map data'**
+  String get offlineShowingCached;
+
+  /// No description provided for @routeEmptyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This route has no wards'**
+  String get routeEmptyMessage;
+
+  /// No description provided for @routeMissingMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Route not found'**
+  String get routeMissingMessage;
 }
 
 class _AppLocalizationsDelegate

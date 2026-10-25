@@ -57,4 +57,42 @@ class AppLocalizationsGu extends AppLocalizations {
   @override
   String get trackingNotificationBody =>
       'શિફ્ટ દરમિયાન તમારી વેનની લોકેશન શેર થાય છે.';
+
+  @override
+  String get liveRouteTitle => 'લાઇવ રૂટ';
+
+  @override
+  String get noticesBadgeTooltip => 'નોટિસ';
+
+  @override
+  String get endOfTripCardPlaceholder => 'શિફ્ટ પૂરી વખતે સારાંશ અહીં દેખાય';
+
+  @override
+  String routeProgress(int done, int total) {
+    return '$total માંથી $done વોર્ડ થયા';
+  }
+
+  @override
+  String get nextWardChip => 'આગળ';
+
+  @override
+  String vanLastSeen(int minutes) {
+    String _temp0 = intl.Intl.pluralLogic(
+      minutes,
+      locale: localeName,
+      other: 'લોકેશન $minutes મિનિટ પહેલાં અપડેટ થયું',
+      one: 'લોકેશન 1 મિનિટ પહેલાં અપડેટ થયું',
+      zero: 'લોકેશન હમણાં જ અપડેટ થયું',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get offlineShowingCached => 'સેવ થયેલો નકશો દેખાય છે';
+
+  @override
+  String get routeEmptyMessage => 'આ રૂટમાં કોઈ વોર્ડ નથી';
+
+  @override
+  String get routeMissingMessage => 'રૂટ મળ્યો નથી';
 }
