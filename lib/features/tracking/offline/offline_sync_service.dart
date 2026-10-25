@@ -72,6 +72,15 @@ class OfflineSyncService {
   bool _flushing = false;
   bool _flushAgain = false;
 
+  /// Completes when the currently running flush drain (pass + every
+  /// trailing pass concurrent callers requested meanwhile) is done. A
+  /// caller of [flushNow] awaiting while a drain runs gets THIS future —
+  /// otherwise an overlapping pass (e.g. the initial connectivity
+  /// emission) would let an `await flushNow()` return before its own
+  /// request has actually drained, and anything the caller does next
+  /// (like a test closing Hive) races the still-running pass.
+  Future<void> _drain = Future<void>.value();
+
   /// Last count pushed through the CHANGE stream (dedupe keeps a constant
   /// backlog from spamming an unchanged value; late subscribers still get
   /// the live value directly — see [pendingCountStream]).
@@ -124,20 +133,30 @@ class OfflineSyncService {
   }
 
   /// Flush pass, safe to call concurrently (one pass runs at a time; a
-  /// concurrent call schedules another pass right after the current one).
+  /// concurrent call's returned future completes after the trailing pass
+  /// it requested finishes — callers can always `await flushNow()` and be
+  /// sure their request drained, not just that some pass was in flight).
   Future<void> flushNow() {
     if (_flushing) {
       _flushAgain = true;
-      return Future<void>.value();
+      return _drain;
     }
     _flushing = true;
-    return _flushPasses().whenComplete(() {
-      _flushing = false;
-      if (_flushAgain) {
-        _flushAgain = false;
-        unawaited(flushNow());
-      }
-    });
+    final done = Completer<void>();
+    _drain = done.future;
+    unawaited(_drainAllPasses(done));
+    return _drain;
+  }
+
+  /// Runs passes until no trailing request is left, then closes [done].
+  Future<void> _drainAllPasses(Completer<void> done) async {
+    while (true) {
+      _flushAgain = false;
+      await _flushPasses();
+      if (!_flushAgain) break;
+    }
+    _flushing = false;
+    done.complete();
   }
 
   // --------------------------------------------------------------------------
@@ -209,12 +228,19 @@ class OfflineSyncService {
   /// Computes the count and pushes it only when it CHANGED (the change
   /// stream stays quiet about unchanged values; late subscribers get the
   /// live count directly via [pendingCountStream]).
+  /// Best-effort count refresh (a badge must never crash the flush): the
+  /// box can be legitimately closed underneath (app restart destroys the
+  /// old service instance mid-read), so errors degrade to a log line.
   Future<void> _refreshCount() async {
-    final count = await _computePendingCount();
-    if (count == _lastEmitted) return;
-    _lastEmitted = count;
-    if (_counts.isClosed) return;
-    _counts.add(count);
+    try {
+      final count = await _computePendingCount();
+      if (count == _lastEmitted) return;
+      _lastEmitted = count;
+      if (_counts.isClosed) return;
+      _counts.add(count);
+    } catch (error) {
+      debugPrint('offline: pending count refresh failed: $error');
+    }
   }
 
   Future<int> _computePendingCount() async {
