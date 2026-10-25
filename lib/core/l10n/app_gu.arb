@@ -35,9 +35,32 @@
   "trackingNotificationTitle": "ટ્રેકિંગ ચાલુ છે",
   "trackingNotificationBody": "શિફ્ટ દરમિયાન તમારી વેનની લોકેશન શેર થાય છે.",
 
+<<<<<<< HEAD
   "mockLocationWarning": "તમારો ફોન લોકેશન ખોટી રીતે બતાવી રહ્યો છે. ટ્રેકિંગ ચાલુ રહેશે, અને કચેરીને આ નોંધ દેખાશે.",
 
   "languageChangeHint": "ભાષા બદલો",
   "languageNameEn": "English",
   "languageNameGu": "ગુજરાતી"
+=======
+  "liveRouteTitle": "લાઇવ રૂટ",
+  "noticesBadgeTooltip": "નોટિસ",
+  "endOfTripCardPlaceholder": "શિફ્ટ પૂરી વખતે સારાંશ અહીં દેખાય",
+  "routeProgress": "{total} માંથી {done} વોર્ડ થયા",
+  "@routeProgress": {
+    "placeholders": {
+      "done": { "type": "int" },
+      "total": { "type": "int" }
+    }
+  },
+  "nextWardChip": "આગળ",
+  "vanLastSeen": "{minutes, plural, =0{લોકેશન હમણાં જ અપડેટ થયું} =1{લોકેશન 1 મિનિટ પહેલાં અપડેટ થયું} other{લોકેશન {minutes} મિનિટ પહેલાં અપડેટ થયું}}",
+  "@vanLastSeen": {
+    "placeholders": {
+      "minutes": { "type": "int" }
+    }
+  },
+  "offlineShowingCached": "સેવ થયેલો નકશો દેખાય છે",
+  "routeEmptyMessage": "આ રૂટમાં કોઈ વોર્ડ નથી",
+  "routeMissingMessage": "રૂટ મળ્યો નથી"
+>>>>>>> feat/driver-06-map-shell
 }
