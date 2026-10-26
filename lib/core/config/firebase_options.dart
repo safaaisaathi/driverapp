@@ -78,14 +78,43 @@ FirebaseOptions demoFirebaseOptions() => const FirebaseOptions(
       authDomain: 'driver-app-demo.firebaseapp.com',
     );
 
-/// Real (shared) project options — NOT supplied yet.
+/// Real (shared) project options — supplied at RUN TIME via dart-define
+/// (contract 0.10: keys are shared privately, never committed to the repo).
 ///
-/// Throws so that flipping [kUseFirebaseEmulator] off before the owner
-/// delivers the private config fails loudly into the bootstrap's degraded
-/// state instead of silently hitting a half-configured project.
-FirebaseOptions sharedProjectFirebaseOptions() => throw UnimplementedError(
-      'Real Firebase options not supplied yet (contract 0.10: keys are '
-      'shared privately, never committed). Paste the values from '
-      '`flutterfire configure` into this function when the owner provides '
-      'them, then run with --dart-define=DRIVERAPP_USE_EMULATOR=false.',
+/// Supply the four values on the run command:
+/// ```
+/// flutter run \
+///   --dart-define=DRIVERAPP_USE_EMULATOR=false \
+///   --dart-define=DRIVERAPP_FB_API_KEY=<key> \
+///   --dart-define=DRIVERAPP_FB_APP_ID=<appId> \
+///   --dart-define=DRIVERAPP_FB_SENDER_ID=<messagingSenderId>
+/// ```
+/// (projectId/storageBucket below are project-derived, not secrets.)
+///
+/// Throws so that flipping [kUseFirebaseEmulator] off without the defines
+/// fails loudly into the bootstrap's degraded state instead of silently
+/// hitting a half-configured project. Values come from
+/// `flutterfire configure` (or the Firebase console) on each machine.
+FirebaseOptions sharedProjectFirebaseOptions() {
+  final apiKey = const String.fromEnvironment('DRIVERAPP_FB_API_KEY');
+  final appId = const String.fromEnvironment('DRIVERAPP_FB_APP_ID');
+  final senderId = const String.fromEnvironment('DRIVERAPP_FB_SENDER_ID');
+
+  if (apiKey.isEmpty || appId.isEmpty || senderId.isEmpty) {
+    throw UnimplementedError(
+      'Real Firebase options not supplied (contract 0.10: keys are shared '
+      'privately, never committed). Run with --dart-define='
+      'DRIVERAPP_FB_API_KEY / _FB_APP_ID / _FB_SENDER_ID — get the values '
+      'from `flutterfire configure` output on this machine.',
     );
+  }
+
+  return FirebaseOptions(
+    apiKey: apiKey,
+    appId: appId,
+    messagingSenderId: senderId,
+    projectId: 'safaaisaathi-63a87',
+    storageBucket: 'safaaisaathi-63a87.firebasestorage.app',
+    authDomain: 'safaaisaathi-63a87.firebaseapp.com',
+  );
+}
