@@ -27,8 +27,8 @@
   "trackingPending": "Van tracking will start automatically.",
 
   "trackingPermissionWhileInUseClaim": "Tracking needs location access so your van can be seen on the live map.",
-  "trackingPermissionBackgroundClaim": "Allow \u2018All the time\u2019 so tracking keeps working after the screen turns off.",
-  "trackingPermissionNotificationsClaim": "Allow notifications so the \u2018Tracking active\u2019 message stays visible.",
+  "trackingPermissionBackgroundClaim": "Allow 'All the time' so tracking keeps working after the screen turns off.",
+  "trackingPermissionNotificationsClaim": "Allow notifications so the 'Tracking active' message stays visible.",
   "trackingPermissionBatteryClaim": "Allow battery exception so tracking lasts your whole shift.",
   "trackingPermissionDenied": "Tracking is off. You can start it again later – your shift is safe.",
   "trackingGpsOff": "Phone location (GPS) is turned off. Turn it on and try again.",
@@ -47,6 +47,8 @@
   "languageNameGu": "ગુજરાતી",
 
   "liveRouteTitle": "Live Route",
+  "routeLoading": "Loading route…",
+  "recenterMap": "Recenter map",
   "noticesBadgeTooltip": "Notices",
   "endOfTripCardPlaceholder": "End-of-trip summary appears here",
   "routeProgress": "{done} of {total} wards done",
@@ -56,6 +58,36 @@
       "total": { "type": "int" }
     }
   },
+  "routeProgressTitle": "Route Progress",
+  "ofTotalWardsDone": "{total, plural, =1{ward done} other{wards done}}",
+  "@ofTotalWardsDone": {
+    "placeholders": {
+      "total": { "type": "int" }
+    }
+  },
+  "nextWardLabel": "Next ward",
+  "markWardDoneLabel": "Mark Ward Done: {wardName}",
+  "@markWardDoneLabel": {
+    "placeholders": {
+      "wardName": { "type": "String" }
+    }
+  },
+  "markWardDoneSemantic": "Mark {wardName} as done",
+  "@markWardDoneSemantic": {
+    "placeholders": {
+      "wardName": { "type": "String" }
+    }
+  },
+  "noOpenShiftTrip": "No open shift trip",
+  "wardListTitle": "Wards",
+  "doneAtTime": "Done at {time}",
+  "@doneAtTime": {
+    "placeholders": {
+      "time": { "type": "String" }
+    }
+  },
+  "noWardsOnRoute": "No wards on this route",
+  "noWardsOnRouteBody": "The route has no wards assigned yet.",
   "nextWardChip": "Next",
   "vanLastSeen": "{minutes, plural, =0{Location updated moments ago} =1{Location updated 1 min ago} other{Location updated {minutes} min ago}}",
   "@vanLastSeen": {
@@ -72,5 +104,16 @@
   "markWardDoneNoTrip": "No open shift trip",
 
   "noticesTitle": "Notices",
-  "noticesEmpty": "No notices"
+  "noticesEmpty": "No notices",
+  "noNoticesBody": "There are no notices for your route right now.",
+
+  "navRoute": "Route",
+  "navNotices": "Notices",
+  "navReports": "Reports",
+
+  "endShiftPrimary": "End Shift",
+  "endShiftHint": "All wards done — end your shift",
+  "endShiftDuration": "{mins, plural, =1{1 min on route} other{{mins} min on route}}",
+  "shiftEnded": "Shift ended",
+  "endShiftFailed": "Couldn't end the shift. Try again."
 }

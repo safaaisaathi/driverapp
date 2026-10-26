@@ -143,6 +143,12 @@ class AppLocalizationsGu extends AppLocalizations {
   String get liveRouteTitle => 'લાઇવ રૂટ';
 
   @override
+  String get routeLoading => 'રૂટ લોડ થાય છે…';
+
+  @override
+  String get recenterMap => 'નકશો ફરી કેન્દ્રિત કરો';
+
+  @override
   String get noticesBadgeTooltip => 'નોટિસ';
 
   @override
@@ -152,6 +158,51 @@ class AppLocalizationsGu extends AppLocalizations {
   String routeProgress(int done, int total) {
     return '$total માંથી $done વોર્ડ થયા';
   }
+
+  @override
+  String get routeProgressTitle => 'રૂટ પગલાં';
+
+  @override
+  String ofTotalWardsDone(int total) {
+    String _temp0 = intl.Intl.pluralLogic(
+      total,
+      locale: localeName,
+      other: 'વોર્ડ પૂરા થયા',
+      one: 'વોર્ડ પૂરું થયું',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get nextWardLabel => 'આગળનો વોર્ડ';
+
+  @override
+  String markWardDoneLabel(String wardName) {
+    return 'વોર્ડ પૂરું કરો: $wardName';
+  }
+
+  @override
+  String markWardDoneSemantic(String wardName) {
+    return '$wardNameને પૂરું કરો';
+  }
+
+  @override
+  String get noOpenShiftTrip => 'કોઈ ખુલ્લી શિફ્ટ ટ્રિપ નથી';
+
+  @override
+  String get wardListTitle => 'વોર્ડ્સ';
+
+  @override
+  String doneAtTime(String time) {
+    return '$time વાગ્યે પૂરું થયું';
+  }
+
+  @override
+  String get noWardsOnRoute => 'આ રૂટમાં કોઈ વોર્ડ નથી';
+
+  @override
+  String get noWardsOnRouteBody =>
+      'આ રૂટમાં હજી કોઈ વોર્ડ સોંપવામાં આવ્યા નથી.';
 
   @override
   String get nextWardChip => 'આગળ';
@@ -191,4 +242,39 @@ class AppLocalizationsGu extends AppLocalizations {
 
   @override
   String get noticesEmpty => 'કોઈ નોટિસ નથી';
+
+  @override
+  String get noNoticesBody => 'તમારા રૂટ માટે હજી કોઈ નોટિસ નથી.';
+
+  @override
+  String get navRoute => 'રૂટ';
+
+  @override
+  String get navNotices => 'નોટિસ';
+
+  @override
+  String get navReports => 'રિપોર્ટ';
+
+  @override
+  String get endShiftPrimary => 'શિફ્ટ સમાપ્ત કરો';
+
+  @override
+  String get endShiftHint => 'તમામ વોર્ડ પૂરા — તમારી શિફ્ટ સમાપ્ત કરો';
+
+  @override
+  String endShiftDuration(num mins) {
+    String _temp0 = intl.Intl.pluralLogic(
+      mins,
+      locale: localeName,
+      other: 'રૂટ પર $mins મિનિટ',
+      one: 'રૂટ પર 1 મિનિટ',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get shiftEnded => 'શિફ્ટ પૂરી થઈ';
+
+  @override
+  String get endShiftFailed => 'શિફ્ટ સમાપ્ત થઈ ન શક્યું. ફરી પ્રયાસ કરો.';
 }

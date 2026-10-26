@@ -8,16 +8,23 @@
 /// smaller control (out-of-order marks are allowed — grilled decision in the
 /// spec's Implementation Decisions, spec story 14). Done rows render their
 /// tick (+ flagged icon for admin-review marks, `trips.wardsDone.flagged`).
+///
+/// Skin re-shelled per docs/DESIGN.md: the route-progress head is the
+/// signature ContourCard (rule CL-12) — same strings, same keys, ink text
+/// on the brandMid fill.
 library;
 
 import 'package:flutter/material.dart';
 
 import 'package:driverapp/core/l10n/app_localizations.dart';
+import 'package:driverapp/core/theme/app_colors.dart';
+import 'package:driverapp/core/theme/app_text.dart';
 import 'package:driverapp/core/theme/app_theme.dart';
+import 'package:driverapp/core/widgets/contour_card.dart';
 
 import '../domain/ward_steps.dart';
 
-class WardListPanel extends StatelessWidget {
+class WardListPanel extends StatefulWidget {
   final String routeName;
 
   final List<WardStep> wardSteps;
@@ -59,9 +66,65 @@ class WardListPanel extends StatelessWidget {
   });
 
   @override
+  State<WardListPanel> createState() => _WardListPanelState();
+}
+
+class _WardListPanelState extends State<WardListPanel> {
+  /// One reused global key on the HIGHLIGHTED row wrapper — the hook used to
+  /// keep the next ward's action visible (DESIGN.md law: sheet content is
+  /// never covered by the nav at the default snap). Reassigned each build to
+  /// whichever row is next; old rows just drop their hold on it.
+  final GlobalKey _nextRowKey = GlobalKey();
+
+  /// Ward id the auto-reveal last ran for — guards against re-triggering on
+  /// no-change rebuilds (in-flight sets, l10n redraws, stale captions).
+  String? _autoRevealedFor;
+
+  String? _nextWardId() {
+    for (final step in widget.wardSteps) {
+      if (!step.isDone) return step.ward.id;
+    }
+    return null;
+  }
+
+  /// Scrolls the (scrollable) list so the next ward's row is fully above the
+  /// nav reserve once its layout is known. A no-op when the row already fits
+  /// (Scrollable.ensureVisible leaves fully-visible targets alone).
+  void _ensureNextVisible() {
+    final wardId = _nextWardId();
+    if (wardId == null || wardId == _autoRevealedFor) return;
+    _autoRevealedFor = wardId;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final context = _nextRowKey.currentContext;
+      if (context == null) return;
+      final box = context.findRenderObject();
+      if (box is! RenderBox || !box.hasSize) return;
+      Scrollable.ensureVisible(
+        context,
+        alignment: 1.0,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
+  @override
+  void didUpdateWidget(WardListPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Reveal runs only when the NEXT ward actually changed — a mark moved the
+    // highlight, not an in-flight flicker or a caption refresh.
+    if (_nextWardId() != _autoRevealedFor) _ensureNextVisible();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final done = wardSteps.where((step) => step.isDone).length;
+    final w = widget;
+    final done = w.wardSteps.where((step) => step.isDone).length;
+    // On a fresh panel build (first appearance, screen re-entry), line the
+    // next ward's action up too — never below the nav reserve.
+    _ensureNextVisible();
 
     return Material(
       color: AppTheme.colorSurface,
@@ -74,104 +137,126 @@ class WardListPanel extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Route progress head — the signature ContourCard (CL-12). The
+          // composite string stays one Text (tests match widgets by it).
+          // No horizontal pad here: the sheet shell already gives the
+          // 20 dp page inset — an extra 16 would re-wrap the composite
+          // progress string and push the last row behind the nav reserve.
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-            child: Text(
-              '$routeName · ${l10n.routeProgress(done, wardSteps.length)}',
-              style: Theme.of(context).textTheme.titleMedium!.copyWith(
-                    color: AppTheme.colorTextPrimary,
+            padding: const EdgeInsets.fromLTRB(0, 8, 0, 4),
+            child: ContourCard(
+              seed: w.routeName.hashCode,
+              minHeight: 56,
+              lines: 5,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  '${w.routeName} · ${l10n.routeProgress(done, w.wardSteps.length)}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.text.titleSmall.copyWith(
+                    color: context.colors.textPrimary,
                     fontWeight: FontWeight.bold,
                   ),
+                ),
+              ),
             ),
           ),
-          if (staleMinutes != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-              child: Row(
-                key: const Key('liveRoute.staleCaption'),
-                spacing: 4,
+          // Non-lazy scroll: a plain Column inside a SingleChildScrollView
+          // builds every row outright (the sheet owns the viewport), so
+          // finders and taps on rows below the fold stay stable.
+          Expanded(
+            child: SingleChildScrollView(
+              physics: const ClampingScrollPhysics(),
+              child: Column(
                 children: [
-                  Icon(Icons.schedule,
-                      size: 16, color: AppTheme.colorTextMuted),
-                  Text(
-                    l10n.vanLastSeen(staleMinutes!),
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall!
-                        .copyWith(color: AppTheme.colorTextMuted),
+                if (w.staleMinutes != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                    child: Row(
+                      key: const Key('liveRoute.staleCaption'),
+                      spacing: 4,
+                      children: [
+                        Icon(Icons.schedule,
+                            size: 16, color: AppTheme.colorTextMuted),
+                        Text(
+                          l10n.vanLastSeen(w.staleMinutes!),
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall!
+                              .copyWith(color: AppTheme.colorTextMuted),
+                        ),
+                      ],
+                    ),
                   ),
-                ],
-              ),
-            ),
-          if (isOffline)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-              child: Row(
-                key: const Key('liveRoute.offlineNote'),
-                spacing: 4,
-                children: [
-                  Icon(Icons.cloud_off,
-                      size: 16, color: AppTheme.colorTextMuted),
-                  Text(
-                    l10n.offlineShowingCached,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall!
-                        .copyWith(color: AppTheme.colorTextMuted),
+                if (w.isOffline)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                    child: Row(
+                      key: const Key('liveRoute.offlineNote'),
+                      spacing: 4,
+                      children: [
+                        Icon(Icons.cloud_off,
+                            size: 16, color: AppTheme.colorTextMuted),
+                        Text(
+                          l10n.offlineShowingCached,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall!
+                              .copyWith(color: AppTheme.colorTextMuted),
+                        ),
+                      ],
+                    ),
                   ),
-                ],
-              ),
-            ),
-          if (!markEnabled)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-              child: Row(
-                key: const Key('liveRoute.markNoTripHint'),
-                spacing: 4,
-                children: [
-                  Icon(Icons.info_outline,
-                      size: 16, color: AppTheme.colorTextMuted),
-                  Text(
-                    l10n.markWardDoneNoTrip,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall!
-                        .copyWith(color: AppTheme.colorTextMuted),
+                if (!w.markEnabled)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                    child: Row(
+                      key: const Key('liveRoute.markNoTripHint'),
+                      spacing: 4,
+                      children: [
+                        Icon(Icons.info_outline,
+                            size: 16, color: AppTheme.colorTextMuted),
+                        Text(
+                          l10n.markWardDoneNoTrip,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall!
+                              .copyWith(color: AppTheme.colorTextMuted),
+                        ),
+                      ],
+                    ),
                   ),
-                ],
-              ),
-            ),
-          if (markWriteFailed)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-              child: Row(
-                key: const Key('liveRoute.markError'),
-                spacing: 4,
-                children: [
-                  Icon(Icons.error_outline,
-                      size: 16, color: AppTheme.colorStatusEscalated),
-                  Text(
-                    l10n.markWardDoneFailed,
-                    style: Theme.of(context).textTheme.bodySmall!.copyWith(
-                        color: AppTheme.colorStatusEscalated),
+                if (w.markWriteFailed)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                    child: Row(
+                      key: const Key('liveRoute.markError'),
+                      spacing: 4,
+                      children: [
+                        Icon(Icons.error_outline,
+                            size: 16, color: AppTheme.colorStatusEscalated),
+                        Text(
+                          l10n.markWardDoneFailed,
+                          style: Theme.of(context).textTheme.bodySmall!
+                              .copyWith(color: AppTheme.colorStatusEscalated),
+                        ),
+                      ],
+                    ),
                   ),
-                ],
-              ),
+                const Divider(height: 1),
+                // The rows are regular list children: the sheet owns the
+                // viewport height now, so a second internal cap is redundant.
+                for (final step in w.wardSteps)
+                  _WardRow(
+                    step: step,
+                    markEnabled: w.markEnabled,
+                    markInFlight: w.markInFlight,
+                    onMark: w.onMark,
+                    nextRowKey: step.isNext ? _nextRowKey : null,
+                  ),
+              ],
             ),
-          const Divider(height: 1),
-          ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.sizeOf(context).height * 0.40,
-            ),
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: wardSteps.length,
-              itemBuilder: (context, index) => _WardRow(
-                step: wardSteps[index],
-                markEnabled: markEnabled,
-                markInFlight: markInFlight,
-                onMark: onMark,
-              ),
             ),
           ),
         ],
@@ -189,11 +274,17 @@ class _WardRow extends StatelessWidget {
 
   final void Function(String wardId) onMark;
 
+  /// Set ONLY on the currently-highlighted row (the panel re-assigns it each
+  /// rebuild): the handle the panel auto-reveal uses to keep the next ward's
+  /// action above the nav. Also carrying the row's canonical test key.
+  final GlobalKey? nextRowKey;
+
   const _WardRow({
     required this.step,
     required this.markEnabled,
     required this.markInFlight,
     required this.onMark,
+    this.nextRowKey,
   });
 
   @override
@@ -207,13 +298,15 @@ class _WardRow extends StatelessWidget {
     // section 6, one-handed driver); other undone wards get the smaller
     // out-of-order control; done rows render their record only.
     if (highlighted) {
-      return Container(
-        key: Key('liveRoute.wardRow.${step.ward.id}'),
+      return KeyedSubtree(
+        key: nextRowKey,
+        child: Container(
+          key: Key('liveRoute.wardRow.${step.ward.id}'),
         color: AppTheme.colorPrimary.withValues(alpha: 0.10),
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          spacing: 8,
+          spacing: 4,
           children: [
             _RowHead(step: step),
             FilledButton(
@@ -227,12 +320,13 @@ class _WardRow extends StatelessWidget {
             ),
           ],
         ),
+      ),
       );
     }
 
     return Container(
       key: Key('liveRoute.wardRow.${step.ward.id}'),
-      height: 64,
+      height: 56,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         spacing: 12,

@@ -251,13 +251,13 @@ abstract class AppLocalizations {
   /// No description provided for @trackingPermissionBackgroundClaim.
   ///
   /// In en, this message translates to:
-  /// **'Allow ‘All the time’ so tracking keeps working after the screen turns off.'**
+  /// **'Allow \'All the time\' so tracking keeps working after the screen turns off.'**
   String get trackingPermissionBackgroundClaim;
 
   /// No description provided for @trackingPermissionNotificationsClaim.
   ///
   /// In en, this message translates to:
-  /// **'Allow notifications so the ‘Tracking active’ message stays visible.'**
+  /// **'Allow notifications so the \'Tracking active\' message stays visible.'**
   String get trackingPermissionNotificationsClaim;
 
   /// No description provided for @trackingPermissionBatteryClaim.
@@ -344,6 +344,18 @@ abstract class AppLocalizations {
   /// **'Live Route'**
   String get liveRouteTitle;
 
+  /// No description provided for @routeLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading route…'**
+  String get routeLoading;
+
+  /// No description provided for @recenterMap.
+  ///
+  /// In en, this message translates to:
+  /// **'Recenter map'**
+  String get recenterMap;
+
   /// No description provided for @noticesBadgeTooltip.
   ///
   /// In en, this message translates to:
@@ -361,6 +373,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{done} of {total} wards done'**
   String routeProgress(int done, int total);
+
+  /// No description provided for @routeProgressTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Route Progress'**
+  String get routeProgressTitle;
+
+  /// No description provided for @ofTotalWardsDone.
+  ///
+  /// In en, this message translates to:
+  /// **'{total, plural, =1{ward done} other{wards done}}'**
+  String ofTotalWardsDone(int total);
+
+  /// No description provided for @nextWardLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Next ward'**
+  String get nextWardLabel;
+
+  /// No description provided for @markWardDoneLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark Ward Done: {wardName}'**
+  String markWardDoneLabel(String wardName);
+
+  /// No description provided for @markWardDoneSemantic.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark {wardName} as done'**
+  String markWardDoneSemantic(String wardName);
+
+  /// No description provided for @noOpenShiftTrip.
+  ///
+  /// In en, this message translates to:
+  /// **'No open shift trip'**
+  String get noOpenShiftTrip;
+
+  /// No description provided for @wardListTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Wards'**
+  String get wardListTitle;
+
+  /// No description provided for @doneAtTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Done at {time}'**
+  String doneAtTime(String time);
+
+  /// No description provided for @noWardsOnRoute.
+  ///
+  /// In en, this message translates to:
+  /// **'No wards on this route'**
+  String get noWardsOnRoute;
+
+  /// No description provided for @noWardsOnRouteBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The route has no wards assigned yet.'**
+  String get noWardsOnRouteBody;
 
   /// No description provided for @nextWardChip.
   ///
@@ -421,6 +493,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No notices'**
   String get noticesEmpty;
+
+  /// No description provided for @noNoticesBody.
+  ///
+  /// In en, this message translates to:
+  /// **'There are no notices for your route right now.'**
+  String get noNoticesBody;
+
+  /// No description provided for @navRoute.
+  ///
+  /// In en, this message translates to:
+  /// **'Route'**
+  String get navRoute;
+
+  /// No description provided for @navNotices.
+  ///
+  /// In en, this message translates to:
+  /// **'Notices'**
+  String get navNotices;
+
+  /// No description provided for @navReports.
+  ///
+  /// In en, this message translates to:
+  /// **'Reports'**
+  String get navReports;
+
+  /// No description provided for @endShiftPrimary.
+  ///
+  /// In en, this message translates to:
+  /// **'End Shift'**
+  String get endShiftPrimary;
+
+  /// No description provided for @endShiftHint.
+  ///
+  /// In en, this message translates to:
+  /// **'All wards done — end your shift'**
+  String get endShiftHint;
+
+  /// No description provided for @endShiftDuration.
+  ///
+  /// In en, this message translates to:
+  /// **'{mins, plural, =1{1 min on route} other{{mins} min on route}}'**
+  String endShiftDuration(num mins);
+
+  /// No description provided for @shiftEnded.
+  ///
+  /// In en, this message translates to:
+  /// **'Shift ended'**
+  String get shiftEnded;
+
+  /// No description provided for @endShiftFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t end the shift. Try again.'**
+  String get endShiftFailed;
 }
 
 class _AppLocalizationsDelegate

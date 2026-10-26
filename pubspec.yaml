@@ -52,6 +52,8 @@ dependencies:
   cloud_functions: ^7.0.1
   connectivity_plus: ^7.3.1
   shared_preferences: ^2.5.6
+  flutter_svg: ^2.1.0
+  meta: ^1.19.0
 
 dev_dependencies:
   flutter_test:
@@ -75,6 +77,35 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  assets:
+    - assets/mascot/
+
+  fonts:
+    - family: NotoSans
+      fonts:
+        - asset: assets/fonts/NotoSans.ttf
+          weight: 300
+        - asset: assets/fonts/NotoSans.ttf
+          weight: 400
+        - asset: assets/fonts/NotoSans.ttf
+          weight: 500
+        - asset: assets/fonts/NotoSans.ttf
+          weight: 600
+        - asset: assets/fonts/NotoSans.ttf
+          weight: 700
+    - family: NotoSansGujarati
+      fonts:
+        - asset: assets/fonts/NotoSansGujarati.ttf
+          weight: 300
+        - asset: assets/fonts/NotoSansGujarati.ttf
+          weight: 400
+        - asset: assets/fonts/NotoSansGujarati.ttf
+          weight: 500
+        - asset: assets/fonts/NotoSansGujarati.ttf
+          weight: 600
+        - asset: assets/fonts/NotoSansGujarati.ttf
+          weight: 700
 
   # To add assets to your application, add an assets section, like this:
   # assets:

@@ -90,11 +90,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get trackingPermissionBackgroundClaim =>
-      'Allow ‘All the time’ so tracking keeps working after the screen turns off.';
+      'Allow \'All the time\' so tracking keeps working after the screen turns off.';
 
   @override
   String get trackingPermissionNotificationsClaim =>
-      'Allow notifications so the ‘Tracking active’ message stays visible.';
+      'Allow notifications so the \'Tracking active\' message stays visible.';
 
   @override
   String get trackingPermissionBatteryClaim =>
@@ -144,6 +144,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get liveRouteTitle => 'Live Route';
 
   @override
+  String get routeLoading => 'Loading route…';
+
+  @override
+  String get recenterMap => 'Recenter map';
+
+  @override
   String get noticesBadgeTooltip => 'Notices';
 
   @override
@@ -153,6 +159,50 @@ class AppLocalizationsEn extends AppLocalizations {
   String routeProgress(int done, int total) {
     return '$done of $total wards done';
   }
+
+  @override
+  String get routeProgressTitle => 'Route Progress';
+
+  @override
+  String ofTotalWardsDone(int total) {
+    String _temp0 = intl.Intl.pluralLogic(
+      total,
+      locale: localeName,
+      other: 'wards done',
+      one: 'ward done',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get nextWardLabel => 'Next ward';
+
+  @override
+  String markWardDoneLabel(String wardName) {
+    return 'Mark Ward Done: $wardName';
+  }
+
+  @override
+  String markWardDoneSemantic(String wardName) {
+    return 'Mark $wardName as done';
+  }
+
+  @override
+  String get noOpenShiftTrip => 'No open shift trip';
+
+  @override
+  String get wardListTitle => 'Wards';
+
+  @override
+  String doneAtTime(String time) {
+    return 'Done at $time';
+  }
+
+  @override
+  String get noWardsOnRoute => 'No wards on this route';
+
+  @override
+  String get noWardsOnRouteBody => 'The route has no wards assigned yet.';
 
   @override
   String get nextWardChip => 'Next';
@@ -192,4 +242,39 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noticesEmpty => 'No notices';
+
+  @override
+  String get noNoticesBody => 'There are no notices for your route right now.';
+
+  @override
+  String get navRoute => 'Route';
+
+  @override
+  String get navNotices => 'Notices';
+
+  @override
+  String get navReports => 'Reports';
+
+  @override
+  String get endShiftPrimary => 'End Shift';
+
+  @override
+  String get endShiftHint => 'All wards done — end your shift';
+
+  @override
+  String endShiftDuration(num mins) {
+    String _temp0 = intl.Intl.pluralLogic(
+      mins,
+      locale: localeName,
+      other: '$mins min on route',
+      one: '1 min on route',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get shiftEnded => 'Shift ended';
+
+  @override
+  String get endShiftFailed => 'Couldn\'t end the shift. Try again.';
 }

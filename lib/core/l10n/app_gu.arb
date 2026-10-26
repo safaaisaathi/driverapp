@@ -47,6 +47,8 @@
   "languageNameGu": "ગુજરાતી",
 
   "liveRouteTitle": "લાઇવ રૂટ",
+  "routeLoading": "રૂટ લોડ થાય છે…",
+  "recenterMap": "નકશો ફરી કેન્દ્રિત કરો",
   "noticesBadgeTooltip": "નોટિસ",
   "endOfTripCardPlaceholder": "શિફ્ટ પૂરી વખતે સારાંશ અહીં દેખાય",
   "routeProgress": "{total} માંથી {done} વોર્ડ થયા",
@@ -56,6 +58,36 @@
       "total": { "type": "int" }
     }
   },
+  "routeProgressTitle": "રૂટ પગલાં",
+  "ofTotalWardsDone": "{total, plural, =1{વોર્ડ પૂરું થયું} other{વોર્ડ પૂરા થયા}}",
+  "@ofTotalWardsDone": {
+    "placeholders": {
+      "total": { "type": "int" }
+    }
+  },
+  "nextWardLabel": "આગળનો વોર્ડ",
+  "markWardDoneLabel": "વોર્ડ પૂરું કરો: {wardName}",
+  "@markWardDoneLabel": {
+    "placeholders": {
+      "wardName": { "type": "String" }
+    }
+  },
+  "markWardDoneSemantic": "{wardName}ને પૂરું કરો",
+  "@markWardDoneSemantic": {
+    "placeholders": {
+      "wardName": { "type": "String" }
+    }
+  },
+  "noOpenShiftTrip": "કોઈ ખુલ્લી શિફ્ટ ટ્રિપ નથી",
+  "wardListTitle": "વોર્ડ્સ",
+  "doneAtTime": "{time} વાગ્યે પૂરું થયું",
+  "@doneAtTime": {
+    "placeholders": {
+      "time": { "type": "String" }
+    }
+  },
+  "noWardsOnRoute": "આ રૂટમાં કોઈ વોર્ડ નથી",
+  "noWardsOnRouteBody": "આ રૂટમાં હજી કોઈ વોર્ડ સોંપવામાં આવ્યા નથી.",
   "nextWardChip": "આગળ",
   "vanLastSeen": "{minutes, plural, =0{લોકેશન હમણાં જ અપડેટ થયું} =1{લોકેશન 1 મિનિટ પહેલાં અપડેટ થયું} other{લોકેશન {minutes} મિનિટ પહેલાં અપડેટ થયું}}",
   "@vanLastSeen": {
@@ -72,5 +104,16 @@
   "markWardDoneNoTrip": "કોઈ ખુલ્લી ટ્રિપ નથી",
 
   "noticesTitle": "નોટિસ",
-  "noticesEmpty": "કોઈ નોટિસ નથી"
+  "noticesEmpty": "કોઈ નોટિસ નથી",
+  "noNoticesBody": "તમારા રૂટ માટે હજી કોઈ નોટિસ નથી.",
+
+  "navRoute": "રૂટ",
+  "navNotices": "નોટિસ",
+  "navReports": "રિપોર્ટ",
+
+  "endShiftPrimary": "શિફ્ટ સમાપ્ત કરો",
+  "endShiftHint": "તમામ વોર્ડ પૂરા — તમારી શિફ્ટ સમાપ્ત કરો",
+  "endShiftDuration": "{mins, plural, =1{રૂટ પર 1 મિનિટ} other{રૂટ પર {mins} મિનિટ}}",
+  "shiftEnded": "શિફ્ટ પૂરી થઈ",
+  "endShiftFailed": "શિફ્ટ સમાપ્ત થઈ ન શક્યું. ફરી પ્રયાસ કરો."
 }
