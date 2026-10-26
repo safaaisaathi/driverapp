@@ -8,6 +8,9 @@
   "retry": "Retry",
 
   "shiftStartTitle": "Shift start",
+  "vanLabel": "Van",
+  "pinLabel": "PIN",
+  "routeSetByAdmin": "(set by admin)",
   "splashTagline": "Clean city, one route at a time.",
   "welcomeTitle": "Welcome",
   "welcomeBody": "Safaai Saathi is ready for today's shift.",

@@ -31,6 +31,39 @@ class AppLocalizationsGu extends AppLocalizations {
   String get shiftStartTitle => 'શિફ્ટ શરૂ કરો';
 
   @override
+  String get vanLabel => 'વેન';
+
+  @override
+  String get pinLabel => 'પિન';
+
+  @override
+  String get routeSetByAdmin => '(એડમિન દ્વારા સેટ)';
+
+  @override
+  String get splashTagline => 'સ્વચ્છ શહેર, એક એક રૂટ.';
+
+  @override
+  String get welcomeTitle => 'સ્વાગત છે';
+
+  @override
+  String get welcomeBody => 'સફાઈ સાથી આજની શિફ્ટ માટે તૈયાર છે.';
+
+  @override
+  String get welcomeCta => 'ચાલો શરૂ કરીએ';
+
+  @override
+  String get dutyTitle => 'આજની ડ્યુટી';
+
+  @override
+  String get dutySubtitle => 'તમારી વેન સાથે જોડાઈને રૂટ શરૂ કરો.';
+
+  @override
+  String get startDuty => 'ડ્યુટી શરૂ કરો';
+
+  @override
+  String get gettingReady => 'રૂટ તૈયાર થઈ રહ્યો છે…';
+
+  @override
   String get pickVanPrompt => 'તમારી વેન પસંદ કરો';
 
   @override

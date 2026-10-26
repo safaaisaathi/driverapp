@@ -31,6 +31,39 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shiftStartTitle => 'Shift start';
 
   @override
+  String get vanLabel => 'Van';
+
+  @override
+  String get pinLabel => 'PIN';
+
+  @override
+  String get routeSetByAdmin => '(set by admin)';
+
+  @override
+  String get splashTagline => 'Clean city, one route at a time.';
+
+  @override
+  String get welcomeTitle => 'Welcome';
+
+  @override
+  String get welcomeBody => 'Safaai Saathi is ready for today\'s shift.';
+
+  @override
+  String get welcomeCta => 'Get started';
+
+  @override
+  String get dutyTitle => 'Today\'s duty';
+
+  @override
+  String get dutySubtitle => 'Connect with your van and start the route.';
+
+  @override
+  String get startDuty => 'Start duty';
+
+  @override
+  String get gettingReady => 'Getting the route ready…';
+
+  @override
   String get pickVanPrompt => 'Pick your van';
 
   @override

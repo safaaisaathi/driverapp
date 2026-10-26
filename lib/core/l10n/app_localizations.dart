@@ -140,6 +140,72 @@ abstract class AppLocalizations {
   /// **'Shift start'**
   String get shiftStartTitle;
 
+  /// No description provided for @vanLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Van'**
+  String get vanLabel;
+
+  /// No description provided for @pinLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'PIN'**
+  String get pinLabel;
+
+  /// No description provided for @routeSetByAdmin.
+  ///
+  /// In en, this message translates to:
+  /// **'(set by admin)'**
+  String get routeSetByAdmin;
+
+  /// No description provided for @splashTagline.
+  ///
+  /// In en, this message translates to:
+  /// **'Clean city, one route at a time.'**
+  String get splashTagline;
+
+  /// No description provided for @welcomeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Welcome'**
+  String get welcomeTitle;
+
+  /// No description provided for @welcomeBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Safaai Saathi is ready for today\'s shift.'**
+  String get welcomeBody;
+
+  /// No description provided for @welcomeCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Get started'**
+  String get welcomeCta;
+
+  /// No description provided for @dutyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Today\'s duty'**
+  String get dutyTitle;
+
+  /// No description provided for @dutySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect with your van and start the route.'**
+  String get dutySubtitle;
+
+  /// No description provided for @startDuty.
+  ///
+  /// In en, this message translates to:
+  /// **'Start duty'**
+  String get startDuty;
+
+  /// No description provided for @gettingReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Getting the route ready…'**
+  String get gettingReady;
+
   /// No description provided for @pickVanPrompt.
   ///
   /// In en, this message translates to:
