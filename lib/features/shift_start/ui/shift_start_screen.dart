@@ -11,6 +11,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_tokens.dart';
+import '../../../core/widgets/skeleton.dart';
 import '../domain/shift_flow.dart';
 import 'basic_route_placeholder.dart';
 import 'language_toggle.dart';
@@ -95,13 +97,24 @@ class _VanListLoading extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return Center(
+    // Skeleton loaders — the card-shape placeholders of the real van
+    // list, pulsing (DESIGN.md loading rule: no bare spinners on a full
+    // screen when the data shape is known).
+    return Padding(
+      padding: const EdgeInsets.all(AppSpace.page),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const CircularProgressIndicator(),
-          const SizedBox(height: AppTheme.spacingUnit * 2),
-          Text(l10n.loading),
+          SkeletonBox(width: 220, height: 24),
+          const SizedBox(height: AppSpace.md),
+          const SkeletonVanCard(),
+          const SkeletonVanCard(),
+          const SkeletonVanCard(),
+          const SizedBox(height: AppSpace.xl),
+          Text(
+            l10n.gettingReady,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
         ],
       ),
     );

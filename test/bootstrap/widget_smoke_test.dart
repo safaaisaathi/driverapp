@@ -21,10 +21,21 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(container: container, child: const DriverApp()),
     );
+    // Walk the static launching flow: splash (1.6 s hold) → welcome →
+    // start duty, which lands on D1 where the degraded van state shows.
+    await tester.pump(const Duration(milliseconds: 1700));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.byKey(const ValueKey('welcome-begin-button')));
+    await tester.pump(); // navigation frame
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.byKey(const ValueKey('duty-start-button')));
+    // M3 fade-forwards: retire the replaced route through small pumps.
     await tester.pumpAndSettle();
 
-    // Home is D1 Shift Start since ticket 04 (was the Phase-0 placeholder).
-    // Without Firebase the van read fails sync inside loadVans, so D1 shows
+
+    // Home lands on D1 Shift Start (after the launching screens, ticket 14
+    // keeps the Splash → Welcome → Start Duty chain before it). Without
+    // Firebase the van read fails sync inside loadVans, so D1 shows
     // its degraded (retryable) van-list state instead of crashing — the same
     // degrade-don't-crash contract this smoke test checked on the placeholder.
     expect(find.byType(MaterialApp), findsOneWidget);

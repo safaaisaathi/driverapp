@@ -7,7 +7,7 @@ import 'core/config/firebase_bootstrap.dart';
 import 'core/l10n/app_localizations.dart';
 import 'core/l10n/locale_controller.dart';
 import 'core/theme/app_theme.dart';
-import 'features/shift_start/ui/shift_start_screen.dart';
+import 'features/launching/splash_screen.dart';
 
 Future<void> main() async {
   // Boot wiring (Firebase init, emulator setup, anonymous session, FCM
@@ -44,9 +44,10 @@ class DriverApp extends ConsumerWidget {
           const Locale('en'),
       supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
-      // D1 Shift Start is the app's home (F-D1); successful starts navigate
-      // to the BasicRoute placeholder (tracking engine = ticket 05).
-      home: const ShiftStartScreen(),
+      // Launching flow (static, no API): Splash → Welcome → Start Duty,
+      // then the D1 van-picker / route screen where data (skeletons +
+      // error states) takes over.
+      home: const SplashScreen(),
     );
   }
 }

@@ -35,7 +35,8 @@ class _NoopAuthGateway implements DriverAuthGateway {
 }
 
 /// Pumps the real DriverApp wiring (main.dart's MaterialApp) against the
-/// fake repository seam plus an in-memory locale store.
+/// fake repository seam plus an in-memory locale store, then walks the
+/// launching flow (splash → welcome → start duty) onto D1.
 Future<void> pumpDriverApp(
   WidgetTester tester, {
   required InMemoryLocaleStore store,
@@ -53,6 +54,17 @@ Future<void> pumpDriverApp(
     ],
     child: const DriverApp(),
   ));
+  // Splash holds 1.6 s (local timer), then Welcome replaces it; a test
+  // drives through the static launching screens to reach D1.
+  await tester.pump(const Duration(milliseconds: 1700));
+  await tester.pump(const Duration(milliseconds: 400)); // welcome push settles
+  await tester.tap(find.byKey(const ValueKey('welcome-begin-button')));
+  await tester.pump(); // navigation frame
+  await tester.pump(const Duration(milliseconds: 400)); // duty push settles
+  await tester.tap(find.byKey(const ValueKey('duty-start-button')));
+  // The M3 fade-forwards exit needs continuous small-step pumping to
+  // retire the replaced route; one long pump leaves it mid-bookkeeping.
+  await tester.pumpAndSettle();
 }
 
 /// Pumps in small steps until [finder] finds a widget, or fails.

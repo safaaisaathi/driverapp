@@ -12,7 +12,9 @@ import 'repositories/fake_repositories.dart';
 /// App smoke test: home now boots into D1 Shift Start (F-D1), rendered
 /// against the fake repository seam — no platform channels.
 void main() {
-  testWidgets('DriverApp renders D1 Shift Start as home', (tester) async {
+  testWidgets('DriverApp boots: Splash → Welcome → Start Duty → D1 '
+      'against the fake repository seam (no platform channels)',
+      (tester) async {
     await tester.pumpWidget(ProviderScope(
       overrides: [
         vansRepositoryProvider.overrideWithValue(FakeVansRepository()),
@@ -25,6 +27,15 @@ void main() {
       ],
       child: const DriverApp(),
     ));
+    // Splash (1.6 s local hold) → Welcome (static) → Start Duty → D1.
+    await tester.pump(const Duration(milliseconds: 1700));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.byKey(const ValueKey('welcome-begin-button')));
+    await tester.pump(); // navigation frame
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.byKey(const ValueKey('duty-start-button')));
+    // M3 fade-forwards: retire the replaced route through small pumps.
+    await tester.pumpAndSettle();
     // The first van load resolves against the fake (empty) list.
     for (var i = 0;
         i < 30 && find.text('No vans found').evaluate().isEmpty;
