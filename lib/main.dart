@@ -27,6 +27,10 @@ class DriverApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp(
+      // The DEBUG ribbon is a debug-build-only cosmetic (no contract
+      // impact); drawing it over the driver's top-right corner hurts
+      // taste and covers content (DESIGN.md line 365 rules the corners).
+      debugShowCheckedModeBanner: false,
       onGenerateTitle: (context) => AppLocalizations.of(context)!.appTitle,
       theme: AppTheme.light(),
       // F-D10 (ticket 13): the D1 toggle drives the language app-wide and
