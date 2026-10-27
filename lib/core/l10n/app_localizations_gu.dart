@@ -310,4 +310,76 @@ class AppLocalizationsGu extends AppLocalizations {
 
   @override
   String get endShiftFailed => 'શિફ્ટ સમાપ્ત થઈ ન શક્યું. ફરી પ્રયાસ કરો.';
+
+  @override
+  String get settingsTitle => 'સેટિંગ્સ';
+
+  @override
+  String get settingsLanguage => 'ભાષા';
+
+  @override
+  String get settingsTheme => 'થીમ';
+
+  @override
+  String get themeLight => 'લાઇટ';
+
+  @override
+  String get themeDark => 'ડાર્ક';
+
+  @override
+  String get themeSystem => 'સિસ્ટમ';
+
+  @override
+  String get settingsVan => 'વેન';
+
+  @override
+  String get settingsNoVan => 'કનેક્ટ નથી';
+
+  @override
+  String get tripHistoryTitle => 'ટ્રિપ ઇતિહાસ';
+
+  @override
+  String get tripHistoryEmpty => 'હજી કોઈ ટ્રિપ નથી';
+
+  @override
+  String get tripHistoryEmptyBody =>
+      'તમારી પહેલી શિફ્ટ પછી અહીં તમારી ટ્રિપ દેખાશે.';
+
+  @override
+  String get chipCompleted => 'પૂર્ણ';
+
+  @override
+  String get chipPartlyDone => 'અંશત પૂર્ણ';
+
+  @override
+  String get tripToday => 'આજ';
+
+  @override
+  String get tripYesterday => 'ગઈકાલ';
+
+  @override
+  String hoursMinutes(Object h, Object m) {
+    return '$h ક $m મિ';
+  }
+
+  @override
+  String wardsDoneOf(Object done, Object total) {
+    return '$done પૈકી $total વોર્ડ';
+  }
+
+  @override
+  String get tripActive => 'ચાલુ';
+
+  @override
+  String get helpAboutTitle => 'મદદ અને વિશે';
+
+  @override
+  String get helpAboutTagline =>
+      'સફાઈ સાથી વેન ચાલકો માટે એપ. SFIC ડેમો માટે વિકસિત.';
+
+  @override
+  String get tripHistory => 'ટ્રિપ ઇતિહાસ';
+
+  @override
+  String get helpAndAbout => 'મદદ અને વિશે';
 }

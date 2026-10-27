@@ -42,4 +42,14 @@ abstract class TripsRepository {
     required String vanId,
     required DateTime date,
   });
+
+  /// The most recent trips of [vanId] as of [asOfDate] — the Trip
+  /// History screen (wireframe WF-22: Today / Yesterday rows; a still
+  /// open trip shows as "running"). Read-only: trips are created by
+  /// this app's shift flow, never issued from the history screen.
+  Stream<List<Trip>> watchRecentTrips({
+    required String vanId,
+    required DateTime asOfDate,
+    int limit = 30,
+  });
 }

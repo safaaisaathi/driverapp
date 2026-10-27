@@ -26,6 +26,7 @@ import 'core/l10n/app_localizations.dart';
 import 'core/l10n/locale_controller.dart';
 import 'core/repositories/repository_providers.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/theme_mode_controller.dart';
 import 'features/live_route/dev/desktop_demo_seed.dart';
 import 'features/live_route/live_route_providers.dart'
     show currentVanIdProvider;
@@ -116,7 +117,9 @@ class DevFlowPreviewApp extends ConsumerWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       onGenerateTitle: (context) => AppLocalizations.of(context)!.appTitle,
-      theme: AppTheme.light(),
+      theme: buildTheme(Brightness.light),
+      darkTheme: buildTheme(Brightness.dark),
+      themeMode: ref.watch(themeModeControllerProvider),
       locale: ref.watch(localeControllerProvider) ?? const Locale('en'),
       supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: AppLocalizations.localizationsDelegates,

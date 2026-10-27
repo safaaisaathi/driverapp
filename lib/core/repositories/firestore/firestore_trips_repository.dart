@@ -79,4 +79,29 @@ final class FirestoreTripsRepository implements TripsRepository {
       return Trip.fromMap(data);
     });
   }
+
+  @override
+  Stream<List<Trip>> watchRecentTrips({
+    required String vanId,
+    required DateTime asOfDate,
+    int limit = 30,
+  }) {
+    // History includes TODAY (WF-22's "Today" row): the open trip shows
+    // as "running", a just-ended trip as completed/partly-done.
+    final after = Timestamp.fromDate(
+      DateTime(asOfDate.year, asOfDate.month, asOfDate.day)
+          .add(const Duration(days: 1)),
+    );
+    final query = _trips
+        .where('vanId', isEqualTo: vanId)
+        .where('date', isLessThan: after)
+        .orderBy('date', descending: true)
+        .limit(limit);
+    return query.snapshots().map(
+          (snapshot) => snapshot.docs.map((doc) {
+            final data = <String, Object?>{...doc.data(), 'id': doc.id};
+            return Trip.fromMap(data);
+          }).toList(),
+        );
+  }
 }

@@ -603,4 +603,15 @@ class _FaultyTrips implements TripsRepository {
 
   @override
   Future<Trip?> readTrip(String tripId) => _inner.readTrip(tripId);
+
+  @override
+  Stream<List<Trip>> watchRecentTrips({
+    required String vanId,
+    required DateTime asOfDate,
+    int limit = 30,
+  }) => _inner.watchRecentTrips(
+        vanId: vanId,
+        asOfDate: asOfDate,
+        limit: limit,
+      );
 }

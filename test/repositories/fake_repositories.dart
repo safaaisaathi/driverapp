@@ -201,6 +201,39 @@ class FakeTripsRepository implements TripsRepository {
   bool _sameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
+  @override
+  Stream<List<Trip>> watchRecentTrips({
+    required String vanId,
+    required DateTime asOfDate,
+    int limit = 30,
+  }) {
+    late StreamController<List<Trip>> controller;
+    late StreamSubscription<void> changesSub;
+    List<Trip> latest() {
+      final cutoff =
+          DateTime(asOfDate.year, asOfDate.month, asOfDate.day)
+              .add(const Duration(days: 1));
+      final matches = trips.values
+          .where(
+            (trip) =>
+                trip.vanId == vanId && trip.date.isBefore(cutoff),
+          )
+          .toList()
+        ..sort((a, b) => b.date.compareTo(a.date));
+      return matches.take(limit).toList();
+    }
+
+    controller = StreamController<List<Trip>>(
+      onListen: () {
+        controller.add(latest());
+        changesSub =
+            _changes.stream.listen((_) => controller.add(latest()));
+      },
+      onCancel: () => changesSub.cancel(),
+    );
+    return controller.stream;
+  }
+
   Trip _require(String tripId) {
     final trip = trips[tripId];
     if (trip == null) {

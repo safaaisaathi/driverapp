@@ -7,6 +7,7 @@ import 'core/config/firebase_bootstrap.dart';
 import 'core/l10n/app_localizations.dart';
 import 'core/l10n/locale_controller.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/theme_mode_controller.dart';
 import 'features/launching/splash_screen.dart';
 
 Future<void> main() async {
@@ -32,7 +33,12 @@ class DriverApp extends ConsumerWidget {
       // taste and covers content (DESIGN.md line 365 rules the corners).
       debugShowCheckedModeBanner: false,
       onGenerateTitle: (context) => AppLocalizations.of(context)!.appTitle,
-      theme: AppTheme.light(),
+      // Wireframes WF-14/21: Light / Dark / System from the SAME token
+      // set (DESIGN.md D-07). Widgets must not branch on brightness —
+      // they read context.tokens, and the extension swaps per theme.
+      theme: buildTheme(Brightness.light),
+      darkTheme: buildTheme(Brightness.dark),
+      themeMode: ref.watch(themeModeControllerProvider),
       // F-D10 (ticket 13): the D1 toggle drives the language app-wide and
       // instantly (this watch rebuilds MaterialApp), restored across
       // launches by LocaleController.

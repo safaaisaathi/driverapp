@@ -259,6 +259,26 @@ class DevTripsRepository implements TripsRepository {
     yield* store.stream;
   }
 
+  @override
+  Stream<List<Trip>> watchRecentTrips({
+    required String vanId,
+    required DateTime asOfDate,
+    int limit = 30,
+  }) async* {
+    // Same local-day matching rule as watchTripByVanIdAndDate; history
+    // INCLUDES today (WF-22's "Today" row) — a still open trip shows as
+    // "running". Newest first.
+    final cutoff =
+        DateTime(asOfDate.year, asOfDate.month, asOfDate.day)
+            .add(const Duration(days: 1));
+    final recent =
+        _trips.values.map((store) => store.value).whereType<Trip>().where(
+              (trip) => trip.vanId == vanId && trip.date.isBefore(cutoff),
+            ).toList()
+          ..sort((a, b) => b.date.compareTo(a.date));
+    yield recent.take(limit).toList();
+  }
+
   static bool _sameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 }

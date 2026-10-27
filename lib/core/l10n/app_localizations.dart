@@ -613,6 +613,138 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t end the shift. Try again.'**
   String get endShiftFailed;
+
+  /// No description provided for @settingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get settingsTitle;
+
+  /// No description provided for @settingsLanguage.
+  ///
+  /// In en, this message translates to:
+  /// **'Language'**
+  String get settingsLanguage;
+
+  /// No description provided for @settingsTheme.
+  ///
+  /// In en, this message translates to:
+  /// **'Theme'**
+  String get settingsTheme;
+
+  /// No description provided for @themeLight.
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get themeLight;
+
+  /// No description provided for @themeDark.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get themeDark;
+
+  /// No description provided for @themeSystem.
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get themeSystem;
+
+  /// No description provided for @settingsVan.
+  ///
+  /// In en, this message translates to:
+  /// **'Van'**
+  String get settingsVan;
+
+  /// No description provided for @settingsNoVan.
+  ///
+  /// In en, this message translates to:
+  /// **'Not connected'**
+  String get settingsNoVan;
+
+  /// No description provided for @tripHistoryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Trip history'**
+  String get tripHistoryTitle;
+
+  /// No description provided for @tripHistoryEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No trips yet'**
+  String get tripHistoryEmpty;
+
+  /// No description provided for @tripHistoryEmptyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your past shifts will show here after your first shift.'**
+  String get tripHistoryEmptyBody;
+
+  /// No description provided for @chipCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get chipCompleted;
+
+  /// No description provided for @chipPartlyDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Partly done'**
+  String get chipPartlyDone;
+
+  /// No description provided for @tripToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get tripToday;
+
+  /// No description provided for @tripYesterday.
+  ///
+  /// In en, this message translates to:
+  /// **'Yesterday'**
+  String get tripYesterday;
+
+  /// No description provided for @hoursMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{h} h {m} min'**
+  String hoursMinutes(Object h, Object m);
+
+  /// No description provided for @wardsDoneOf.
+  ///
+  /// In en, this message translates to:
+  /// **'{done} of {total} wards'**
+  String wardsDoneOf(Object done, Object total);
+
+  /// No description provided for @tripActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Running'**
+  String get tripActive;
+
+  /// No description provided for @helpAboutTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Help and about'**
+  String get helpAboutTitle;
+
+  /// No description provided for @helpAboutTagline.
+  ///
+  /// In en, this message translates to:
+  /// **'Safai Sathi driver app for Safai Sathi vans. Developed for the SFIC demo.'**
+  String get helpAboutTagline;
+
+  /// No description provided for @tripHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Trip history'**
+  String get tripHistory;
+
+  /// No description provided for @helpAndAbout.
+  ///
+  /// In en, this message translates to:
+  /// **'Help and about'**
+  String get helpAndAbout;
 }
 
 class _AppLocalizationsDelegate

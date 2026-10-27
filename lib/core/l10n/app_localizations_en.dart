@@ -310,4 +310,76 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get endShiftFailed => 'Couldn\'t end the shift. Try again.';
+
+  @override
+  String get settingsTitle => 'Settings';
+
+  @override
+  String get settingsLanguage => 'Language';
+
+  @override
+  String get settingsTheme => 'Theme';
+
+  @override
+  String get themeLight => 'Light';
+
+  @override
+  String get themeDark => 'Dark';
+
+  @override
+  String get themeSystem => 'System';
+
+  @override
+  String get settingsVan => 'Van';
+
+  @override
+  String get settingsNoVan => 'Not connected';
+
+  @override
+  String get tripHistoryTitle => 'Trip history';
+
+  @override
+  String get tripHistoryEmpty => 'No trips yet';
+
+  @override
+  String get tripHistoryEmptyBody =>
+      'Your past shifts will show here after your first shift.';
+
+  @override
+  String get chipCompleted => 'Completed';
+
+  @override
+  String get chipPartlyDone => 'Partly done';
+
+  @override
+  String get tripToday => 'Today';
+
+  @override
+  String get tripYesterday => 'Yesterday';
+
+  @override
+  String hoursMinutes(Object h, Object m) {
+    return '$h h $m min';
+  }
+
+  @override
+  String wardsDoneOf(Object done, Object total) {
+    return '$done of $total wards';
+  }
+
+  @override
+  String get tripActive => 'Running';
+
+  @override
+  String get helpAboutTitle => 'Help and about';
+
+  @override
+  String get helpAboutTagline =>
+      'Safai Sathi driver app for Safai Sathi vans. Developed for the SFIC demo.';
+
+  @override
+  String get tripHistory => 'Trip history';
+
+  @override
+  String get helpAndAbout => 'Help and about';
 }
