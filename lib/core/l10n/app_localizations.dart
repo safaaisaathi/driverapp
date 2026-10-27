@@ -745,6 +745,198 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Help and about'**
   String get helpAndAbout;
+
+  /// No description provided for @noticeDetailTimeAgo.
+  ///
+  /// In en, this message translates to:
+  /// **'{mins} min ago'**
+  String noticeDetailTimeAgo(Object mins);
+
+  /// No description provided for @noticeDetailAppliesToVan.
+  ///
+  /// In en, this message translates to:
+  /// **'Applies to this van'**
+  String get noticeDetailAppliesToVan;
+
+  /// No description provided for @noticeDetailAppliesToWard.
+  ///
+  /// In en, this message translates to:
+  /// **'Applies to Ward {wardId}'**
+  String noticeDetailAppliesToWard(Object wardId);
+
+  /// No description provided for @noticeDetailAppliesToAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Applies to all vans'**
+  String get noticeDetailAppliesToAll;
+
+  /// No description provided for @noticeDetailGotIt.
+  ///
+  /// In en, this message translates to:
+  /// **'Got it'**
+  String get noticeDetailGotIt;
+
+  /// No description provided for @reportDetailReportsToday.
+  ///
+  /// In en, this message translates to:
+  /// **'{n} reports today'**
+  String reportDetailReportsToday(Object n);
+
+  /// No description provided for @reportDetailTimeAgo.
+  ///
+  /// In en, this message translates to:
+  /// **'{mins} min ago'**
+  String reportDetailTimeAgo(Object mins);
+
+  /// No description provided for @reportDetailDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get reportDetailDone;
+
+  /// No description provided for @reportDetailWillRevisit.
+  ///
+  /// In en, this message translates to:
+  /// **'Will Revisit'**
+  String get reportDetailWillRevisit;
+
+  /// No description provided for @reportDetailStatusOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get reportDetailStatusOpen;
+
+  /// No description provided for @reportDetailStatusDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get reportDetailStatusDone;
+
+  /// No description provided for @reportDetailLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Location'**
+  String get reportDetailLocation;
+
+  /// No description provided for @reportDetailWard.
+  ///
+  /// In en, this message translates to:
+  /// **'Ward {wardId}'**
+  String reportDetailWard(Object wardId);
+
+  /// No description provided for @complaintCategoryMissedCollection.
+  ///
+  /// In en, this message translates to:
+  /// **'Missed collection'**
+  String get complaintCategoryMissedCollection;
+
+  /// No description provided for @complaintCategoryGarbageDump.
+  ///
+  /// In en, this message translates to:
+  /// **'Garbage dump'**
+  String get complaintCategoryGarbageDump;
+
+  /// No description provided for @complaintCategoryOpenGutter.
+  ///
+  /// In en, this message translates to:
+  /// **'Open gutter'**
+  String get complaintCategoryOpenGutter;
+
+  /// No description provided for @complaintCategoryOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get complaintCategoryOther;
+
+  /// No description provided for @moreOptionsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'More options'**
+  String get moreOptionsTitle;
+
+  /// No description provided for @moreOptionsSkipWard.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip ward'**
+  String get moreOptionsSkipWard;
+
+  /// No description provided for @moreOptionsOnBreak.
+  ///
+  /// In en, this message translates to:
+  /// **'On break'**
+  String get moreOptionsOnBreak;
+
+  /// No description provided for @moreOptionsCallForHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Call for help'**
+  String get moreOptionsCallForHelp;
+
+  /// No description provided for @moreOptionsSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get moreOptionsSettings;
+
+  /// No description provided for @skipWardTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip ward'**
+  String get skipWardTitle;
+
+  /// No description provided for @skipWardConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip this ward'**
+  String get skipWardConfirm;
+
+  /// No description provided for @skipWardCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get skipWardCancel;
+
+  /// No description provided for @skipWardWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'This ward will be dropped from today\'s route. It cannot be restored this shift.'**
+  String get skipWardWarning;
+
+  /// No description provided for @onBreakTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'On break'**
+  String get onBreakTitle;
+
+  /// No description provided for @onBreakBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your shift is paused locally — the office can still see your last location. Tap Resume shift when you\'re back.'**
+  String get onBreakBody;
+
+  /// No description provided for @onBreakResume.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume shift'**
+  String get onBreakResume;
+
+  /// No description provided for @callForHelpTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Call for help'**
+  String get callForHelpTitle;
+
+  /// No description provided for @callForHelpBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Call the office for help on today\'s route.'**
+  String get callForHelpBody;
+
+  /// No description provided for @callForHelpCall.
+  ///
+  /// In en, this message translates to:
+  /// **'Call office'**
+  String get callForHelpCall;
 }
 
 class _AppLocalizationsDelegate

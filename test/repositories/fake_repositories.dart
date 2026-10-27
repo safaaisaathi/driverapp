@@ -401,6 +401,8 @@ class FakeRoutesRepository implements RoutesRepository {
 
   final Map<String, RouteModel> routes;
 
+  void seedRoute(RouteModel route) => routes[route.id] = route;
+
   @override
   Future<RouteModel?> readRoute(String routeId) async => routes[routeId];
 }

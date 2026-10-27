@@ -382,4 +382,112 @@ class AppLocalizationsGu extends AppLocalizations {
 
   @override
   String get helpAndAbout => 'મદદ અને વિશે';
+
+  @override
+  String noticeDetailTimeAgo(Object mins) {
+    return '$mins મિનિટ પહેલા';
+  }
+
+  @override
+  String get noticeDetailAppliesToVan => 'આ વેન માટે લાગુ';
+
+  @override
+  String noticeDetailAppliesToWard(Object wardId) {
+    return 'વોર્ડ $wardId માટે લાગુ';
+  }
+
+  @override
+  String get noticeDetailAppliesToAll => 'તમામ વેન માટે લાગુ';
+
+  @override
+  String get noticeDetailGotIt => 'ઠીક છે';
+
+  @override
+  String reportDetailReportsToday(Object n) {
+    return 'આજ $n રિપોર્ટ';
+  }
+
+  @override
+  String reportDetailTimeAgo(Object mins) {
+    return '$mins મિનિટ પહેલા';
+  }
+
+  @override
+  String get reportDetailDone => 'પૂર્ણ થયું';
+
+  @override
+  String get reportDetailWillRevisit => 'ફરી આવીશ';
+
+  @override
+  String get reportDetailStatusOpen => 'ખુલ્લું';
+
+  @override
+  String get reportDetailStatusDone => 'પૂર્ણ થયું';
+
+  @override
+  String get reportDetailLocation => 'સ્થળ';
+
+  @override
+  String reportDetailWard(Object wardId) {
+    return 'વોર્ડ $wardId';
+  }
+
+  @override
+  String get complaintCategoryMissedCollection => 'મિસ્ડ કલેક્શન';
+
+  @override
+  String get complaintCategoryGarbageDump => 'કૂદરકતિ ઢગલો';
+
+  @override
+  String get complaintCategoryOpenGutter => 'ખુલ્લું નાળું';
+
+  @override
+  String get complaintCategoryOther => 'અન્ય';
+
+  @override
+  String get moreOptionsTitle => 'વિકલ્પો';
+
+  @override
+  String get moreOptionsSkipWard => 'વોર્ડ સ્કીપ કરો';
+
+  @override
+  String get moreOptionsOnBreak => 'બ્રેક પર';
+
+  @override
+  String get moreOptionsCallForHelp => 'મદદ માટે કોલ કરો';
+
+  @override
+  String get moreOptionsSettings => 'સેટિંગ્સ';
+
+  @override
+  String get skipWardTitle => 'વોર્ડ સ્કીપ કરો';
+
+  @override
+  String get skipWardConfirm => 'આ વોર્ડ સ્કીપ કરો';
+
+  @override
+  String get skipWardCancel => 'રદ કરો';
+
+  @override
+  String get skipWardWarning =>
+      'આજના રૂટથી આ વોર્ડ દૂર કરવામાં આવશે. આ શિફ્ટમાં તેને વાપસી લાવી શકાશે નહિ.';
+
+  @override
+  String get onBreakTitle => 'બ્રેક પર';
+
+  @override
+  String get onBreakBody =>
+      'તમારી શિફ્ટ સ્થાનિક રીતે પૌઝ થઈ ગઈ છે — ઓફિસ તમારા છેલ્લા સ્થાનને હજી જોઈ શકે છે. પરત ફર્યા પછી રિઝ્યુમ પર ટૅપ કરો.';
+
+  @override
+  String get onBreakResume => 'શિફ્ટ રિઝ્યુમ કરો';
+
+  @override
+  String get callForHelpTitle => 'મદદ માટે કોલ કરો';
+
+  @override
+  String get callForHelpBody => 'આજના રૂટમાં સહાય માટે ઓફિસને કોલ કરો.';
+
+  @override
+  String get callForHelpCall => 'ઓફિસને કોલ કરો';
 }

@@ -10,7 +10,6 @@ import 'package:driverapp/core/models/models.dart';
 import 'package:driverapp/core/repositories/repository_providers.dart';
 import '../../core/theme/theme_fakes.dart';
 import 'package:driverapp/core/theme/theme_mode_controller.dart';
-import 'package:driverapp/features/settings/settings_flow.dart';
 import 'package:driverapp/features/settings/ui/settings_screen.dart';
 import 'package:driverapp/features/settings/ui/trip_history_screen.dart';
 import 'package:driverapp/features/shift_start/domain/shift_session.dart';

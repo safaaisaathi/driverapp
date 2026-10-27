@@ -382,4 +382,112 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get helpAndAbout => 'Help and about';
+
+  @override
+  String noticeDetailTimeAgo(Object mins) {
+    return '$mins min ago';
+  }
+
+  @override
+  String get noticeDetailAppliesToVan => 'Applies to this van';
+
+  @override
+  String noticeDetailAppliesToWard(Object wardId) {
+    return 'Applies to Ward $wardId';
+  }
+
+  @override
+  String get noticeDetailAppliesToAll => 'Applies to all vans';
+
+  @override
+  String get noticeDetailGotIt => 'Got it';
+
+  @override
+  String reportDetailReportsToday(Object n) {
+    return '$n reports today';
+  }
+
+  @override
+  String reportDetailTimeAgo(Object mins) {
+    return '$mins min ago';
+  }
+
+  @override
+  String get reportDetailDone => 'Done';
+
+  @override
+  String get reportDetailWillRevisit => 'Will Revisit';
+
+  @override
+  String get reportDetailStatusOpen => 'Open';
+
+  @override
+  String get reportDetailStatusDone => 'Done';
+
+  @override
+  String get reportDetailLocation => 'Location';
+
+  @override
+  String reportDetailWard(Object wardId) {
+    return 'Ward $wardId';
+  }
+
+  @override
+  String get complaintCategoryMissedCollection => 'Missed collection';
+
+  @override
+  String get complaintCategoryGarbageDump => 'Garbage dump';
+
+  @override
+  String get complaintCategoryOpenGutter => 'Open gutter';
+
+  @override
+  String get complaintCategoryOther => 'Other';
+
+  @override
+  String get moreOptionsTitle => 'More options';
+
+  @override
+  String get moreOptionsSkipWard => 'Skip ward';
+
+  @override
+  String get moreOptionsOnBreak => 'On break';
+
+  @override
+  String get moreOptionsCallForHelp => 'Call for help';
+
+  @override
+  String get moreOptionsSettings => 'Settings';
+
+  @override
+  String get skipWardTitle => 'Skip ward';
+
+  @override
+  String get skipWardConfirm => 'Skip this ward';
+
+  @override
+  String get skipWardCancel => 'Cancel';
+
+  @override
+  String get skipWardWarning =>
+      'This ward will be dropped from today\'s route. It cannot be restored this shift.';
+
+  @override
+  String get onBreakTitle => 'On break';
+
+  @override
+  String get onBreakBody =>
+      'Your shift is paused locally — the office can still see your last location. Tap Resume shift when you\'re back.';
+
+  @override
+  String get onBreakResume => 'Resume shift';
+
+  @override
+  String get callForHelpTitle => 'Call for help';
+
+  @override
+  String get callForHelpBody => 'Call the office for help on today\'s route.';
+
+  @override
+  String get callForHelpCall => 'Call office';
 }
