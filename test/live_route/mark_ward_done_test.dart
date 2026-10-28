@@ -14,6 +14,7 @@ import 'package:driverapp/core/l10n/app_localizations.dart';
 import 'package:driverapp/core/models/models.dart';
 import 'package:driverapp/core/repositories/repositories.dart';
 import 'package:driverapp/core/theme/app_theme.dart';
+import 'package:driverapp/core/widgets/pill_nav.dart';
 import 'package:driverapp/features/live_route/live_route_providers.dart';
 import 'package:driverapp/features/live_route/live_route_screen.dart';
 import 'package:flutter/material.dart';
@@ -98,7 +99,6 @@ void main() {
       ProviderScope(
         overrides: [
           tileUrlTemplateProvider.overrideWithValue(null),
-          currentVanIdProvider.overrideWithValue('van-01'),
           ...overrides,
           ...extra,
         ],
@@ -107,7 +107,7 @@ void main() {
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: Locale('en'),
-          home: LiveRouteScreen(),
+          home: LiveRouteScreen(vanId: 'van-01'),
         ),
       ),
     );
@@ -117,6 +117,49 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
     await tester.pump(const Duration(milliseconds: 50));
+  }
+
+  /// Pulls the sheet to its FULL snap — the driver's "open the drawer"
+  /// gesture. The sheet now opens COLLAPSED (bottom-most: the head card and
+  /// the mark control hide BEHIND the pill nav by design, device pass
+  /// 2026-10-28), so nothing inside the panel is reachable until pulled up.
+  /// The drag starts on the grab strip — the only chrome visible above the
+  /// pill nav — because a drag at the scrollable's centre would land on the
+  /// nav overlay and be swallowed.
+  Future<void> pullSheetFull(WidgetTester tester) async {
+    final navTop = tester.getRect(find.byType(PillNav)).top;
+    await tester.dragFrom(
+      Offset(tester.getCenter(find.byType(Scrollable)).dx, navTop - 18),
+      const Offset(0, -900),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+  }
+
+  /// Scrolls until the finder's centre sits ABOVE the pill nav band.
+  /// scrollUntilVisible only guarantees visibility inside the scroll view —
+  /// and the view's bottom 96 dp sit under the floating nav where taps die
+  /// (2026-10-28 device-session defect: nav container occupies 804–884 of a
+  /// 900 dp window).
+  Future<void> scrollAboveNav(
+    WidgetTester tester,
+    Finder finder, {
+    double step = 72,
+  }) async {
+    await pullSheetFull(tester);
+    final navTop = tester.getRect(find.byType(PillNav)).top;
+    await tester.scrollUntilVisible(
+      finder,
+      step,
+      scrollable: find.byType(Scrollable),
+    );
+    for (
+      var i = 0;
+      i < 10 && tester.getRect(finder).center.dy >= navTop;
+      i++
+    ) {
+      await tester.drag(find.byType(Scrollable), Offset(0, -step));
+      await tester.pump(const Duration(milliseconds: 50));
+    }
   }
 
   FakeVansRepository vansFor(double vanLat, {bool withFix = true}) =>
@@ -144,6 +187,7 @@ void main() {
     final trips = FakeTripsRepository([emptyTrip()]);
     await pumpScreen(tester, standardOverrides(trips, vanLat: 22.7005));
     await settle(tester);
+    await pullSheetFull(tester);
 
     await tester.tap(find.byKey(const Key('liveRoute.markNextWard')));
     await settle(tester);
@@ -179,7 +223,10 @@ void main() {
     await pumpScreen(tester, standardOverrides(trips, vanLat: 22.7759));
     await settle(tester);
 
-    // Out of order: the third ward through its own smaller control.
+    // Out of order: the third ward through its own smaller control. The 72
+    // dp rows scroll in the sheet — bring wc's row clear of the nav before
+    // tapping it.
+    await scrollAboveNav(tester, find.byKey(const Key('liveRoute.markWard.wc')));
     await tester.tap(find.byKey(const Key('liveRoute.markWard.wc')));
     await settle(tester);
 
@@ -207,6 +254,7 @@ void main() {
     final trips = FakeTripsRepository([emptyTrip()]);
     await pumpScreen(tester, standardOverrides(trips, vanLat: 22.7759));
     await settle(tester);
+    await pullSheetFull(tester);
 
     await tester.tap(find.byKey(const Key('liveRoute.markNextWard')));
     await settle(tester);
@@ -227,6 +275,7 @@ void main() {
     final trips = FakeTripsRepository([emptyTrip()]);
     await pumpScreen(tester, standardOverrides(trips, vanLat: 22.7005));
     await settle(tester);
+    await pullSheetFull(tester);
 
     await tester.tap(find.byKey(const Key('liveRoute.markNextWard')));
     await settle(tester);
@@ -243,6 +292,7 @@ void main() {
       standardOverrides(trips, vanLat: 22.7759, withFix: false),
     );
     await settle(tester);
+    await pullSheetFull(tester);
 
     await tester.tap(find.byKey(const Key('liveRoute.markNextWard')));
     await settle(tester);
@@ -258,20 +308,22 @@ void main() {
     final trips = FakeTripsRepository([emptyTrip()]);
     await pumpScreen(tester, standardOverrides(trips, vanLat: 22.7005));
     await settle(tester);
+    await pullSheetFull(tester);
 
     // Same-storm taps (no settle between): the in-flight guard eats the
     // second tap.
     await tester.tap(find.byKey(const Key('liveRoute.markNextWard')));
     await tester.tap(find.byKey(const Key('liveRoute.markNextWard')));
     await settle(tester);
-    // After the write landed, wa is DONE — its button is gone; the next big
-    // button belongs to wb, so wa can never be appended again through the UI
-    // either.
+    // After the write landed, wa is DONE — its button is gone; the ONE
+    // pinned big button (§4.17) now targets wb, so wa can never be appended
+    // again through the UI either.
     expect(find.byKey(const Key('liveRoute.markWard.wa')), findsNothing);
+    expect(find.byKey(const Key('liveRoute.markNextWard')), findsOneWidget);
     expect(
       find.descendant(
         of: find.byKey(const Key('liveRoute.wardRow.wb')),
-        matching: find.byKey(const Key('liveRoute.markNextWard')),
+        matching: find.byKey(const Key('liveRoute.nextChip')),
       ),
       findsOneWidget,
     );
@@ -315,6 +367,7 @@ void main() {
     await settle(tester);
 
     expect(find.byKey(const Key('liveRoute.offlineBanner')), findsOneWidget);
+    await pullSheetFull(tester);
     await tester.tap(find.byKey(const Key('liveRoute.markNextWard')));
     await settle(tester);
 
@@ -329,6 +382,7 @@ void main() {
     final trips = _ThrowingTripsRepository([emptyTrip()]);
     await pumpScreen(tester, standardOverrides(trips, vanLat: 22.7005));
     await settle(tester);
+    await pullSheetFull(tester);
 
     await tester.tap(find.byKey(const Key('liveRoute.markNextWard')));
     await settle(tester);

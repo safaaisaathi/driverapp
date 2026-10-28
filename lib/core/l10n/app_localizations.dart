@@ -356,6 +356,12 @@ abstract class AppLocalizations {
   /// **'Your van\'s location is shared while on shift.'**
   String get trackingNotificationBody;
 
+  /// No description provided for @trackingOpenLocationSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Open location settings'**
+  String get trackingOpenLocationSettings;
+
   /// No description provided for @mockLocationWarning.
   ///
   /// In en, this message translates to:
@@ -427,6 +433,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Notices'**
   String get noticesBadgeTooltip;
+
+  /// No description provided for @noticesUnreadSemantic.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Notices, 1 unread} other{Notices, {count} unread}}'**
+  String noticesUnreadSemantic(int count);
 
   /// No description provided for @endOfTripCardPlaceholder.
   ///
@@ -517,6 +529,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Showing saved map data'**
   String get offlineShowingCached;
+
+  /// No description provided for @liveRouteMapSemantic.
+  ///
+  /// In en, this message translates to:
+  /// **'Route map with the van\'s live position'**
+  String get liveRouteMapSemantic;
+
+  /// No description provided for @vanMarkerSemantic.
+  ///
+  /// In en, this message translates to:
+  /// **'Your van'**
+  String get vanMarkerSemantic;
 
   /// No description provided for @routeEmptyMessage.
   ///

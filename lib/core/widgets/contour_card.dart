@@ -19,12 +19,17 @@ class ContourCard extends StatelessWidget {
     this.seed = 0,
     this.lines = 9,
     this.minHeight = 160,
+    this.borderRadius,
   });
 
   final Widget child;
   final int seed;
   final int lines;
   final double minHeight;
+
+  /// Defaults to the card radius; pass the pill radius where the card must
+  /// optically match a nav pill (the D2 sheet head, 2026-10-28 device pass).
+  final BorderRadius? borderRadius;
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +42,8 @@ class ContourCard extends StatelessWidget {
         padding: EdgeInsets.all(AppSpace.cardPad),
         decoration: BoxDecoration(
           color: c.brandMid,
-          borderRadius: BorderRadius.circular(AppRadius.card),
+          borderRadius:
+              borderRadius ?? BorderRadius.circular(AppRadius.card),
         ),
         // The contour painter's rings span up to 0.9 x the card's longest
         // side: without a clip they paint past the rounded card across the

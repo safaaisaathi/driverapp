@@ -45,6 +45,7 @@
   "trackingGpsOff": "ફોનનું લોકેશન (GPS) બંધ છે. તે ચાલુ કરો અને ફરી પ્રયાસ કરો.",
   "trackingNotificationTitle": "ટ્રેકિંગ ચાલુ છે",
   "trackingNotificationBody": "શિફ્ટ દરમિયાન તમારી વેનની લોકેશન શેર થાય છે.",
+  "trackingOpenLocationSettings": "લોકેશન સેટિંગ્સ ખોલો",
 
   "mockLocationWarning": "તમારો ફોન લોકેશન ખોટી રીતે બતાવી રહ્યો છે. ટ્રેકિંગ ચાલુ રહેશે, અને કચેરીને આ નોંધ દેખાશે.",
 
@@ -61,6 +62,12 @@
   "routeLoading": "રૂટ લોડ થાય છે…",
   "recenterMap": "નકશો ફરી કેન્દ્રિત કરો",
   "noticesBadgeTooltip": "નોટિસ",
+  "noticesUnreadSemantic": "{count, plural, =1{નોટિસ, 1 ન વંચાયેલી} other{નોટિસ, {count} ન વંચાયેલી}}",
+  "@noticesUnreadSemantic": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
   "endOfTripCardPlaceholder": "શિફ્ટ પૂરી વખતે સારાંશ અહીં દેખાય",
   "routeProgress": "{total} માંથી {done} વોર્ડ થયા",
   "@routeProgress": {
@@ -107,6 +114,8 @@
     }
   },
   "offlineShowingCached": "સેવ થયેલો નકશો દેખાય છે",
+  "liveRouteMapSemantic": "રૂટ મેપ, વેનની લાઇવ સ્થિતિ સાથે",
+  "vanMarkerSemantic": "તમારી વેન",
   "routeEmptyMessage": "આ રૂટમાં કોઈ વોર્ડ નથી",
   "routeMissingMessage": "રૂટ મળ્યો નથી",
 

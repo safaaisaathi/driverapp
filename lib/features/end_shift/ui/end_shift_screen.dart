@@ -24,7 +24,11 @@ import 'package:driverapp/features/shift_start/domain/shift_session.dart';
 import '../domain/end_shift_flow.dart';
 
 class EndShiftScreen extends ConsumerWidget {
-  const EndShiftScreen({super.key});
+  const EndShiftScreen({super.key, required this.vanId});
+
+  /// The van whose open trip + route the summary reads (passed through
+  /// from the live route screen).
+  final String vanId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -42,7 +46,11 @@ class EndShiftScreen extends ConsumerWidget {
                 EndShiftPhase.ended => _EndedState(
                     message: l10n.shiftEnded,
                   ),
-                _ => _SummaryBody(phase: phase, session: session),
+                _ => _SummaryBody(
+                    phase: phase,
+                    session: session,
+                    vanId: vanId,
+                  ),
               },
             ),
 
@@ -74,16 +82,22 @@ class EndShiftScreen extends ConsumerWidget {
 class _SummaryBody extends ConsumerWidget {
   final EndShiftPhase phase;
   final ShiftSession? session;
+  final String vanId;
 
-  const _SummaryBody({required this.phase, required this.session});
+  const _SummaryBody({
+    required this.phase,
+    required this.session,
+    required this.vanId,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     final c = context.colors;
-    final trip = ref.watch(openTripProvider).value;
-    final total =
-        ref.watch(routeModelProvider).value?.wardIds.length ?? trip?.wardsDone.length ?? 0;
+    final trip = ref.watch(openTripProvider(vanId)).value;
+    final total = ref.watch(routeModelProvider(vanId)).value?.wardIds.length ??
+        trip?.wardsDone.length ??
+        0;
     final done = trip?.wardsDone.length ?? 0;
     final mins = session?.startedAt == null
         ? null

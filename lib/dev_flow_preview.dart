@@ -28,8 +28,6 @@ import 'core/repositories/repository_providers.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_mode_controller.dart';
 import 'features/live_route/dev/desktop_demo_seed.dart';
-import 'features/live_route/live_route_providers.dart'
-    show currentVanIdProvider;
 import 'features/launching/splash_screen.dart';
 import 'features/shift_start/data/verify_driver_pin.dart';
 import 'features/shift_start/domain/shift_session.dart';
@@ -71,7 +69,6 @@ Future<void> main() async {
   final now = DateTime.now();
   final container = ProviderContainer(
     overrides: [
-      currentVanIdProvider.overrideWithValue(devPreviewVanId),
       vansRepositoryProvider.overrideWithValue(seed.vans),
       tripsRepositoryProvider.overrideWithValue(seed.trips),
       routesRepositoryProvider.overrideWithValue(seed.routes),

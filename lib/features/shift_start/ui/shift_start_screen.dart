@@ -8,6 +8,8 @@
 /// localized (CL-21); buttons ≥ 56/64 dp come from `AppTheme` (0.5).
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -16,9 +18,12 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_tokens.dart';
 import '../../../core/widgets/skeleton.dart';
+import '../data/shift_tracking_auto_start.dart';
 import '../domain/shift_flow.dart';
-import 'basic_route_placeholder.dart';
 import 'language_toggle.dart';
+
+// ignore: implementation_imports
+import '../../live_route/live_route_screen.dart';
 
 /// D1 entry widget. `onShiftStarted` defaults to pushing the route
 /// placeholder (ticket 05 will replace the destination).
@@ -43,12 +48,35 @@ class ShiftStartScreen extends ConsumerWidget {
     if (flow.phase == ShiftFlowPhase.onShift && flow.session != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!context.mounted) return;
+        // F-D2 auto-start: the engine comes up when D1 hands over an
+        // on-shift session (fresh start AND resume both land here) — the
+        // four-stage permission flow runs inside the starter. Fire-and-
+        // forget: a permission denial or tracking failure must never block
+        // the D1 navigation (defect 2026-10-28: nothing started the engine
+        // from the real flow before this).
+        final l10n = AppLocalizations.of(context)!;
+        unawaited(
+          ProviderScope.containerOf(context)
+              .read(shiftTrackingAutoStarterProvider)
+              .startTrackingFor(
+                flow.session!,
+                notificationTitle: l10n.trackingNotificationTitle,
+                notificationBody: l10n.trackingNotificationBody,
+              ),
+        );
         if (onShiftStarted != null) {
           onShiftStarted!(context);
         } else {
+          // F-D1 hand-over: the REAL live route screen (M1 map shell) is the
+          // active-shift destination; D1's van id is passed as the plain
+          // argument the live-route provider families key on. (A nested
+          // ProviderScope override was tried here and RESOLVED WITHOUT the
+          // override on device — Riverpod 3 creates non-overridden providers
+          // in the parent container, so the child's override never applied.
+          // An explicit argument cannot miss; defect 2026-10-28.)
           Navigator.of(context).pushReplacement(
             MaterialPageRoute<void>(
-              builder: (_) => const BasicRoutePlaceholder(),
+              builder: (_) => LiveRouteScreen(vanId: flow.session!.vanId),
             ),
           );
         }

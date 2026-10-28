@@ -17,6 +17,12 @@ import 'package:driverapp/core/repositories/repository_providers.dart';
 import 'data/battery_plus_battery_source.dart';
 import 'data/flutter_foreground_task_service.dart';
 import 'data/geolocator_position_source.dart';
+
+// The gateway types are EXPORTED for other features AND used by the
+// gateway provider below — export alone does not bring names into this
+// file's scope.
+import 'data/geolocator_tracking_permission_gateway.dart';
+import 'domain/permission_gateway.dart';
 import 'data/hive_trail_buffer.dart';
 import 'domain/battery_source.dart';
 import 'domain/foreground_service.dart';
@@ -48,6 +54,16 @@ final Provider<ForegroundServiceHandle> foregroundServiceProvider =
 /// Local Trail buffers, one box `trail-<tripId>` per trip.
 final Provider<TrailBufferFactory> trailBufferFactoryProvider =
     Provider<TrailBufferFactory>((ref) => HiveTrailBuffer.open);
+
+/// The four-stage permission gates (while-in-use location, background
+/// location, notifications, battery exemption) in contract order.
+/// Geolocator-backed; the DEV-only duplicate lives in `dev_tracking.dart`
+/// and must stay there.
+final Provider<TrackingPermissionGateway>
+    trackingPermissionGatewayProvider =
+    Provider<TrackingPermissionGateway>(
+  (ref) => const GeolocatorTrackingPermissionGateway(),
+);
 
 /// THE tracking engine singleton: clean start/stop/stop-flush semantics,
 /// all contract writes routed through the repositories (spec seam 1).

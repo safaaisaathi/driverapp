@@ -25,7 +25,13 @@ class HiveTrailBuffer implements TrailBuffer {
   final Box _box;
 
   static Future<TrailBuffer> open(String tripId) async {
-    final box = await Hive.openBox<_StoredPoint>(trailBoxName(tripId));
+    // The entry under trailBoxEntryKey is a List of points (see _read), so
+    // the box MUST open untyped: typed Box<Map<String, Object?>> makes
+    // Hive cast each entry to Map on read (defect found on device
+    // 2026-10-28: first add wrote the list, every later read threw
+    // List<Map> -> Map and the whole cadence cycle logged 'cadence check
+    // failed' while the trail stayed empty).
+    final box = await Hive.openBox(trailBoxName(tripId));
     return HiveTrailBuffer(box);
   }
 

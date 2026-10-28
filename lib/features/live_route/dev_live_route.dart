@@ -8,7 +8,7 @@
 /// Mirrors `lib/features/tracking/dev_tracking.dart`: boots
 /// Firebase/emulators FIRST (degrading gracefully when they are down), then
 /// shows the D2 screen against the seeded van `van-01`. The real van id
-/// comes from D1 at integration (`currentVanIdProvider`).
+/// comes from D1's session at integration (the vanId argument).
 library;
 
 import 'dart:async';
@@ -25,7 +25,6 @@ import 'package:driverapp/core/theme/app_theme.dart';
 import 'package:driverapp/features/shift_start/domain/shift_session.dart';
 
 import 'dev/desktop_demo_seed.dart';
-import 'live_route_providers.dart';
 import 'live_route_screen.dart';
 
 /// Seeded van id for the demo (must exist in the emulator seed).
@@ -43,7 +42,6 @@ Future<void> main() async {
   final seed = DevDesktopSeed();
   final container = ProviderContainer(
     overrides: [
-      currentVanIdProvider.overrideWithValue(devLiveRouteVanId),
       vansRepositoryProvider.overrideWithValue(seed.vans),
       tripsRepositoryProvider.overrideWithValue(seed.trips),
       routesRepositoryProvider.overrideWithValue(seed.routes),
@@ -102,7 +100,7 @@ class DevLiveRouteMaterialApp extends ConsumerWidget {
       locale: ref.watch(localeControllerProvider) ?? const Locale('en'),
       supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
-      home: const LiveRouteScreen(),
+      home: LiveRouteScreen(vanId: devLiveRouteVanId),
     );
   }
 }

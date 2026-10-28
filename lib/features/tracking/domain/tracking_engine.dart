@@ -428,6 +428,21 @@ class TrackingEngine {
         batteryPct: battery,
         now: now,
       );
+      const trackDebug = true;
+      if (trackDebug) {
+        final moveM = _lastWritten == null
+            ? -1.0
+            : (fix.lat - _lastWritten!.lat).abs() *
+                111320 +
+                (fix.lng - _lastWritten!.lng).abs() * 111320;
+        debugPrint(
+          'tracking: cycle t=${now.toIso8601String()} '
+          'shouldWrite=${decision.shouldWrite} '
+          'intervalUsed=${decision.intervalUsed} '
+          'moveM=${moveM.toStringAsFixed(1)} '
+          'pend=${_trailBuffer == null ? -1 : _trailBuffer!.pendingCount}',
+        );
+      }
 
       // Interval switch (F-D8): the policy decides the NEXT cadence.
       if (decision.intervalUsed != _intervalSec) {
@@ -548,9 +563,11 @@ class TrackingEngine {
 
     final batch = await buffer.takeOldest();
     if (batch.isEmpty) return;
+    debugPrint('tracking: flush ${batch.length} points');
 
     try {
       await _trips.appendGpsTrail(tripId, batch);
+      debugPrint('tracking: flush OK (${batch.length})');
     } catch (error) {
       debugPrint('DEBUG flushFor: append failed $error');
       await buffer.putBackOldest(batch);

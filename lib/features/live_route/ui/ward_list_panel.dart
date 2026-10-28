@@ -1,17 +1,25 @@
 /// The ordered ward list panel for the Live Route screen (PRD-2 F-D3:
 /// "D2 shows routes.wardIds in order with names; the next ward is
-/// highlighted"). Overlays the bottom of the map, thumb-reachable, every row
-/// ≥ 56dp (contract section 6).
+/// highlighted").
 ///
-/// Mark Ward Done (ticket 07): the NEXT ward's row carries the big ≥56dp
-/// button (one-handed, thumb zone); every other UNDONE ward renders a
-/// smaller control (out-of-order marks are allowed — grilled decision in the
-/// spec's Implementation Decisions, spec story 14). Done rows render their
-/// tick (+ flagged icon for admin-review marks, `trips.wardsDone.flagged`).
+/// Plain content — the sheet shell (`core/widgets/draggable_sheet.dart`)
+/// owns the single scroll viewport, so nothing in here scrolls (DESIGN.md
+/// §4.11: never nest scrolling). Content order per §4.11: the route-progress
+/// ContourCard head → the ONE primary action (§4.17 BigActionButton, one per
+/// screen) → the ward rows. While any ward is undone that primary is the
+/// Mark control; once EVERY ward is done it becomes the End Shift entry
+/// (the old end-trip banner on the map is gone — device UX pass 2026-10-28).
 ///
-/// Skin re-shelled per docs/DESIGN.md: the route-progress head is the
-/// signature ContourCard (rule CL-12) — same strings, same keys, ink text
-/// on the brandMid fill.
+/// Rows are 72 dp cards (§4.17): a 48 dp leading circle carries the state —
+/// `primary` + number for the next ward, `brand` + check for a done ward,
+/// `surface` + number for a pending one — with the ward name, and on the
+/// right either the out-of-order mark control (undone, spec story 14) or the
+/// done record (check + the word "Done", + the flagged icon for
+/// admin-review marks, `trips.wardsDone.flagged`).
+///
+/// The old auto-reveal machinery (Scrollable.ensureVisible on the next row)
+/// is gone: the action is pinned right under the head, so nothing can be
+/// "hidden below the nav" in the first place.
 library;
 
 import 'package:flutter/material.dart';
@@ -20,11 +28,12 @@ import 'package:driverapp/core/l10n/app_localizations.dart';
 import 'package:driverapp/core/theme/app_colors.dart';
 import 'package:driverapp/core/theme/app_text.dart';
 import 'package:driverapp/core/theme/app_theme.dart';
+import 'package:driverapp/core/theme/app_tokens.dart';
 import 'package:driverapp/core/widgets/contour_card.dart';
 
 import '../domain/ward_steps.dart';
 
-class WardListPanel extends StatefulWidget {
+class WardListPanel extends StatelessWidget {
   final String routeName;
 
   final List<WardStep> wardSteps;
@@ -53,6 +62,29 @@ class WardListPanel extends StatefulWidget {
   /// The mark event: `wardId` in, the flow handles dedupe/guard/decision.
   final void Function(String wardId) onMark;
 
+  /// Pushes the D5 end-shift summary. Rendered as the sheet's ONE primary
+  /// once every ward is done — replacing the mark control (the old
+  /// end-trip banner on the map is gone, device UX pass 2026-10-28).
+  final VoidCallback onEndShift;
+
+  /// The live sheet controller — drives the head card's affordance arrow
+  /// (flips from up to down once the sheet reaches its full snap). Null in
+  /// previews/tests that don't own a sheet: the arrow renders static.
+  final DraggableScrollableController? sheetController;
+
+  /// The sheet's full snap fraction — what "completely extended" means.
+  final double sheetFullFraction;
+
+  /// The head card's top padding — the sheet-local gap between the grab
+  /// strip and the card's top edge. The live route adds it to
+  /// [DraggableSheet.grabStripHeight] when it derives the collapsed fraction:
+  /// card top must land exactly on the pill nav's top edge.
+  static const double headTopPadding = AppSpace.sm;
+
+  /// The head card's height — exactly the PillNav pill's height (80 dp), so
+  /// a card whose top sits on the pill's top is masked 1:1 by the pill.
+  static const double headCardHeight = AppSize.navHeightDriver;
+
   const WardListPanel({
     super.key,
     required this.routeName,
@@ -63,208 +95,207 @@ class WardListPanel extends StatefulWidget {
     required this.markWriteFailed,
     required this.markEnabled,
     required this.onMark,
+    required this.onEndShift,
+    this.sheetController,
+    this.sheetFullFraction = 0.96,
   });
 
-  @override
-  State<WardListPanel> createState() => _WardListPanelState();
-}
-
-class _WardListPanelState extends State<WardListPanel> {
-  /// One reused global key on the HIGHLIGHTED row wrapper — the hook used to
-  /// keep the next ward's action visible (DESIGN.md law: sheet content is
-  /// never covered by the nav at the default snap). Reassigned each build to
-  /// whichever row is next; old rows just drop their hold on it.
-  final GlobalKey _nextRowKey = GlobalKey();
-
-  /// Ward id the auto-reveal last ran for — guards against re-triggering on
-  /// no-change rebuilds (in-flight sets, l10n redraws, stale captions).
-  String? _autoRevealedFor;
-
-  String? _nextWardId() {
-    for (final step in widget.wardSteps) {
-      if (!step.isDone) return step.ward.id;
+  WardStep? get _next {
+    for (final step in wardSteps) {
+      if (!step.isDone) return step;
     }
     return null;
-  }
-
-  /// Scrolls the (scrollable) list so the next ward's row is fully above the
-  /// nav reserve once its layout is known. A no-op when the row already fits
-  /// (Scrollable.ensureVisible leaves fully-visible targets alone).
-  void _ensureNextVisible() {
-    final wardId = _nextWardId();
-    if (wardId == null || wardId == _autoRevealedFor) return;
-    _autoRevealedFor = wardId;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final context = _nextRowKey.currentContext;
-      if (context == null) return;
-      final box = context.findRenderObject();
-      if (box is! RenderBox || !box.hasSize) return;
-      Scrollable.ensureVisible(
-        context,
-        alignment: 1.0,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOutCubic,
-      );
-    });
-  }
-
-  @override
-  void didUpdateWidget(WardListPanel oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // Reveal runs only when the NEXT ward actually changed — a mark moved the
-    // highlight, not an in-flight flicker or a caption refresh.
-    if (_nextWardId() != _autoRevealedFor) _ensureNextVisible();
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final w = widget;
+    final w = this;
+    final c = context.colors;
     final done = w.wardSteps.where((step) => step.isDone).length;
-    // On a fresh panel build (first appearance, screen re-entry), line the
-    // next ward's action up too — never below the nav reserve.
-    _ensureNextVisible();
+    final next = _next;
 
-    return Material(
-      color: AppTheme.colorSurface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppTheme.radiusMd),
-        ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Route progress head — the signature ContourCard (CL-12). The
-          // composite string stays one Text (tests match widgets by it).
-          // No horizontal pad here: the sheet shell already gives the
-          // 20 dp page inset — an extra 16 would re-wrap the composite
-          // progress string and push the last row behind the nav reserve.
-          Padding(
-            padding: const EdgeInsets.fromLTRB(0, 8, 0, 4),
-            child: ContourCard(
-              seed: w.routeName.hashCode,
-              minHeight: 56,
-              lines: 5,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(
-                  '${w.routeName} · ${l10n.routeProgress(done, w.wardSteps.length)}',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: context.text.titleSmall.copyWith(
-                    color: context.colors.textPrimary,
-                    fontWeight: FontWeight.bold,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AppSpace.cardGap,
+      children: [
+        // Route progress head — the signature ContourCard (CL-12/13). Sized
+        // EXACTLY like the PillNav pill (80 dp, pill radius, same 16 dp
+        // inset) so the collapsed sheet stacks it flush on the nav and the
+        // two read as ONE unit (device pass 2026-10-28). The composite
+        // string stays one Text (tests match widgets by it); ink text only
+        // on the brandMid fill (CL-14); the affordance arrow flips at full.
+        Padding(
+          padding: const EdgeInsets.only(top: WardListPanel.headTopPadding),
+          child: ContourCard(
+            seed: w.routeName.hashCode,
+            minHeight: WardListPanel.headCardHeight,
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            child: Center(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${w.routeName} · ${l10n.routeProgress(done, w.wardSteps.length)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.text.titleSmall.copyWith(
+                        color: AppTheme.colorPrimary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: AppSpace.sm),
+                  _SheetArrow(
+                    controller: w.sheetController,
+                    fullFraction: w.sheetFullFraction,
+                  ),
+                ],
               ),
             ),
           ),
-          // Non-lazy scroll: a plain Column inside a SingleChildScrollView
-          // builds every row outright (the sheet owns the viewport), so
-          // finders and taps on rows below the fold stay stable.
-          Expanded(
-            child: SingleChildScrollView(
-              physics: const ClampingScrollPhysics(),
-              child: Column(
-                children: [
-                if (w.staleMinutes != null)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-                    child: Row(
-                      key: const Key('liveRoute.staleCaption'),
-                      spacing: 4,
-                      children: [
-                        Icon(Icons.schedule,
-                            size: 16, color: AppTheme.colorTextMuted),
-                        Text(
-                          l10n.vanLastSeen(w.staleMinutes!),
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall!
-                              .copyWith(color: AppTheme.colorTextMuted),
-                        ),
-                      ],
-                    ),
-                  ),
-                if (w.isOffline)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-                    child: Row(
-                      key: const Key('liveRoute.offlineNote'),
-                      spacing: 4,
-                      children: [
-                        Icon(Icons.cloud_off,
-                            size: 16, color: AppTheme.colorTextMuted),
-                        Text(
-                          l10n.offlineShowingCached,
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall!
-                              .copyWith(color: AppTheme.colorTextMuted),
-                        ),
-                      ],
-                    ),
-                  ),
-                if (!w.markEnabled)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-                    child: Row(
-                      key: const Key('liveRoute.markNoTripHint'),
-                      spacing: 4,
-                      children: [
-                        Icon(Icons.info_outline,
-                            size: 16, color: AppTheme.colorTextMuted),
-                        Text(
-                          l10n.markWardDoneNoTrip,
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall!
-                              .copyWith(color: AppTheme.colorTextMuted),
-                        ),
-                      ],
-                    ),
-                  ),
-                if (w.markWriteFailed)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-                    child: Row(
-                      key: const Key('liveRoute.markError'),
-                      spacing: 4,
-                      children: [
-                        Icon(Icons.error_outline,
-                            size: 16, color: AppTheme.colorStatusEscalated),
-                        Text(
-                          l10n.markWardDoneFailed,
-                          style: Theme.of(context).textTheme.bodySmall!
-                              .copyWith(color: AppTheme.colorStatusEscalated),
-                        ),
-                      ],
-                    ),
-                  ),
-                const Divider(height: 1),
-                // The rows are regular list children: the sheet owns the
-                // viewport height now, so a second internal cap is redundant.
-                for (final step in w.wardSteps)
-                  _WardRow(
-                    step: step,
-                    markEnabled: w.markEnabled,
-                    markInFlight: w.markInFlight,
-                    onMark: w.onMark,
-                    nextRowKey: step.isNext ? _nextRowKey : null,
-                  ),
-              ],
+        ),
+
+        // THE primary action of the screen (§4.17 BigActionButton: 72 dp,
+        // full width, pill, one per screen). Pinned right after the head so
+        // it is reachable at every snap without hunting for a row. Route
+        // complete swaps it for the End Shift entry (ticket 08) — same slot,
+        // still the screen's one primary.
+        if (next != null)
+          _MarkNextButton(
+            next: next,
+            enabled: w.markEnabled && !w.markInFlight.contains(next.ward.id),
+            onMark: w.onMark,
+          )
+        else if (w.wardSteps.isNotEmpty)
+          FilledButton(
+            key: const Key('liveRoute.endShift'),
+            onPressed: w.onEndShift,
+            style: FilledButton.styleFrom(
+              // Lesson (glossary 2026-10-26): never Size.fromHeight — width=∞
+              // crashes Rows. Size(0, h) keeps the pill free to stretch.
+              minimumSize: const Size(0, AppSize.bigAction),
             ),
+            child: Text(
+              l10n.endShiftPrimary,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
-        ],
+
+        // One-line captions: stale fix, offline cache note, the no-trip
+        // guard, and the failed-write retry line.
+        if (w.staleMinutes != null)
+          _Caption(
+            key: const Key('liveRoute.staleCaption'),
+            icon: Icons.schedule,
+            text: l10n.vanLastSeen(w.staleMinutes!),
+          ),
+        if (w.isOffline)
+          _Caption(
+            key: const Key('liveRoute.offlineNote'),
+            icon: Icons.cloud_off,
+            text: l10n.offlineShowingCached,
+          ),
+        if (!w.markEnabled)
+          _Caption(
+            key: const Key('liveRoute.markNoTripHint'),
+            icon: Icons.info_outline,
+            text: l10n.markWardDoneNoTrip,
+          ),
+        if (w.markWriteFailed)
+          _Caption(
+            key: const Key('liveRoute.markError'),
+            icon: Icons.error_outline,
+            text: l10n.markWardDoneFailed,
+            color: c.statusEscalated.fill,
+          ),
+
+        // The 72 dp ward cards (§4.17).
+        for (final step in w.wardSteps)
+          _WardRow(
+            step: step,
+            markEnabled: w.markEnabled,
+            markInFlight: w.markInFlight,
+            onMark: w.onMark,
+          ),
+      ],
+    );
+  }
+}
+
+/// §4.17 BigActionButton: height 72, full width, pill, `primary`, leading
+/// status icon 28. The semantic label names the ward it marks — the visible
+/// label stays the canonical "Mark Ward Done".
+class _MarkNextButton extends StatelessWidget {
+  final WardStep next;
+  final bool enabled;
+  final void Function(String wardId) onMark;
+
+  const _MarkNextButton({
+    required this.next,
+    required this.enabled,
+    required this.onMark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    // Plain FilledButton — the canonical one-primary shape. (A
+    // Semantics(container:) or Tooltip wrapper here replaced the button's
+    // render object between the widget tests' finder evaluation and their
+    // hit test — taps "missed"; bisecting kept the bare button.)
+    return FilledButton(
+      key: const Key('liveRoute.markNextWard'),
+      onPressed: enabled ? () => onMark(next.ward.id) : null,
+      style: FilledButton.styleFrom(
+        // Lesson (glossary 2026-10-26): never Size.fromHeight — width=∞
+        // crashes Rows. Size(0, h) keeps the pill free to stretch.
+        minimumSize: const Size(0, AppSize.bigAction),
+      ),
+      child: Text(
+        l10n.markWardDone,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }
 }
 
+/// A one-line status caption under the head.
+class _Caption extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final Color? color;
+
+  const _Caption({
+    required super.key,
+    required this.icon,
+    required this.text,
+    this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final tone = color ?? AppTheme.colorTextMuted;
+    return Row(
+      spacing: AppSpace.xs,
+      children: [
+        Icon(icon, size: 16, color: tone),
+        Expanded(
+          child: Text(
+            text,
+            style: Theme.of(context).textTheme.bodySmall!.copyWith(color: tone),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// One 72 dp ward card (§4.17).
 class _WardRow extends StatelessWidget {
   final WardStep step;
 
@@ -274,180 +305,175 @@ class _WardRow extends StatelessWidget {
 
   final void Function(String wardId) onMark;
 
-  /// Set ONLY on the currently-highlighted row (the panel re-assigns it each
-  /// rebuild): the handle the panel auto-reveal uses to keep the next ward's
-  /// action above the nav. Also carrying the row's canonical test key.
-  final GlobalKey? nextRowKey;
-
   const _WardRow({
     required this.step,
     required this.markEnabled,
     required this.markInFlight,
     required this.onMark,
-    this.nextRowKey,
   });
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final highlighted = step.isNext;
+    final c = context.colors;
     final inFlight = markInFlight.contains(step.ward.id);
     final canMark = !step.isDone && markEnabled && !inFlight;
+    final next = step.isNext && !step.isDone;
 
-    // The NEXT ward's row carries the one-tap ≥56dp action (contract
-    // section 6, one-handed driver); other undone wards get the smaller
-    // out-of-order control; done rows render their record only.
-    if (highlighted) {
-      return KeyedSubtree(
-        key: nextRowKey,
-        child: Container(
-          key: Key('liveRoute.wardRow.${step.ward.id}'),
-        color: AppTheme.colorPrimary.withValues(alpha: 0.10),
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          spacing: 4,
-          children: [
-            _RowHead(step: step),
-            FilledButton(
-              key: const Key('liveRoute.markNextWard'),
-              onPressed: canMark ? () => onMark(step.ward.id) : null,
-              child: Text(
-                l10n.markWardDone,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+    final row = Container(
+      key: Key('liveRoute.wardRow.${step.ward.id}'),
+      constraints: const BoxConstraints(minHeight: 72),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpace.lg,
+        vertical: AppSpace.sm,
+      ),
+      decoration: BoxDecoration(
+        color: c.surfaceMuted,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+      ),
+      child: Row(
+        spacing: AppSpace.md,
+        children: [
+          _LeadingCircle(step: step),
+          Expanded(
+            child: Text(
+              step.ward.name,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: context.text.titleSmall.copyWith(
+                color: AppTheme.colorTextPrimary,
+                fontWeight: next ? FontWeight.bold : null,
               ),
             ),
-          ],
-        ),
-      ),
-      );
-    }
-
-    return Container(
-      key: Key('liveRoute.wardRow.${step.ward.id}'),
-      height: 56,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        spacing: 12,
-        children: [
-          Expanded(child: _RowHead(step: step)),
-          if (!step.isDone)
+          ),
+          if (next)
+            Container(
+              key: const Key('liveRoute.nextChip'),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpace.md,
+                vertical: AppSpace.sm,
+              ),
+              decoration: BoxDecoration(
+                color: c.primary,
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+              ),
+              child: Text(
+                l10n.nextWardChip,
+                style: context.text.label.copyWith(color: c.onPrimary),
+              ),
+            )
+          else if (step.isDone) ...[
+            Icon(
+              Icons.check_circle,
+              color: step.isFlagged ? c.statusEscalated.fill : c.primary,
+              // Not const: the interpolated key depends on the ward id.
+              key: Key('liveRoute.doneTick.${step.ward.id}'),
+            ),
+            Text(
+              l10n.markDone,
+              style: context.text.bodySmall.copyWith(color: c.textMuted),
+            ),
+            if (step.isFlagged)
+              Icon(
+                Icons.flag,
+                size: 18,
+                color: c.statusEscalated.fill,
+                key: Key('liveRoute.flagged.${step.ward.id}'),
+              ),
+          ] else
             IconButton(
               // The out-of-order control (spec story 14 — real routes
               // rarely follow list order). Keyed per-ward; disabled while
               // no trip can receive the append or a write is in flight.
               key: Key('liveRoute.markWard.${step.ward.id}'),
-              tooltip: l10n.markWardDone,
+              tooltip: l10n.markWardDoneSemantic(step.ward.name),
               onPressed: canMark ? () => onMark(step.ward.id) : null,
               icon: const Icon(Icons.check_circle_outline),
-              color: AppTheme.colorPrimary,
-            ),
-          if (step.isDone)
-            Icon(
-              Icons.check_circle,
-              color: step.isFlagged
-                  ? AppTheme.colorStatusEscalated
-                  : AppTheme.colorPrimary,
-              // Not const: the interpolated key depends on the ward id.
-              key: Key('liveRoute.doneTick.${step.ward.id}'),
-            ),
-          if (step.isDone && step.isFlagged)
-            Icon(
-              Icons.flag,
-              size: 18,
-              color: AppTheme.colorStatusEscalated,
-              key: Key('liveRoute.flagged.${step.ward.id}'),
+              color: c.primary,
             ),
         ],
       ),
     );
+
+    // Merged rows read as ONE node ("Ward 2, Done" / "Ward 1, Next"); the
+    // pending row stays split so the out-of-order mark control remains its
+    // own TalkBack target (it carries the ward-name semantic via tooltip).
+    if (!step.isDone && !next) return row;
+    return MergeSemantics(child: row);
   }
 }
 
-/// The shared row head: order badge + ward name (+ the Next chip on the
-/// highlighted row). A plain Row — the wrapping row lays it out (Expanded
-/// in the fixed-height row, stretched in the next-ward column).
-class _RowHead extends StatelessWidget {
+/// The 48 dp leading circle carrying the row's state (§4.17): `primary` +
+/// number for the NEXT ward, `brand` + check for a DONE ward, `surface` +
+/// number for a pending one. (The spec's `surfaceMuted` circle assumes a
+/// surface row — on this surfaceMuted card the inverse reads the same way.)
+class _LeadingCircle extends StatelessWidget {
   final WardStep step;
 
-  const _RowHead({required this.step});
+  const _LeadingCircle({required this.step});
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return Row(
-      spacing: 12,
-      children: [
-        _OrderBadge(isDone: step.isDone, isNext: step.isNext, index: step.orderIndex),
-        Expanded(
-          child: Text(
-            step.ward.name,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodyLarge!.copyWith(
-                  fontWeight: step.isNext ? FontWeight.bold : null,
-                  color: AppTheme.colorTextPrimary,
-                ),
-          ),
-        ),
-        if (step.isNext)
-          Container(
-            key: const Key('liveRoute.nextChip'),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppTheme.colorPrimary,
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(
-              l10n.nextWardChip,
-              style: const TextStyle(
-                color: AppTheme.colorOnPrimary,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-      ],
+    final c = context.colors;
+
+    final Color fill;
+    final Widget child;
+    if (step.isDone) {
+      fill = c.brand;
+      child = Icon(Icons.check, size: 24, color: c.onBrand);
+    } else if (step.isNext) {
+      fill = c.primary;
+      child = Text(
+        '${step.orderIndex + 1}',
+        style: TextStyle(fontWeight: FontWeight.bold, color: c.onPrimary),
+      );
+    } else {
+      fill = c.surface;
+      child = Text(
+        '${step.orderIndex + 1}',
+        style: TextStyle(fontWeight: FontWeight.bold, color: c.textMuted),
+      );
+    }
+
+    return Container(
+      width: 48,
+      height: 48,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(shape: BoxShape.circle, color: fill),
+      child: child,
     );
   }
 }
 
-class _OrderBadge extends StatelessWidget {
-  final bool isDone;
-  final bool isNext;
-  final int index;
+/// The head card's affordance arrow: points UP while there is more sheet to
+/// pull, flips DOWN once the sheet is fully extended, animated either way
+/// (device pass 2026-10-28). Listens to the live sheet controller so the
+/// flip tracks the actual snap, not a gesture guess.
+class _SheetArrow extends StatelessWidget {
+  final DraggableScrollableController? controller;
+  final double fullFraction;
 
-  const _OrderBadge({
-    required this.isDone,
-    required this.isNext,
-    required this.index,
-  });
+  const _SheetArrow({required this.controller, required this.fullFraction});
 
   @override
   Widget build(BuildContext context) {
-    final highlighted = isNext || isDone;
-    return Container(
-      width: 32,
-      height: 32,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: highlighted
-            ? AppTheme.colorPrimary
-            : AppTheme.colorBackground,
-        border: Border.all(
-          color: highlighted ? AppTheme.colorPrimary : AppTheme.colorTextMuted,
-        ),
-      ),
-      child: Text(
-        '${index + 1}',
-        style: TextStyle(
-          fontWeight: FontWeight.bold,
-          color: highlighted
-              ? AppTheme.colorOnPrimary
-              : AppTheme.colorTextMuted,
-        ),
-      ),
+    Widget arrow(bool full) => AnimatedRotation(
+      turns: full ? 0.5 : 0,
+      duration: AppMotion.fast,
+      curve: AppMotion.standard,
+      child: Icon(Icons.expand_less, size: 28, color: AppTheme.colorPrimary),
+    );
+
+    final controller = this.controller;
+    if (controller == null) return arrow(false);
+
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        final full =
+            controller.isAttached && controller.size >= fullFraction - 0.01;
+        return arrow(full);
+      },
     );
   }
 }

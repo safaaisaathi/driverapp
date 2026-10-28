@@ -63,10 +63,7 @@ class MarkWardDoneFlow {
     this.writeFailed = false,
   });
 
-  MarkWardDoneFlow copyWith({
-    Set<String>? inFlight,
-    bool? writeFailed,
-  }) =>
+  MarkWardDoneFlow copyWith({Set<String>? inFlight, bool? writeFailed}) =>
       MarkWardDoneFlow(
         inFlight: inFlight ?? this.inFlight,
         writeFailed: writeFailed ?? this.writeFailed,
@@ -76,10 +73,10 @@ class MarkWardDoneFlow {
 /// Riverpod wiring for the mark flow (0.11: writes only through the
 /// repository seam; feature tests override the repositories, never this
 /// notifier — see test/live_route/mark_ward_done_test.dart).
-final markWardDoneFlowProvider = NotifierProvider.autoDispose<
-        MarkWardDoneController, MarkWardDoneFlow>(
-  MarkWardDoneController.new,
-);
+final markWardDoneFlowProvider =
+    NotifierProvider.autoDispose<MarkWardDoneController, MarkWardDoneFlow>(
+      MarkWardDoneController.new,
+    );
 
 /// Drives the Mark Ward Done writes (public method = the tap event).
 class MarkWardDoneController extends Notifier<MarkWardDoneFlow> {
@@ -115,17 +112,20 @@ class MarkWardDoneController extends Notifier<MarkWardDoneFlow> {
     );
   }
 
-  /// Tapped "this ward is done" for [wardId] — the big next-ward button and
-  /// the smaller out-of-order control both land here. Never throws: a
-  /// failed append surfaces as [MarkWardDoneFlow.writeFailed].
-  Future<void> mark(String wardId) async {
+  /// Tapped "this ward is done" for [wardId] on the van [vanId]'s shift —
+  /// the big next-ward button and the smaller out-of-order control both
+  /// land here. Never throws: a failed append surfaces as
+  /// [MarkWardDoneFlow.writeFailed].
+  Future<void> mark(String vanId, String wardId) async {
     if (state.inFlight.contains(wardId)) return; // double-tap re-entrancy
-    _set(state.copyWith(
-      inFlight: <String>{...state.inFlight, wardId},
-      writeFailed: false, // this attempt IS the retry
-    ));
+    _set(
+      state.copyWith(
+        inFlight: <String>{...state.inFlight, wardId},
+        writeFailed: false, // this attempt IS the retry
+      ),
+    );
 
-    final trip = ref.read(openTripProvider).value;
+    final trip = ref.read(openTripProvider(vanId)).value;
     if (trip == null) {
       // No open trip today — the UI already disables the controls with the
       // hint; nothing must be written anywhere (contract: wardsDone of
@@ -140,7 +140,7 @@ class MarkWardDoneController extends Notifier<MarkWardDoneFlow> {
       return;
     }
 
-    final ward = (ref.read(routeWardsProvider).value ?? const <Ward>[])
+    final ward = (ref.read(routeWardsProvider(vanId)).value ?? const <Ward>[])
         .where((candidate) => candidate.id == wardId)
         .firstOrNull;
     if (ward == null) {
@@ -153,7 +153,7 @@ class MarkWardDoneController extends Notifier<MarkWardDoneFlow> {
     // The flag decision (seam 2 pure helper): the van's last-known position
     // vs the ward centre/radius. A null fix cannot prove "inside" → flagged
     // (candidate ruling: unknown position = outside for review purposes).
-    final fix = ref.read(vanDocProvider).value?.lastLocation;
+    final fix = ref.read(vanDocProvider(vanId)).value?.lastLocation;
     final decision = fix == null
         ? (withinRadius: false, flagged: true)
         : markDecision(

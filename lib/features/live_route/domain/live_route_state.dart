@@ -6,7 +6,8 @@
 /// `AsyncValue` itself and no widgets.
 library;
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart'
+    show debugPrint, listEquals;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:driverapp/core/models/models.dart';
@@ -170,6 +171,15 @@ LiveRouteState combineLiveRouteState({
   for (final value in [van, trip, route, wards]) {
     if (value.hasError) {
       error = value;
+      // Which leg failed and why — never guess on a device again.
+      final err = value.error;
+      var detail = err.toString();
+      // Riverpod wraps callback errors: unwrap for the message chain.
+      if (detail.length < 8) detail = '${err.runtimeType}';
+      debugPrint('live-route: error leg raw:');
+      debugPrint(detail);
+      final st = value.stackTrace;
+      if (st != null) debugPrint(st.toString());
       break;
     }
   }

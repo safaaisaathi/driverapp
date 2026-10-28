@@ -53,3 +53,7 @@ android/app/google-services.json
 firebase.json
 devtools_options.yaml
 android/build/
+
+# Cloud Functions: build artifacts + deps never committed
+functions/node_modules/
+functions/lib/

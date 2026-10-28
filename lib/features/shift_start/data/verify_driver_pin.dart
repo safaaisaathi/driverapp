@@ -62,11 +62,14 @@ abstract interface class DriverPinVerifier {
 /// constants as the rest of the Emulator Suite setup).
 final class FirebaseCallablePinVerifier implements DriverPinVerifier {
   FirebaseCallablePinVerifier(FirebaseApp app)
-      : _functions =
-            FirebaseFunctions.instanceFor(app: app)..useFunctionsEmulator(
-              kFirebaseEmulatorHost,
-              kFunctionsEmulatorPort,
-            );
+      : _functions = FirebaseFunctions.instanceFor(app: app) {
+    // Only point at the Emulator Suite when running against emulators
+    // (DRIVERAPP_USE_EMULATOR=true). On the real-device/cloud path the
+    // callable reaches the live Cloud Functions backend directly.
+    if (kUseFirebaseEmulator) {
+      _functions.useFunctionsEmulator(kFirebaseEmulatorHost, kFunctionsEmulatorPort);
+    }
+  }
 
   final FirebaseFunctions _functions;
 
@@ -106,16 +109,25 @@ final class FirebaseCallablePinVerifier implements DriverPinVerifier {
     }
   }
 
-  /// Code mapping follows the typical callable error policy (backend not
-  /// deployed yet — refined when the real payload surface lands):
-  /// auth-ish codes ⇒ wrong PIN, `resource-exhausted` ⇒ the 0.7 rate
-  /// limit, everything else ⇒ backend/network unavailable.
+  /// Error-code mapping — deliberately narrow (refined against the LIVE
+  /// function now that it is deployed):
+  ///
+  /// `unauthenticated` ⇒ wrongPin: the deployed function throws
+  /// `unauthenticated` for exactly ONE reason — a PIN mismatch. Never
+  /// widen this bucket: a wider mapping turns backend/IAM/config
+  /// problems into "Wrong pin." and tells a real driver their number is
+  /// wrong when the van is simply not seeded (observed defect: Cloud
+  /// Run rejects an invocation with the same code when the invoker IAM
+  /// is closed, so everything here ran through "wrong pin").
+  ///
+  /// `resource-exhausted` ⇒ the 0.7 rate limit.
+  ///
+  /// EVERYTHING else ⇒ unavailable: `not-found` = van not seeded
+  /// (config gap), `permission-denied` / `invalid-argument` /
+  /// anything else = backend or wiring fault. None of these are the
+  /// driver's mistake, so none of them may read "wrong pin".
   DriverPinFailureKind _mapCode(String code) => switch (code) {
-        'unauthenticated' ||
-        'permission-denied' ||
-        'invalid-argument' ||
-        'not-found' =>
-          DriverPinFailureKind.wrongPin,
+        'unauthenticated' => DriverPinFailureKind.wrongPin,
         'resource-exhausted' => DriverPinFailureKind.lockedOut,
         _ => DriverPinFailureKind.unavailable,
       };

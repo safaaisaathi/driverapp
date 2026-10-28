@@ -7,6 +7,7 @@
 /// (never a crash).
 library;
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'permission_gateway.dart';
 
 /// Outcome of walking the four stages.
@@ -52,6 +53,7 @@ class PermissionFlowController {
 
     for (final stage in stages) {
       final approval = await _ask(stage);
+      debugPrint('tracking-flow: $stage -> $approval');
 
       // A stage may report GPS-off without being "denied by the user"; it
       // still blocks tracking, so treat it as the failed stage.

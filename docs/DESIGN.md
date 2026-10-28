@@ -359,7 +359,7 @@ If a class name differs in your Flutter version (for example `DialogThemeData` v
 
 | Element | Spec |
 |---|---|
-| Glass top bar | height 64, inset 16 from safe top and 16 from sides, radius pill, `glass` fill, `elev2`. Contents: round 48 icon slot (ward/place icon in `brandSoft` circle) + two-line text (ward name `titleSmall`, subtitle `bodySmall` muted) + round 48 icon button(s) at the right (language toggle, then search/refresh) |
+| Glass top bar | height 64, inset 16 from safe top and 16 from sides, radius pill, `glass` fill, `elev2`. Contents: round 48 icon slot (ward/place icon in `brandSoft` circle) + two-line text (ward name `titleSmall`, subtitle `bodySmall` muted) + round 48 icon button(s) at the right (language toggle, then search/refresh). D2 override (changed 2026-10-28: notices bell removed from the glass bar — the pill nav is the notices entry): icon slot = route icon, subtitle = TrackingBadge, ONE settings icon button on the right |
 | Pill nav (user) | height 72, auto width (3 items), centered, bottom inset 16 + safe area, radius pill, `surface`, `elev2`, inner padding 8. Item = 56 circle. Active item = `primary` circle with `onPrimary` icon. Inactive = transparent with `textMuted` icon. Label NOT shown (icons + `Semantics` label); on `regular` and above show no labels |
 | Pill nav (driver) | height 80, item circle 64, same style |
 | Bottom sheet on map | radius 32 top, `surface`, `elev3`, grab handle 40 x 4 `borderStrong`. Snap points (fraction of screen height): collapsed 0.22, default 0.36, expanded 0.88. Sheet bottom padding includes the nav height + 16 so content is never covered by the nav |
@@ -553,10 +553,10 @@ Vertical list; node = 24 dp circle (`status.fill` for reached, `border` for futu
 
 | Component | Spec |
 |---|---|
-| BigActionButton | height 72, full width, pill, `primary`, label uses `button` (16 sp); optional leading icon 28; one per screen: "Mark Ward Done" |
+| BigActionButton | height 72, full width, pill, `primary`, label uses `button` (16 sp); optional leading icon 28; one per screen: "Mark Ward Done"; label swaps to "End Shift" once every ward is done (opens D5) (changed 2026-10-28: End Shift moved here from the D2 "more" menu) |
 | WardRow | height 72, `surface` card radius 28; leading 48 circle (`primary` + number if next, `brand` + check if done, `surfaceMuted` + number if pending); title `titleSmall`; done time `bodySmall` muted. Done rows have a check icon plus the word "Done" |
 | PinPad | 4 boxes + system numeric keypad; wrong PIN shows InlineError and a 120 ms flash of the outline in `error` (no shake) |
-| TrackingBadge | pill in the glass bar: 8 dp `brand` dot + "Tracking active" text (text always present) |
+| TrackingBadge | pill in the glass bar: 8 dp `brand` dot + "Tracking active" text (text always present); label ellipsizes (`Flexible`) and never overflows the glass bar (changed 2026-10-28) |
 
 ### 4.18 Language toggle
 
@@ -917,16 +917,18 @@ Empty: <Binny wait> "No reports yet" + [ Report a Problem ] tonal
 
 ```
 +--------------------------------+
-| <GlassBar> <TrackingBadge> (notice)|
+| <GlassBar> route + TrackingBadge (settings) |
+| <OfflineBanner / tracking / mock-location> |
 |          MAP: van, wards       |
 |==== sheet snap 0.36 ===========|
 |  <ContourCard> 4 of 9 wards    |
-|  [ Mark Ward Done: Ward 5  ]   |  <BigActionButton> 72 high
+|  [ Mark Ward Done: Ward 5  ]   |  <BigActionButton> 72 high; becomes [ End Shift ] once every ward is done
 |  <WardRow> done ...            |
 |  <WardRow> next ...            |
 |       <PillNav driver>         |
 +--------------------------------+
 ```
+Changed 2026-10-28: notices bell removed from glass bar — PillNav is the notices entry; end-of-trip banner removed — End Shift is the sheet's primary once all wards are done; TrackingBadge ellipsizes. Banners remaining in the slot under the glass bar: offline note, tracking-state (GPS off / permission denied, with Retry), mock-location warning. There is no other end-of-trip card, summary seam or End Shift button on this screen.
 Landscape: map left (60%), panel right (40%, max 420) holding ContourCard + BigActionButton + ward list; nav pill stays bottom-left.
 
 ### 9.10 Remaining screens (compact)
@@ -1178,7 +1180,7 @@ Feature screens live in `lib/features/<feature>/ui/` (PRD 0.11) and import only 
 | Theme | Settings | segmented Light / Dark / System |
 | Notices (driver) | nav item + badge | M2 list |
 | Mark ward done | D2 sheet, directly under the ContourCard | BigActionButton |
-| End shift | D2 "more" menu -> D5 | menu item opens M3 |
+| End shift | D2 sheet primary, only once every ward is done -> D5 | BigActionButton label swap (changed 2026-10-28; was D2 "more" menu) |
 | Tracking status | D2 glass bar | TrackingBadge |
 | Help / privacy | Settings card | link row |
 | Offline / stale | banner under the glass bar | 4.15 |

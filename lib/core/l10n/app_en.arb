@@ -45,6 +45,7 @@
   "trackingGpsOff": "Phone location (GPS) is turned off. Turn it on and try again.",
   "trackingNotificationTitle": "Tracking active",
   "trackingNotificationBody": "Your van's location is shared while on shift.",
+  "trackingOpenLocationSettings": "Open location settings",
 
   "mockLocationWarning": "Your phone is faking its location. Tracking continues, and the office will see this notice.",
 
@@ -61,6 +62,12 @@
   "routeLoading": "Loading route…",
   "recenterMap": "Recenter map",
   "noticesBadgeTooltip": "Notices",
+  "noticesUnreadSemantic": "{count, plural, =1{Notices, 1 unread} other{Notices, {count} unread}}",
+  "@noticesUnreadSemantic": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
   "endOfTripCardPlaceholder": "End-of-trip summary appears here",
   "routeProgress": "{done} of {total} wards done",
   "@routeProgress": {
@@ -107,6 +114,8 @@
     }
   },
   "offlineShowingCached": "Showing saved map data",
+  "liveRouteMapSemantic": "Route map with the van's live position",
+  "vanMarkerSemantic": "Your van",
   "routeEmptyMessage": "This route has no wards",
   "routeMissingMessage": "Route not found",
 

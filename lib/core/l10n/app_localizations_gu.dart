@@ -148,6 +148,9 @@ class AppLocalizationsGu extends AppLocalizations {
       'શિફ્ટ દરમિયાન તમારી વેનની લોકેશન શેર થાય છે.';
 
   @override
+  String get trackingOpenLocationSettings => 'લોકેશન સેટિંગ્સ ખોલો';
+
+  @override
   String get mockLocationWarning =>
       'તમારો ફોન લોકેશન ખોટી રીતે બતાવી રહ્યો છે. ટ્રેકિંગ ચાલુ રહેશે, અને કચેરીને આ નોંધ દેખાશે.';
 
@@ -183,6 +186,17 @@ class AppLocalizationsGu extends AppLocalizations {
 
   @override
   String get noticesBadgeTooltip => 'નોટિસ';
+
+  @override
+  String noticesUnreadSemantic(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'નોટિસ, $count ન વંચાયેલી',
+      one: 'નોટિસ, 1 ન વંચાયેલી',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get endOfTripCardPlaceholder => 'શિફ્ટ પૂરી વખતે સારાંશ અહીં દેખાય';
@@ -254,6 +268,12 @@ class AppLocalizationsGu extends AppLocalizations {
 
   @override
   String get offlineShowingCached => 'સેવ થયેલો નકશો દેખાય છે';
+
+  @override
+  String get liveRouteMapSemantic => 'રૂટ મેપ, વેનની લાઇવ સ્થિતિ સાથે';
+
+  @override
+  String get vanMarkerSemantic => 'તમારી વેન';
 
   @override
   String get routeEmptyMessage => 'આ રૂટમાં કોઈ વોર્ડ નથી';

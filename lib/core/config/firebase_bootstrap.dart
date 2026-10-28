@@ -27,8 +27,16 @@ import 'package:driverapp/features/tracking/offline/data/hive_firestore_timestam
 import 'package:driverapp/features/tracking/offline/offline_providers.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+// Platform-interface internals, used exactly once in the two-engine adopt
+// path: resetting `MethodChannelFirebase.isCoreInitialized` is the only lever
+// the public API leaves to re-sync the Dart-side app registry with native.
+// Transitive dependency of `firebase_core`; stays unlisted (contract 0.10).
+// ignore: depend_on_referenced_packages
+import 'package:firebase_core_platform_interface/firebase_core_platform_interface.dart'
+    show MethodChannelFirebase;
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
@@ -129,46 +137,94 @@ class BootstrapController extends Notifier<BootstrapStatus> {
 
   bool _running = false;
 
+  // ---------------------------------------------------------------------------
+  // Test seams — platform channels do not exist in unit tests (Ticket 02).
+  // Each defaults to the real implementation; tests swap in doubles, the same
+  // injection pattern as the [FirebaseBackend] parameter of [run].
+  // ---------------------------------------------------------------------------
+
+  /// Opens the Hive flag box ([openBootstrapFlagBox] without path_provider).
+  @visibleForTesting
+  Future<FlagBox> Function() openFlagBox = openBootstrapFlagBox;
+
+  /// The `Firebase.initializeApp` step — the seam the two-engine
+  /// "already exists" adopt fix is tested through
+  /// (test/bootstrap/firebase_adopt_test.dart).
+  @visibleForTesting
+  Future<FirebaseApp> Function(FirebaseBackend backend) initializeApp =
+      _defaultInitializeApp;
+
+  /// Anonymous sign-in (Auth platform channel).
+  @visibleForTesting
+  Future<String> Function(FirebaseApp app) signInAnonymously =
+      _defaultSignInAnonymously;
+
+  /// FCM gateway; production uses [FirebaseMessagingGateway].
+  @visibleForTesting
+  MessagingGateway messagingGateway = const FirebaseMessagingGateway();
+
   Future<void> _runOnce(_BootProgress progress, FirebaseBackend backend) async {
     // 1. Local flag storage (first-launch detection).
-    progress.flagBox ??= await openBootstrapFlagBox();
-    // 2. Firebase core.
-    progress.app ??= await Firebase.initializeApp(
-      name: defaultFirebaseAppName,
-      options: firebaseOptions(backend),
-    );
+    progress.flagBox ??= await openFlagBox();
+    // 2. Firebase core — with the two-engine "already exists" adopt fix
+    //    (see [_initializeFirebaseApp]).
+    progress.app ??= await _initializeFirebaseApp(backend);
     // 3. Emulator wiring (before any Firestore/Auth use).
     if (!progress.emulatorsWired && backend == FirebaseBackend.emulatorSuite) {
       _wireEmulators(progress.app!);
       progress.emulatorsWired = true;
     }
     // 4. Anonymous session at launch.
-    progress.anonymousUid ??= await _signInAnonymously(progress.app!);
+    progress.anonymousUid ??= await signInAnonymously(progress.app!);
     // 5. FCM: init + one-time topic `all` subscription.
     if (!progress.messagingReady) {
-      await _messaging.init();
+      await messagingGateway.init();
       progress.messagingReady = true;
     }
     if (!progress.allSubscribed) {
       await ensureSubscribedToAllTopic(
         flags: progress.flagBox!,
-        messaging: _messaging,
+        messaging: messagingGateway,
       );
       progress.allSubscribed = true;
     }
   }
 
-  Future<String> _signInAnonymously(FirebaseApp app) async {
-    final credential =
-        await FirebaseAuth.instanceFor(app: app).signInAnonymously();
-    final user = credential.user;
-    if (user == null) {
-      throw StateError('signInAnonymously returned no user (Ticket 02)');
+  /// Firebase core with ONE deliberate deviation from a plain retry loop: a
+  /// PlatformException(IllegalStateException, "...already exists!") is
+  /// ADOPTED instead of rethrown, because retrying can never recover from it.
+  Future<FirebaseApp> _initializeFirebaseApp(FirebaseBackend backend) async {
+    try {
+      return await initializeApp(backend);
+    } on PlatformException catch (error) {
+      if (error.code != 'IllegalStateException' ||
+          !(error.message?.contains('already exists') ?? false)) {
+        rethrow; // every other failure keeps degrading exactly as before.
+      }
+      // Samsung letterbox relaunch (M215F, logcat 2026-10-28): while the
+      // first Flutter engine is still warming up, a letterbox activity
+      // relaunch can start a SECOND engine in the same process (Geolocator
+      // log: "Connected engine count 2"). Both engines run main(), and their
+      // `initializeApp` calls race; the loser's native create throws
+      // PlatformException(IllegalStateException, "FirebaseApp name [DEFAULT]
+      // already exists!") on EVERY retry, so that engine degraded forever.
+      // A Firebase app is process-wide state — ADOPT the winner's app.
+      try {
+        return Firebase.app(defaultFirebaseAppName);
+      } on FirebaseException catch (adoptError) {
+        if (adoptError.code != 'no-app') rethrow;
+        // Device-true subtlety: this isolate last synced its Dart-side app
+        // registry with native BEFORE the other engine's create completed, so
+        // `Firebase.app` cannot see the app yet — and re-running
+        // `initializeApp` would only rethrow the same exception forever (the
+        // proven never-recovers behavior). Force one re-sync of the registry
+        // from native, then adopt what native reports.
+        // ignore: invalid_use_of_visible_for_testing_member
+        MethodChannelFirebase.isCoreInitialized = false;
+        return await initializeApp(backend);
+      }
     }
-    return user.uid;
   }
-
-  FirebaseMessagingGateway get _messaging => const FirebaseMessagingGateway();
 }
 
 final class _BootProgress {
@@ -180,6 +236,27 @@ final class _BootProgress {
   bool allSubscribed = false;
 }
 
+/// Real `Firebase.initializeApp` behind [BootstrapController.initializeApp]:
+/// the single name/options pair the app boots with.
+Future<FirebaseApp> _defaultInitializeApp(FirebaseBackend backend) =>
+    Firebase.initializeApp(
+      name: defaultFirebaseAppName,
+      options: firebaseOptions(backend),
+    );
+
+/// Real anonymous sign-in behind [BootstrapController.signInAnonymously]
+/// (Auth platform channel — moved out of the controller so tests can inject
+/// a double).
+Future<String> _defaultSignInAnonymously(FirebaseApp app) async {
+  final credential =
+      await FirebaseAuth.instanceFor(app: app).signInAnonymously();
+  final user = credential.user;
+  if (user == null) {
+    throw StateError('signInAnonymously returned no user (Ticket 02)');
+  }
+  return user.uid;
+}
+
 /// Boot wiring entry point. Fire-and-forget from `main()` — never throws
 /// (Ticket 02); UI observes [bootstrapProvider] / awaits `done()`.
 Future<void> runBootstrap(ProviderContainer container) async {
@@ -189,6 +266,13 @@ Future<void> runBootstrap(ProviderContainer container) async {
   if (!Hive.isAdapterRegistered(207)) {
     Hive.registerAdapter(FirestoreTimestampAdapter());
   }
+  // Firebase boot FIRST — the offline sync drain reads Firestore through
+  // `firebaseFirestoreProvider`, and with no Firebase app that read throws
+  // `[core/no-app]` every launch (observed defect on device: the service
+  // never started because it was read before `.run()` initialized app).
+  // `.run()` never throws; it only degrades internally, so starting the
+  // drain after it (ready OR degraded) is always well-defined.
+  await container.read(bootstrapProvider.notifier).run();
   // The sync drain starts with boot and is idempotent; a host without
   // platform channels (tests, CLI) just logs and boots on (ticket 02 rule).
   try {
@@ -196,7 +280,6 @@ Future<void> runBootstrap(ProviderContainer container) async {
   } catch (error) {
     debugPrint('bootstrap: offline sync service not started: $error');
   }
-  await container.read(bootstrapProvider.notifier).run();
 }
 
 /// Silent-retry backoff, `attempt` is 1-based. Cheap calls first so a

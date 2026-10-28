@@ -4,8 +4,10 @@ import 'package:driverapp/core/l10n/app_localizations.dart';
 import 'package:driverapp/core/models/models.dart';
 import 'package:driverapp/core/repositories/repositories.dart';
 import 'package:driverapp/core/theme/app_theme.dart';
+import 'package:driverapp/features/shift_start/data/shift_tracking_auto_start.dart';
 import 'package:driverapp/features/shift_start/data/verify_driver_pin.dart';
 import 'package:driverapp/features/shift_start/domain/shift_session.dart';
+import 'package:driverapp/features/shift_start/ui/basic_route_placeholder.dart';
 import 'package:driverapp/features/shift_start/ui/shift_start_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -29,6 +31,14 @@ const String enVanListError = "Couldn't load vans";
 const String enRetry = 'Retry';
 const String enStartShift = 'Start Shift';
 const String enResumeShift = 'Resume shift';
+const String enTrackingPending = 'Van tracking will start automatically.';
+
+/// L10n contract (arb): created for the F-D2 auto-start surface.
+const String enTrackingGpsOff =
+    'Phone location (GPS) is turned off. Turn it on and try again.';
+const String enTrackingDenied =
+    'Tracking is off. You can start it again later – your shift is safe.';
+const String enTrackingStarted = 'Tracking active';
 
 Map<String, Object?> sampleVanDocMap({
   String id = 'van-1',
@@ -101,6 +111,40 @@ final class _ScriptedPinVerifier implements DriverPinVerifier {
       cause: 'scripted',
     );
   }
+}
+
+/// Records every D1 → F-D2 auto-start hand-over so widget tests assert the
+/// engine seam without touching platform channels (spec seam 1).
+/// `nextKind` scripts the reported outcome (the real starter derives it
+/// from the permission flow).
+final class RecordingTrackingAutoStarter implements ShiftTrackingAutoStarter {
+  final List<ShiftSession> startedWith = [];
+  int openSettingsCalls = 0;
+  ShiftTrackingAutoStartKind nextKind = ShiftTrackingAutoStartKind.started;
+
+  @override
+  Future<ShiftTrackingAutoStart> startTrackingFor(
+    ShiftSession session, {
+    required String notificationTitle,
+    required String notificationBody,
+  }) async {
+    startedWith.add(session);
+    return ShiftTrackingAutoStart(nextKind);
+  }
+
+  @override
+  Future<void> openLocationSettings() async => openSettingsCalls++;
+}
+
+/// Seeds an active ShiftSession for placeholder/banner tests without
+/// running D1 (pattern matches the settings/report test _SeededShift).
+final class _SeededSession extends ShiftController {
+  _SeededSession(this._session);
+
+  final ShiftSession _session;
+
+  @override
+  ShiftSession? build() => _session;
 }
 
 class RecordingAuthGateway implements DriverAuthGateway {
@@ -203,6 +247,7 @@ Future<ProviderScope> pumpHarness(
   DriverAuthGateway? auth,
   MessagingGateway? messaging,
   void Function(BuildContext context)? onShiftStarted,
+  RecordingTrackingAutoStarter? trackingStarter,
 }) async {
   final scope = ProviderScope(
     overrides: [
@@ -214,6 +259,9 @@ Future<ProviderScope> pumpHarness(
           .overrideWithValue(auth ?? RecordingAuthGateway()),
       driverMessagingGatewayProvider
           .overrideWithValue(messaging ?? RecordingMessagingGateway()),
+      // F-D2 engine seam: tests never run the real (platform) starter.
+      shiftTrackingAutoStarterProvider
+          .overrideWithValue(trackingStarter ?? RecordingTrackingAutoStarter()),
     ],
     child: MaterialApp(
       theme: AppTheme.light(),
@@ -379,6 +427,7 @@ void main() {
     final vansRepo = FakeVansRepository([sampleVan()]);
     final tripsRepo = FakeTripsRepository();
     final messaging = RecordingMessagingGateway();
+    final trackingStarter = RecordingTrackingAutoStarter();
     var navigated = false;
     await pumpHarness(
       tester,
@@ -388,6 +437,7 @@ void main() {
       verifier: pinVerifier(),
       messaging: messaging,
       onShiftStarted: (_) => navigated = true,
+      trackingStarter: trackingStarter,
     );
     final before = DateTime.now();
     await selectVanAndVerify(tester);
@@ -421,6 +471,13 @@ void main() {
 
     // FCM topic `van_{vanId}` after shift start (0.6.6).
     expect(messaging.topics, ['van_van-1']);
+
+    // F-D2 auto-start seam: the engine hand-over fires exactly once with
+    // the just-created trip (the real starter's permission flow is
+    // platform-bound and lives on the device only).
+    expect(trackingStarter.startedWith, hasLength(1));
+    expect(trackingStarter.startedWith.single.vanId, 'van-1');
+    expect(trackingStarter.startedWith.single.tripId, trip.id);
 
     // ShiftController session (ticket 05 engine seam).
     final container =
@@ -521,5 +578,102 @@ void main() {
     final buttonFinder =
         find.byKey(const ValueKey('d1-start-button')).hitTestable();
     expect(buttonFinder, findsOneWidget);
+  });
+
+  group('F-D2 auto-start outcome surface (placeholder)', () {
+    final sampleSession = ShiftSession(
+      vanId: 'van-1',
+      tripId: 'trip-1',
+      routeId: 'route-1',
+      startedAt: DateTime.now(),
+      date: DateTime.now(),
+    );
+
+    Future<void> pumpPlaceholder(
+      WidgetTester tester, {
+      required RecordingTrackingAutoStarter starter,
+    }) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            shiftTrackingAutoStarterProvider.overrideWithValue(starter),
+            shiftControllerProvider.overrideWith(
+              () => _SeededSession(sampleSession),
+            ),
+          ],
+          child: MaterialApp(
+            locale: const Locale('en'),
+            supportedLocales: AppLocalizations.supportedLocales,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            home: const BasicRoutePlaceholder(),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('gps-off surfaces the localized banner with recovery actions',
+        (tester) async {
+      final starter = RecordingTrackingAutoStarter()
+        ..nextKind = ShiftTrackingAutoStartKind.gpsOff;
+      await pumpPlaceholder(tester, starter: starter);
+
+      // Simulate the real starter writing its outcome into the surface.
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(BasicRoutePlaceholder)),
+      );
+      container
+          .read(shiftTrackingAutoStartStatusProvider.notifier)
+          .set(const ShiftTrackingAutoStart(ShiftTrackingAutoStartKind.gpsOff));
+      await tester.pump();
+
+      expect(find.text(enTrackingGpsOff), findsOneWidget);
+      expect(find.text(enTrackingStarted), findsNothing);
+
+      // The recovery actions exist and fire the starter seam.
+      await tester.tap(find.byKey(const ValueKey('tracking-open-gps-settings')));
+      await tester.tap(find.byKey(const ValueKey('tracking-start-retry')));
+      await tester.pump();
+      expect(starter.openSettingsCalls, 1);
+      expect(starter.startedWith.single.vanId, 'van-1');
+    });
+
+    testWidgets('denied surfaces its banner, without the gps settings action',
+        (tester) async {
+      final starter = RecordingTrackingAutoStarter()
+        ..nextKind = ShiftTrackingAutoStartKind.denied;
+      await pumpPlaceholder(tester, starter: starter);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(BasicRoutePlaceholder)),
+      );
+      container
+          .read(shiftTrackingAutoStartStatusProvider.notifier)
+          .set(const ShiftTrackingAutoStart(ShiftTrackingAutoStartKind.denied));
+      await tester.pump();
+
+      expect(find.text(enTrackingDenied), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('tracking-open-gps-settings')),
+        findsNothing,
+      );
+      // Retry stays available — shifts are safe, tracking is re-startable.
+      expect(find.byKey(const ValueKey('tracking-start-retry')), findsOneWidget);
+    });
+
+    testWidgets(
+        'started keeps the calm default copy and shows no recovery panel',
+        (tester) async {
+      final starter = RecordingTrackingAutoStarter();
+      await pumpPlaceholder(tester, starter: starter);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(BasicRoutePlaceholder)),
+      );
+      container
+          .read(shiftTrackingAutoStartStatusProvider.notifier)
+          .set(const ShiftTrackingAutoStart(ShiftTrackingAutoStartKind.started));
+      await tester.pump();
+
+      expect(find.text(enTrackingPending), findsOneWidget);
+      expect(find.byKey(const ValueKey('tracking-start-retry')), findsNothing);
+    });
   });
 }

@@ -149,6 +149,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Your van\'s location is shared while on shift.';
 
   @override
+  String get trackingOpenLocationSettings => 'Open location settings';
+
+  @override
   String get mockLocationWarning =>
       'Your phone is faking its location. Tracking continues, and the office will see this notice.';
 
@@ -184,6 +187,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noticesBadgeTooltip => 'Notices';
+
+  @override
+  String noticesUnreadSemantic(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Notices, $count unread',
+      one: 'Notices, 1 unread',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get endOfTripCardPlaceholder => 'End-of-trip summary appears here';
@@ -254,6 +268,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get offlineShowingCached => 'Showing saved map data';
+
+  @override
+  String get liveRouteMapSemantic => 'Route map with the van\'s live position';
+
+  @override
+  String get vanMarkerSemantic => 'Your van';
 
   @override
   String get routeEmptyMessage => 'This route has no wards';

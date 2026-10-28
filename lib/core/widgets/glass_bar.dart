@@ -16,6 +16,7 @@ class GlassBar extends StatelessWidget {
     this.leadingIcon,
     this.title,
     this.subtitle,
+    this.subtitleBadge,
     this.actions = const [],
     this.showLanguageToggle = false,
     this.currentLocale = 'en',
@@ -25,6 +26,12 @@ class GlassBar extends StatelessWidget {
   final IconData? leadingIcon;
   final String? title;
   final String? subtitle;
+
+  /// A small widget rendered UNDER the title in place of [subtitle] — the
+  /// pill-shaped status badges (e.g. TrackingBadge, §4.17) live here so the
+  /// title line is never squeezed out by the actions.
+  final Widget? subtitleBadge;
+
   final List<Widget> actions;
   final bool showLanguageToggle;
   final String currentLocale;
@@ -39,7 +46,10 @@ class GlassBar extends StatelessWidget {
     return SafeArea(
       top: true,
       child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: AppSpace.sm),
+        padding: EdgeInsets.symmetric(
+          horizontal: AppSpace.lg,
+          vertical: AppSpace.sm,
+        ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(AppRadius.pill),
           child: BackdropFilter(
@@ -64,13 +74,20 @@ class GlassBar extends StatelessWidget {
                         shape: BoxShape.circle,
                       ),
                       child: Center(
-                        child: Icon(leadingIcon, size: AppSize.icon, color: c.brand, weight: 300),
+                        child: Icon(
+                          leadingIcon,
+                          size: AppSize.icon,
+                          color: c.brand,
+                          weight: 300,
+                        ),
                       ),
                     ),
                     SizedBox(width: AppSpace.md),
                   ],
-                  // Title + subtitle
-                  if (title != null || subtitle != null) ...[
+                  // Title + subtitle line (text or a badge widget)
+                  if (title != null ||
+                      subtitle != null ||
+                      subtitleBadge != null) ...[
                     Expanded(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -79,11 +96,16 @@ class GlassBar extends StatelessWidget {
                           if (title != null)
                             Text(
                               title!,
-                              style: t.titleSmall.copyWith(color: c.textPrimary),
+                              style: t.titleSmall.copyWith(
+                                color: c.textPrimary,
+                              ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                          if (subtitle != null)
+                          if (subtitleBadge != null) ...[
+                            SizedBox(height: AppSpace.xs),
+                            subtitleBadge!,
+                          ] else if (subtitle != null)
                             Text(
                               subtitle!,
                               style: t.bodySmall.copyWith(color: c.textMuted),
@@ -116,10 +138,7 @@ class GlassBar extends StatelessWidget {
 }
 
 class _LanguageToggle extends StatelessWidget {
-  const _LanguageToggle({
-    required this.currentLocale,
-    this.onToggle,
-  });
+  const _LanguageToggle({required this.currentLocale, this.onToggle});
 
   final String currentLocale;
   final VoidCallback? onToggle;
@@ -187,7 +206,9 @@ class _LangSegment extends StatelessWidget {
           ),
           child: Text(
             label,
-            style: t.label.copyWith(color: isSelected ? c.onPrimary : c.textPrimary),
+            style: t.label.copyWith(
+              color: isSelected ? c.onPrimary : c.textPrimary,
+            ),
           ),
         ),
       ),
@@ -199,11 +220,7 @@ class _LangSegment extends StatelessWidget {
 /// DESIGN.md Section 4.17. The label is passed in (CL-21: all strings come
 /// from the caller's l10n — this widget owns no copy).
 class TrackingBadge extends StatelessWidget {
-  const TrackingBadge({
-    super.key,
-    required this.label,
-    this.isActive = true,
-  });
+  const TrackingBadge({super.key, required this.label, this.isActive = true});
 
   final String label;
   final bool isActive;
@@ -214,7 +231,10 @@ class TrackingBadge extends StatelessWidget {
     final t = context.text;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: AppSpace.xs),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpace.md,
+        vertical: AppSpace.xs,
+      ),
       decoration: BoxDecoration(
         color: c.brandSoft,
         borderRadius: BorderRadius.circular(AppRadius.pill),
@@ -231,7 +251,19 @@ class TrackingBadge extends StatelessWidget {
             ),
           ),
           SizedBox(width: AppSpace.xs),
-          Text(label, style: t.label.copyWith(color: c.brand)),
+          // Flexible: the badge sits in the GlassBar's Expanded title column
+          // — a bare Text here overflowed by ~36 px on the device (the red
+          // "…FLOWED BY 36 PIX" error strip) once actions + the language
+          // toggle squeezed the column. Ellipsize instead of overflowing
+          // (device UX pass 2026-10-28).
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: t.label.copyWith(color: c.brand),
+            ),
+          ),
         ],
       ),
     );

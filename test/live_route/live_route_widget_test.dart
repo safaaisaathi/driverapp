@@ -197,9 +197,6 @@ void main() {
       ProviderScope(
         overrides: [
           tileUrlTemplateProvider.overrideWithValue(null),
-          // D1 owns the real van id at integration; tests pin the seeded demo
-          // van (default provider throws — a wrong van must fail loudly).
-          currentVanIdProvider.overrideWithValue('van-01'),
           ...overrides,
           ...extra,
         ],
@@ -207,7 +204,9 @@ void main() {
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: Locale('en'),
-          home: LiveRouteScreen(),
+          // The van id is a plain argument now (D1's session owns it);
+          // tests pin the seeded demo van.
+          home: LiveRouteScreen(vanId: 'van-01'),
         ),
       ),
     );
@@ -239,11 +238,13 @@ void main() {
     // Map is up (tiles swapped out in tests — no network attempts).
     expect(find.byKey(const Key('liveRoute.map')), findsOneWidget);
 
-    // AppBar shows the route name; placeholders present (tickets 09/08 slots).
+    // Glass bar shows the route name + the settings entry (the top-bar
+    // notices bell is gone — PillNav carries notices; the end-trip bar is
+    // gone from the map — End Shift lives in the sheet, 2026-10-28 pass).
     expect(find.text('Godhra Fort Route'), findsOneWidget);
-    expect(find.byKey(const Key('liveRoute.noticesPlaceholder')), findsOneWidget);
+    expect(find.byKey(const Key('liveRoute.settings')), findsOneWidget);
     expect(
-        find.byKey(const Key('liveRoute.endTripPlaceholder')), findsOneWidget);
+        find.byKey(const Key('liveRoute.endTripPlaceholder')), findsNothing);
 
     // Ward list rows exist for every route ward, in route order (top-to-bottom).
     final rowOrder = [
@@ -293,6 +294,9 @@ void main() {
     // Flagged Mark Ward Done stays visually recorded for the driver.
     expect(find.byKey(const Key('liveRoute.flagged.wb')), findsOneWidget);
     expect(find.byKey(const Key('liveRoute.doneTick.wc')), findsNothing);
+    // Two of three done: the sheet primary is still the mark control —
+    // End Shift only replaces it once EVERY ward is done.
+    expect(find.byKey(const Key('liveRoute.endShift')), findsNothing);
 
     // Next highlight moved to the first undone ward.
     expect(
@@ -302,6 +306,34 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('route complete: the sheet primary becomes End Shift',
+      (tester) async {
+    await pumpScreen(
+      tester,
+      [
+        vansRepositoryProvider
+            .overrideWithValue(FakeVansRepository([van(updatedAt: now)])),
+        tripsRepositoryProvider.overrideWithValue(FakeTripsRepository([
+          tripFrom([
+            {'wardId': 'wa', 'doneAt': now, 'flagged': false},
+            {'wardId': 'wb', 'doneAt': now, 'flagged': true},
+            {'wardId': 'wc', 'doneAt': now, 'flagged': false},
+          ]),
+        ])),
+        wardsRepositoryProvider
+            .overrideWithValue(FakeWardsRepository([wardA, wardB, wardC])),
+        routesRepositoryProvider.overrideWithValue(FakeRoutesRepository([route()])),
+      ],
+    );
+    await settle(tester);
+
+    // Every ward ticked: no mark control remains, the sheet's one primary
+    // is the End Shift entry (2026-10-28 device UX pass — the old end-trip
+    // banner is gone from the map).
+    expect(find.byKey(const Key('liveRoute.markNextWard')), findsNothing);
+    expect(find.byKey(const Key('liveRoute.endShift')), findsOneWidget);
   });
 
   testWidgets('van doc stream updates the marker; stale fix shows the caption',
@@ -483,7 +515,6 @@ void main() {
     final counted = CountingVansRepository(realVans);
     final container = ProviderContainer(
       overrides: [
-        currentVanIdProvider.overrideWithValue('van-01'),
         vansRepositoryProvider.overrideWithValue(counted),
         tripsRepositoryProvider.overrideWithValue(FakeTripsRepository([])),
         wardsRepositoryProvider
@@ -495,7 +526,7 @@ void main() {
 
     // One screen mounted: the chain holds live listeners.
     container.listen(
-      liveRouteStateProvider,
+      liveRouteStateProvider('van-01'),
       (previous, next) {},
       fireImmediately: true,
     );
