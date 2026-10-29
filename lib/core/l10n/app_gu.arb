@@ -6,7 +6,6 @@
   "error": "કંઈક ખોટું થયું",
   "offline": "તમે ઓફલાઇન છો",
   "retry": "ફરી પ્રયાસ કરો",
-
   "shiftStartTitle": "શિફ્ટ શરૂ કરો",
   "vanLabel": "વેન",
   "pinLabel": "પિન",
@@ -36,7 +35,6 @@
   "shiftStarted": "શિફ્ટ શરૂ થઈ ગઈ",
   "basicRouteTitle": "તમારો રૂટ",
   "trackingPending": "વેન ટ્રેકિંગ આપોઆપ શરૂ થશે.",
-
   "identityStartTitle": "શિફ્ટ શરૂ કરો",
   "identityCodeLabel": "કોડ",
   "identityCodeHint": "XX-0000",
@@ -48,42 +46,38 @@
   "identityWardsAllotted": "{count, plural, =1{1 વોર્ડ સોંપાયો છે} other{{count} વોર્ડ સોંપાયા છે}}",
   "@identityWardsAllotted": {
     "placeholders": {
-      "count": { "type": "int" }
+      "count": {
+        "type": "int"
+      }
     }
   },
   "identityNotFoundTitle": "ડ્રાઇવર મળ્યો નથી",
   "identityNotFoundBody": "કોડ કચેરી સાથે ચકાસીને ફરી પ્રયાસ કરો.",
   "identityLookupFailedTitle": "કોડ ચકાસી શકાયો નથી",
   "identityLookupFailedBody": "કનેક્શન તપાસીને ફરી પ્રયાસ કરો.",
-
   "trackingPermissionWhileInUseClaim": "ટ્રેકિંગ માટે લોકેશનની પરવાનગી આપો, જેથી તમારી વેન લાઇવ નકશામાં દેખાય.",
-  "trackingPermissionBackgroundClaim": "લોકેશનને \u2018બધી વખત\u2019 મંજૂરી આપો, જેથી સ્ક્રીન બંધ થાય પછી પણ ટ્રેકિંગ ચાલુ રહે.",
-  "trackingPermissionNotificationsClaim": "\u2018ટ્રેકિંગ ચાલુ છે\u2019 સંદેશ દેખાય તે માટે નોટિફિકેશન મંજૂર કરો.",
+  "trackingPermissionBackgroundClaim": "લોકેશનને ‘બધી વખત’ મંજૂરી આપો, જેથી સ્ક્રીન બંધ થાય પછી પણ ટ્રેકિંગ ચાલુ રહે.",
+  "trackingPermissionNotificationsClaim": "‘ટ્રેકિંગ ચાલુ છે’ સંદેશ દેખાય તે માટે નોટિફિકેશન મંજૂર કરો.",
   "trackingPermissionBatteryClaim": "તમારી શિફ્ટ દરમિયાન ટ્રેકિંગ ચાલુ રહે તે માટે બેટરી બચતનો અપવાદ મંજૂર કરો.",
   "trackingPermissionDenied": "ટ્રેકિંગ બંધ છે. તમે પછી ફરી શરૂ કરી શકશો – તમારી શિફ્ટ સુરક્ષિત છે.",
   "trackingGpsOff": "ફોનનું લોકેશન (GPS) બંધ છે. તે ચાલુ કરો અને ફરી પ્રયાસ કરો.",
   "trackingNotificationTitle": "ટ્રેકિંગ ચાલુ છે",
   "trackingNotificationBody": "શિફ્ટ દરમિયાન તમારી વેનની લોકેશન શેર થાય છે.",
   "trackingOpenLocationSettings": "લોકેશન સેટિંગ્સ ખોલો",
-
   "permissionAllow": "મંજૂર",
   "permissionNotNow": "હાલ માટે નહીં",
   "trackingPermissionLocationTitle": "લોકેશન પહોંચ",
   "trackingPermissionBackgroundTitle": "બેકગ્રાઉન્ડ લોકેશન",
   "trackingPermissionNotificationsTitle": "નોટિફિકેશન",
   "trackingPermissionBatteryTitle": "બેટરી અપવાદ",
-
   "mockLocationWarning": "તમારો ફોન લોકેશન ખોટી રીતે બતાવી રહ્યો છે. ટ્રેકિંગ ચાલુ રહેશે, અને કચેરીને આ નોંધ દેખાશે.",
-
   "pendingReportsTitle": "પેંડિંગ રિપોર્ટ્સ",
   "pendingReportsEmpty": "કંઈ પેંડિંગ નથી",
   "willRevisit": "ફરી આવીશ",
   "markDone": "પૂરું થયું",
-
   "languageChangeHint": "ભાષા બદલો",
   "languageNameEn": "English",
   "languageNameGu": "ગુજરાતી",
-
   "liveRouteTitle": "લાઇવ રૂટ",
   "routeLoading": "રૂટ લોડ થાય છે…",
   "recenterMap": "નકશો ફરી કેન્દ્રિત કરો",
@@ -91,35 +85,47 @@
   "noticesUnreadSemantic": "{count, plural, =1{નોટિસ, 1 ન વંચાયેલી} other{નોટિસ, {count} ન વંચાયેલી}}",
   "@noticesUnreadSemantic": {
     "placeholders": {
-      "count": { "type": "int" }
+      "count": {
+        "type": "int"
+      }
     }
   },
   "endOfTripCardPlaceholder": "શિફ્ટ પૂરી વખતે સારાંશ અહીં દેખાય",
   "routeProgress": "{total} માંથી {done} વોર્ડ થયા",
   "@routeProgress": {
     "placeholders": {
-      "done": { "type": "int" },
-      "total": { "type": "int" }
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
     }
   },
   "routeProgressTitle": "રૂટ પગલાં",
   "ofTotalWardsDone": "{total, plural, =1{વોર્ડ પૂરું થયું} other{વોર્ડ પૂરા થયા}}",
   "@ofTotalWardsDone": {
     "placeholders": {
-      "total": { "type": "int" }
+      "total": {
+        "type": "int"
+      }
     }
   },
   "nextWardLabel": "આગળનો વોર્ડ",
   "markWardDoneLabel": "વોર્ડ પૂરું કરો: {wardName}",
   "@markWardDoneLabel": {
     "placeholders": {
-      "wardName": { "type": "String" }
+      "wardName": {
+        "type": "String"
+      }
     }
   },
   "markWardDoneSemantic": "{wardName}ને પૂરું કરો",
   "@markWardDoneSemantic": {
     "placeholders": {
-      "wardName": { "type": "String" }
+      "wardName": {
+        "type": "String"
+      }
     }
   },
   "noOpenShiftTrip": "કોઈ ખુલ્લી શિફ્ટ ટ્રિપ નથી",
@@ -127,7 +133,9 @@
   "doneAtTime": "{time} વાગ્યે પૂરું થયું",
   "@doneAtTime": {
     "placeholders": {
-      "time": { "type": "String" }
+      "time": {
+        "type": "String"
+      }
     }
   },
   "noWardsOnRoute": "આ રૂટમાં કોઈ વોર્ડ નથી",
@@ -136,7 +144,9 @@
   "vanLastSeen": "{minutes, plural, =0{લોકેશન હમણાં જ અપડેટ થયું} =1{લોકેશન 1 મિનિટ પહેલાં અપડેટ થયું} other{લોકેશન {minutes} મિનિટ પહેલાં અપડેટ થયું}}",
   "@vanLastSeen": {
     "placeholders": {
-      "minutes": { "type": "int" }
+      "minutes": {
+        "type": "int"
+      }
     }
   },
   "offlineShowingCached": "સેવ થયેલો નકશો દેખાય છે",
@@ -144,25 +154,20 @@
   "vanMarkerSemantic": "તમારી વેન",
   "routeEmptyMessage": "આ રૂટમાં કોઈ વોર્ડ નથી",
   "routeMissingMessage": "રૂટ મળ્યો નથી",
-
   "markWardDone": "વોર્ડ પૂરું કરો",
   "markWardDoneFailed": "નોંધણી થઈ શકી નથી. ફરી પ્રયાસ કરો.",
   "markWardDoneNoTrip": "કોઈ ખુલ્લી ટ્રિપ નથી",
-
   "noticesTitle": "નોટિસ",
   "noticesEmpty": "કોઈ નોટિસ નથી",
   "noNoticesBody": "તમારા રૂટ માટે હજી કોઈ નોટિસ નથી.",
-
   "navRoute": "રૂટ",
   "navNotices": "નોટિસ",
   "navReports": "રિપોર્ટ",
-
   "endShiftPrimary": "શિફ્ટ સમાપ્ત કરો",
   "endShiftHint": "તમામ વોર્ડ પૂરા — તમારી શિફ્ટ સમાપ્ત કરો",
   "endShiftDuration": "{mins, plural, =1{રૂટ પર 1 મિનિટ} other{રૂટ પર {mins} મિનિટ}}",
   "shiftEnded": "શિફ્ટ પૂરી થઈ",
   "endShiftFailed": "શિફ્ટ સમાપ્ત થઈ ન શક્યું. ફરી પ્રયાસ કરો.",
-
   "settingsTitle": "સેટિંગ્સ",
   "settingsLanguage": "ભાષા",
   "settingsTheme": "થીમ",
@@ -216,5 +221,9 @@
   "onBreakResume": "શિફ્ટ રિઝ્યુમ કરો",
   "callForHelpTitle": "મદદ માટે કોલ કરો",
   "callForHelpBody": "આજના રૂટમાં સહાય માટે ઓફિસને કોલ કરો.",
-  "callForHelpCall": "ઓફિસને કોલ કરો"
+  "callForHelpCall": "ઓફિસને કોલ કરો",
+  "identityWelcomeBackTitle": "ફરી સ્વાગત છે",
+  "identityWelcomeBackBody": "આ ફોન તમને ઓળખે છે.",
+  "identityStartMyShift": "મારી શિફ્ટ શરૂ કરો",
+  "identityChangeCode": "બીજા ડ્રાઇવર?"
 }

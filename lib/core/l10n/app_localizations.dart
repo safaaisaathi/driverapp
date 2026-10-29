@@ -1075,6 +1075,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Call office'**
   String get callForHelpCall;
+
+  /// No description provided for @identityWelcomeBackTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Welcome back'**
+  String get identityWelcomeBackTitle;
+
+  /// No description provided for @identityWelcomeBackBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This phone remembers you.'**
+  String get identityWelcomeBackBody;
+
+  /// No description provided for @identityStartMyShift.
+  ///
+  /// In en, this message translates to:
+  /// **'Start my Shift'**
+  String get identityStartMyShift;
+
+  /// No description provided for @identityChangeCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Different driver?'**
+  String get identityChangeCode;
 }
 
 class _AppLocalizationsDelegate

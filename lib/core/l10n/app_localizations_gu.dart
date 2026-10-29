@@ -575,4 +575,16 @@ class AppLocalizationsGu extends AppLocalizations {
 
   @override
   String get callForHelpCall => 'ઓફિસને કોલ કરો';
+
+  @override
+  String get identityWelcomeBackTitle => 'ફરી સ્વાગત છે';
+
+  @override
+  String get identityWelcomeBackBody => 'આ ફોન તમને ઓળખે છે.';
+
+  @override
+  String get identityStartMyShift => 'મારી શિફ્ટ શરૂ કરો';
+
+  @override
+  String get identityChangeCode => 'બીજા ડ્રાઇવર?';
 }

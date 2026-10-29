@@ -576,4 +576,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get callForHelpCall => 'Call office';
+
+  @override
+  String get identityWelcomeBackTitle => 'Welcome back';
+
+  @override
+  String get identityWelcomeBackBody => 'This phone remembers you.';
+
+  @override
+  String get identityStartMyShift => 'Start my Shift';
+
+  @override
+  String get identityChangeCode => 'Different driver?';
 }
