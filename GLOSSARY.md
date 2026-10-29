@@ -76,6 +76,10 @@ _Avoid_: login state, user data
 
 Deferred work parking lot. Sweep at wave boundaries; every item moves out only when shipped, or ships as `shortcut:` code. Owner: me (agent), Backend Owner, or user.
 
+### Driver-identity wave (in progress, overnight 2026-10-30)
+
+Login architecture change: driver enters a unique code `XX-0000` (admin allots van + wards in `drivers/{CODE}`), confirm card, straight to shift. Spec = GitHub issue #1; tickets = sub-issues #2-#10 with native blocking edges. Branch `feature/driver-identity`, PR to `main` at the end (user approves; never self-merge). Contract frozen in PRD-2 §0.16 BEFORE code. Visual spec: `docs/DESIGN-driver-app.md` (wireframe-derived, DESIGN.md structure, rulings D-101..D-108). Tracking: old D1 (van picker + PIN) dies; splash auto-routes on a device-local `setupDone` flag; Binny mascot removed everywhere ([removed-T8] in the design file; empty states need the neutral-icon replacement). Tickets so far: 1 contract+rules+seeds ✅ (#2), 2 Driver model + DriversRepository ✅ (#3, named per codebase convention, not "DriverDirectory"), 3 identity persistence ✅ (#4). Old `verifyDriverPin` Function stays deployed until the Backend Owner sweep (app stops calling it).
+
 ### Performance Bag
 - [ ] `maxTrailBufferPoints` (5000) cap is a guess — measure real batch write latency on device (ticket 14). *(me → 14)*
 - [ ] `gpsTrail` arrayUnion grows one doc unbounded long-shift — contract change, shard/rotation. *(Backend Owner)*
