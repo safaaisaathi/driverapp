@@ -37,6 +37,25 @@
   "basicRouteTitle": "તમારો રૂટ",
   "trackingPending": "વેન ટ્રેકિંગ આપોઆપ શરૂ થશે.",
 
+  "identityStartTitle": "શિફ્ટ શરૂ કરો",
+  "identityCodeLabel": "કોડ",
+  "identityCodeHint": "XX-0000",
+  "identityCodeError": "કોડ ખોટો છે. ફરી પ્રયાસ કરો.",
+  "identityCodeContinue": "આગળ વધો",
+  "identityFieldName": "નામ",
+  "identityFieldWards": "વોર્ડ્સ",
+  "identityFieldPhone": "ફોન",
+  "identityWardsAllotted": "{count, plural, =1{1 વોર્ડ સોંપાયો છે} other{{count} વોર્ડ સોંપાયા છે}}",
+  "@identityWardsAllotted": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "identityNotFoundTitle": "ડ્રાઇવર મળ્યો નથી",
+  "identityNotFoundBody": "કોડ કચેરી સાથે ચકાસીને ફરી પ્રયાસ કરો.",
+  "identityLookupFailedTitle": "કોડ ચકાસી શકાયો નથી",
+  "identityLookupFailedBody": "કનેક્શન તપાસીને ફરી પ્રયાસ કરો.",
+
   "trackingPermissionWhileInUseClaim": "ટ્રેકિંગ માટે લોકેશનની પરવાનગી આપો, જેથી તમારી વેન લાઇવ નકશામાં દેખાય.",
   "trackingPermissionBackgroundClaim": "લોકેશનને \u2018બધી વખત\u2019 મંજૂરી આપો, જેથી સ્ક્રીન બંધ થાય પછી પણ ટ્રેકિંગ ચાલુ રહે.",
   "trackingPermissionNotificationsClaim": "\u2018ટ્રેકિંગ ચાલુ છે\u2019 સંદેશ દેખાય તે માટે નોટિફિકેશન મંજૂર કરો.",

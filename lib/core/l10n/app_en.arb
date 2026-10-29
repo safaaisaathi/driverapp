@@ -37,6 +37,25 @@
   "basicRouteTitle": "Your route",
   "trackingPending": "Van tracking will start automatically.",
 
+  "identityStartTitle": "Start shift",
+  "identityCodeLabel": "Code",
+  "identityCodeHint": "XX-0000",
+  "identityCodeError": "Wrong code. Try again.",
+  "identityCodeContinue": "Continue",
+  "identityFieldName": "Name",
+  "identityFieldWards": "Wards",
+  "identityFieldPhone": "Phone",
+  "identityWardsAllotted": "{count, plural, =1{1 ward allotted} other{{count} wards allotted}}",
+  "@identityWardsAllotted": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "identityNotFoundTitle": "Driver not found",
+  "identityNotFoundBody": "Check the code with the office and try again.",
+  "identityLookupFailedTitle": "Couldn't check the code",
+  "identityLookupFailedBody": "Check your connection and try again.",
+
   "trackingPermissionWhileInUseClaim": "Tracking needs location access so your van can be seen on the live map.",
   "trackingPermissionBackgroundClaim": "Allow 'All the time' so tracking keeps working after the screen turns off.",
   "trackingPermissionNotificationsClaim": "Allow notifications so the 'Tracking active' message stays visible.",

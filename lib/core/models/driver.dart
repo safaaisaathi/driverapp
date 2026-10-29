@@ -16,6 +16,23 @@ String? normalizeDriverCode(String raw) {
 
 final RegExp _driverCodePattern = RegExp(r'^[A-Z]{2}-[0-9]{4}$');
 
+/// Confirm-card display form of the driver's phone (0.16): strips a
+/// leading `+91` country code and shows only the first 2 and last 2
+/// digits, e.g. `9876543210` → `98XXXXXX10` (the X count mirrors the real
+/// length). Anything that keeps fewer than 4 digits after stripping is
+/// returned trimmed but unmasked — the office seeds the phone, and a
+/// broken value must never throw on screen.
+String maskDriverPhone(String phone) {
+  final trimmed = phone.trim();
+  final withoutCountryCode = trimmed.startsWith('+91')
+      ? trimmed.substring(3)
+      : trimmed;
+  if (withoutCountryCode.length < 4) return trimmed;
+  return '${withoutCountryCode.substring(0, 2)}'
+      '${'X' * (withoutCountryCode.length - 4)}'
+      '${withoutCountryCode.substring(withoutCountryCode.length - 2)}';
+}
+
 /// The `drivers` collection (0.16): doc id = the normalized driver code
 /// `AB-1234` (regex `^[A-Z]{2}-[0-9]{4}$`). Fields: name, phone, vanId,
 /// routeId, wardIds (one or more), active. Writes are admin-only; the app

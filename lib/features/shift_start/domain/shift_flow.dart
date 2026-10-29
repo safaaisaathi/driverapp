@@ -16,7 +16,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/domain/ist_clock.dart';
+import '../../../core/config/firebase_bootstrap.dart' show MessagingGateway;
 import '../../../core/models/models.dart';
 import '../../../core/repositories/repositories.dart';
 import '../data/verify_driver_pin.dart'
@@ -27,10 +27,9 @@ import '../data/verify_driver_pin.dart'
         DriverAuthGateway,
         pinVerifierProvider,
         driverAuthGatewayProvider,
-        driverMessagingGatewayProvider,
-        fcmTopicVanOf;
-import '../../../core/config/firebase_bootstrap.dart' show MessagingGateway;
+        driverMessagingGatewayProvider;
 import 'shift_session.dart';
+import 'start_shift.dart';
 
 /// One row of the van picker: the public `vans` doc plus its resolved
 /// route name (`vans.routeId` → `routes`, spec story 4).
@@ -178,6 +177,11 @@ class ShiftStartFlowController extends Notifier<ShiftFlowState> {
 
   MessagingGateway get _messaging => ref.read(driverMessagingGatewayProvider);
 
+  /// The trip-creation + van-marking core (ticket 4 extraction); this
+  /// controller only orchestrates phases around it now.
+  StartShift get _startShift =>
+      StartShift(trips: _trips, vans: _vans, messaging: _messaging);
+
   /// Loads the van list + route names; retryable from the error state.
   Future<void> loadVans() async {
     _initialLoadRun = true;
@@ -234,7 +238,7 @@ class ShiftStartFlowController extends Notifier<ShiftFlowState> {
         );
         return;
       }
-      final resumable = _isResumable(fresh);
+      final resumable = _startShift.isResumable(fresh);
       state = state.copyWith(
         phase: ShiftFlowPhase.readyToStart,
         vans: _replaceVan(fresh),
@@ -278,16 +282,8 @@ class ShiftStartFlowController extends Notifier<ShiftFlowState> {
         throw StateError('Van doc disappeared while starting the shift');
       }
 
-      final ShiftSession session;
-      if (_isResumable(van)) {
-        // Grilled decision: RESUME, never duplicate. Reattach to the
-        // existing trip; no trip doc is written.
-        session = await _resumeSession(van, now);
-      } else {
-        session = await _createTripAndMarkVan(van, now);
-      }
+      final session = await _startShift.execute(van, now);
       ref.read(shiftControllerProvider.notifier).activate(session);
-      await _subscribeVanTopic(session.vanId);
       state = state.copyWith(
         phase: ShiftFlowPhase.onShift,
         session: session,
@@ -332,72 +328,7 @@ class ShiftStartFlowController extends Notifier<ShiftFlowState> {
 
   // -- internals --
 
-  bool _isResumable(Van van) =>
-      van.currentTripId != null && van.status == VanStatus.onShift;
-
   Future<Van?> _latestVan(String vanId) => _vans.readVan(vanId);
-
-  /// Fresh start (0.13 behaviour rules 3): trip doc + van marker writes,
-  /// in that order, each through its repository.
-  Future<ShiftSession> _createTripAndMarkVan(Van van, DateTime now) async {
-    // `date` = the collection-day calendar date resolved in IST
-    // (grilled ruling, spec Implementation Decisions).
-    final date = utcStartOfIstDay(now);
-    // `startedAt`: models carry DateTime only (Ticket 01 seam) — client
-    // clock is used; server-timestamp support is a tracked gap note.
-    final startedAt = now;
-    final trip = Trip(
-      id: '',
-      vanId: van.id,
-      routeId: van.routeId,
-      date: date,
-      startedAt: startedAt,
-      endedAt: null,
-      wardsDone: const <WardDone>[],
-      alertedWardIds: const <String>[],
-      gpsTrail: const <GpsPoint>[],
-      mockLocationDetected: false,
-    );
-    final created = await _trips.createTrip(trip);
-    await _vans.updateStatus(van.id, VanStatus.onShift);
-    await _vans.updateCurrentTripId(van.id, created.id);
-    return ShiftSession(
-      vanId: van.id,
-      tripId: created.id,
-      routeId: van.routeId,
-      startedAt: created.startedAt,
-      date: created.date,
-    );
-  }
-
-  /// Resume branch: the existing trip's identity comes back untouched
-  /// (read, not watch — the resume reattach is a one-time decision).
-  Future<ShiftSession> _resumeSession(Van van, DateTime now) async {
-    final tripId = van.currentTripId!;
-    final todayTrip = await _trips.readTrip(tripId);
-    if (todayTrip != null && todayTrip.vanId != van.id) {
-      // Defensive: the referenced trip belongs to another van — treat the
-      // marker as stale and fail the reattach surface, never invent state.
-      throw StateError('currentTripId "$tripId" does not match this van');
-    }
-    return ShiftSession(
-      vanId: van.id,
-      tripId: tripId,
-      routeId: van.routeId,
-      startedAt: todayTrip?.startedAt ?? now,
-      date: todayTrip?.date ?? utcStartOfIstDay(now),
-    );
-  }
-
-  /// Topic `van_{vanId}` (PRD-2 0.6.6) — best effort: an FCM outage must
-  /// not fail the started shift (bootstrap retries the suite itself).
-  Future<void> _subscribeVanTopic(String vanId) async {
-    try {
-      await _messaging.subscribeToTopic(fcmTopicVanOf(vanId));
-    } on Exception {
-      // Silent degrade; the notice push path is a demo nicety here.
-    }
-  }
 
   List<VanPickerEntry> _replaceVan(Van fresh) => [
         for (final entry in state.vans)

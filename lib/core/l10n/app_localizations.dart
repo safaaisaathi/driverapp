@@ -308,6 +308,84 @@ abstract class AppLocalizations {
   /// **'Van tracking will start automatically.'**
   String get trackingPending;
 
+  /// No description provided for @identityStartTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Start shift'**
+  String get identityStartTitle;
+
+  /// No description provided for @identityCodeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Code'**
+  String get identityCodeLabel;
+
+  /// No description provided for @identityCodeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'XX-0000'**
+  String get identityCodeHint;
+
+  /// No description provided for @identityCodeError.
+  ///
+  /// In en, this message translates to:
+  /// **'Wrong code. Try again.'**
+  String get identityCodeError;
+
+  /// No description provided for @identityCodeContinue.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get identityCodeContinue;
+
+  /// No description provided for @identityFieldName.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get identityFieldName;
+
+  /// No description provided for @identityFieldWards.
+  ///
+  /// In en, this message translates to:
+  /// **'Wards'**
+  String get identityFieldWards;
+
+  /// No description provided for @identityFieldPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone'**
+  String get identityFieldPhone;
+
+  /// No description provided for @identityWardsAllotted.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 ward allotted} other{{count} wards allotted}}'**
+  String identityWardsAllotted(int count);
+
+  /// No description provided for @identityNotFoundTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Driver not found'**
+  String get identityNotFoundTitle;
+
+  /// No description provided for @identityNotFoundBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Check the code with the office and try again.'**
+  String get identityNotFoundBody;
+
+  /// No description provided for @identityLookupFailedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t check the code'**
+  String get identityLookupFailedTitle;
+
+  /// No description provided for @identityLookupFailedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Check your connection and try again.'**
+  String get identityLookupFailedBody;
+
   /// No description provided for @trackingPermissionWhileInUseClaim.
   ///
   /// In en, this message translates to:

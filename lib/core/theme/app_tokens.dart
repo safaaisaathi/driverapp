@@ -28,6 +28,9 @@ class AppSize {
   static const double icon = 24, iconSmall = 20;
   static const double vanMarker = 44, pinWidth = 40, pinHeight = 52, markerHit = 48;
   static const double thumb = 72; // complaint thumbnail
+
+  // Driver-only additions (DESIGN-driver-app.md §2.3)
+  static const double permissionIconCircle = 96; // [est] neutral-icon circle
 }
 
 /// Elevation tokens (BoxShadow only, never Material elevation tint)

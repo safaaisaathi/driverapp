@@ -117,6 +117,53 @@ class AppLocalizationsGu extends AppLocalizations {
   String get trackingPending => 'વેન ટ્રેકિંગ આપોઆપ શરૂ થશે.';
 
   @override
+  String get identityStartTitle => 'શિફ્ટ શરૂ કરો';
+
+  @override
+  String get identityCodeLabel => 'કોડ';
+
+  @override
+  String get identityCodeHint => 'XX-0000';
+
+  @override
+  String get identityCodeError => 'કોડ ખોટો છે. ફરી પ્રયાસ કરો.';
+
+  @override
+  String get identityCodeContinue => 'આગળ વધો';
+
+  @override
+  String get identityFieldName => 'નામ';
+
+  @override
+  String get identityFieldWards => 'વોર્ડ્સ';
+
+  @override
+  String get identityFieldPhone => 'ફોન';
+
+  @override
+  String identityWardsAllotted(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count વોર્ડ સોંપાયા છે',
+      one: '1 વોર્ડ સોંપાયો છે',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get identityNotFoundTitle => 'ડ્રાઇવર મળ્યો નથી';
+
+  @override
+  String get identityNotFoundBody => 'કોડ કચેરી સાથે ચકાસીને ફરી પ્રયાસ કરો.';
+
+  @override
+  String get identityLookupFailedTitle => 'કોડ ચકાસી શકાયો નથી';
+
+  @override
+  String get identityLookupFailedBody => 'કનેક્શન તપાસીને ફરી પ્રયાસ કરો.';
+
+  @override
   String get trackingPermissionWhileInUseClaim =>
       'ટ્રેકિંગ માટે લોકેશનની પરવાનગી આપો, જેથી તમારી વેન લાઇવ નકશામાં દેખાય.';
 

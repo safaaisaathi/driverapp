@@ -118,6 +118,54 @@ class AppLocalizationsEn extends AppLocalizations {
   String get trackingPending => 'Van tracking will start automatically.';
 
   @override
+  String get identityStartTitle => 'Start shift';
+
+  @override
+  String get identityCodeLabel => 'Code';
+
+  @override
+  String get identityCodeHint => 'XX-0000';
+
+  @override
+  String get identityCodeError => 'Wrong code. Try again.';
+
+  @override
+  String get identityCodeContinue => 'Continue';
+
+  @override
+  String get identityFieldName => 'Name';
+
+  @override
+  String get identityFieldWards => 'Wards';
+
+  @override
+  String get identityFieldPhone => 'Phone';
+
+  @override
+  String identityWardsAllotted(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count wards allotted',
+      one: '1 ward allotted',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get identityNotFoundTitle => 'Driver not found';
+
+  @override
+  String get identityNotFoundBody =>
+      'Check the code with the office and try again.';
+
+  @override
+  String get identityLookupFailedTitle => 'Couldn\'t check the code';
+
+  @override
+  String get identityLookupFailedBody => 'Check your connection and try again.';
+
+  @override
   String get trackingPermissionWhileInUseClaim =>
       'Tracking needs location access so your van can be seen on the live map.';
 
