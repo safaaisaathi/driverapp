@@ -174,6 +174,19 @@ Driver phone starts a shift on route R, a second phone with the user app in a wa
 6. Use DESIGN.md as soon as it exists (0.12).
 7. When a feature touches another app's work (for example the driver writes what the user reads), follow the exact shapes in 0.2 and 0.13.
 
+### 0.16 Driver identity and onboarding (added 2026-10-30, replaces the D1 PIN flow)
+
+Decision source: grill session 2026-10-30 + spec (GitHub issue #1, safaaisaathi/driverapp). Supersedes the D1 half of `F-D1` (van picker + PIN) and the driver-app side of the `verifyDriverPin` callable (0.7). The Function stays deployed until the backend sweep deletes it; the app simply stops calling it.
+
+- **`drivers` collection (new; 0.2 addition).** Doc ID = the normalized driver code `AB-1234`: two uppercase letters, dash, four digits (regex `^[A-Z]{2}-[0-9]{4}$`). Fields: `name` (string), `phone` (string), `vanId` (string), `routeId` (string), `wardIds` (array of ward ids, one or more), `active` (bool). Writes are admin-only (Firestore console now, PRD-3 panel later); the app only reads.
+- **Code normalization.** Input `ab1234` / `AB-1234` / `ab-1234` → trim, uppercase, insert dash → `AB-1234`. A bad shape never reaches Firestore.
+- **Launch flow.** Splash (no buttons, no mascot, auto-advances when bootstrap is ready) → the device-local `setupDone` flag decides: fresh device → Welcome → the 4-stage permission setup (0.13 order: `locationWhileInUse` → `locationBackground` → `notifications` → `batteryOptimization`) → `setupDone = true` → start-shift page; returning device → start-shift page directly. The Start Duty interstitial is deleted.
+- **Start-shift page.** Code entry → signed-in read of `drivers/{CODE}` → confirm card (driver name, allotted van, COUNT of `wardIds`, phone masked `98XXXXXX10`) → Start Shift. Distinct not-found and offline states, both with retry. After the first confirm the code is remembered on-device; the next launch shows a Welcome-back card with a change-code option beside it.
+- **Trip contract additions.** `trips.driverId` (string = the confirmed code) and `trips.wardIds` (array = the driver's allotted wards; D2 scopes map + ward marking to it). The van comes from `drivers.vanId` (van picker deleted). `vans.currentTripId`, `status: on_shift`, `routeId` handling unchanged.
+- **Security stance.** The code is a badge number, NOT a secret: no OTP, no PIN. The app keeps its anonymous auth session (the PIN callable's custom-token sign-in is not load-bearing; 0.8 rules carry no custom-claim checks). The production wall is rules tightening + App Check per the production plan (GLOSSARY 2026-10-29).
+- **Rules.** `match /drivers/{code} { allow read: if request.auth != null; }` and nothing else.
+- **Screens.** `D1 Shift Start` becomes the driver-code entry + confirm card; splash/welcome per above; the Start Duty screen is deleted.
+
 ---
 
 ## 1. Features
