@@ -4,6 +4,7 @@
 library;
 
 export 'complaints_repository.dart';
+export 'drivers_repository.dart';
 export 'notices_repository.dart';
 export 'repository_providers.dart';
 export 'routes_repository.dart';

@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:driverapp/core/models/models.dart';
 import 'package:driverapp/core/repositories/repositories.dart';
 
-/// In-memory implementations of the six repository interfaces (spec seam 1).
+/// In-memory implementations of the seven repository interfaces (spec seam 1).
 ///
 /// Feature tests override the provider wiring with these:
 ///
@@ -391,6 +391,29 @@ class FakeWardsRepository implements WardsRepository {
       .where((ward) => ward.routeId == routeId)
       .toList()
     ..sort((a, b) => a.id.compareTo(b.id));
+}
+
+class FakeDriversRepository implements DriversRepository {
+  FakeDriversRepository([Iterable<Driver>? seed])
+      : drivers = {
+          for (final driver in seed ?? const <Driver>[]) driver.id: driver,
+        };
+
+  /// Keyed by the normalized driver code (the contract doc id).
+  final Map<String, Driver> drivers;
+
+  /// Normalized codes the backing map was consulted with. Empty after a
+  /// bad-shape fetch proves the repository normalized before any lookup
+  /// (0.16: a bad shape makes no Firestore call).
+  final List<String> lookups = [];
+
+  @override
+  Future<Driver?> fetchDriver(String rawCode) async {
+    final code = normalizeDriverCode(rawCode);
+    if (code == null) return null;
+    lookups.add(code);
+    return drivers[code];
+  }
 }
 
 class FakeRoutesRepository implements RoutesRepository {

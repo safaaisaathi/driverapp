@@ -3,6 +3,7 @@
 library;
 
 export 'complaint.dart';
+export 'driver.dart';
 export 'firestore_time.dart';
 export 'location.dart';
 export 'notice.dart';

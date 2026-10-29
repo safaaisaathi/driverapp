@@ -2,7 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'complaints_repository.dart';
+import 'drivers_repository.dart';
 import 'firestore/firestore_complaints_repository.dart';
+import 'firestore/firestore_drivers_repository.dart';
 import 'firestore/firestore_notices_repository.dart';
 import 'firestore/firestore_routes_repository.dart';
 import 'firestore/firestore_trips_repository.dart';
@@ -65,6 +67,11 @@ final Provider<NoticesRepository> noticesRepositoryProvider =
 final Provider<ComplaintsRepository> complaintsRepositoryProvider =
     Provider<ComplaintsRepository>(
   (ref) => FirestoreComplaintsRepository(ref.watch(firebaseFirestoreProvider)),
+);
+
+final Provider<DriversRepository> driversRepositoryProvider =
+    Provider<DriversRepository>(
+  (ref) => FirestoreDriversRepository(ref.watch(firebaseFirestoreProvider)),
 );
 
 final Provider<WardsRepository> wardsRepositoryProvider =

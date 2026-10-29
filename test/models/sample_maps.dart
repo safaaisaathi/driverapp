@@ -120,6 +120,19 @@ Map<String, Object?> complaintDocMap({String id = 'complaint-01'}) => {
       'note': '',
     };
 
+/// The `drivers` doc (0.16): doc id = the normalized driver code, so the map
+/// carries `id` and the seed fields — name, phone, vanId, routeId, wardIds
+/// (one or more), active.
+Map<String, Object?> driverDocMap({String id = 'AB-1234'}) => {
+      'id': id,
+      'name': 'Ramesh Patel',
+      'phone': '9876543210',
+      'vanId': 'van-01',
+      'routeId': 'route-01',
+      'wardIds': <String>['ward-01', 'ward-02'],
+      'active': true,
+    };
+
 /// The same trip doc with every timestamp as epoch millis (`int`).
 Map<String, Object?> tripDocMapMillis() => {
       ...tripDocMap(),
