@@ -152,6 +152,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get trackingOpenLocationSettings => 'Open location settings';
 
   @override
+  String get permissionAllow => 'Allow';
+
+  @override
+  String get permissionNotNow => 'Not now';
+
+  @override
+  String get trackingPermissionLocationTitle => 'Location access';
+
+  @override
+  String get trackingPermissionBackgroundTitle => 'Background location';
+
+  @override
+  String get trackingPermissionNotificationsTitle => 'Notifications';
+
+  @override
+  String get trackingPermissionBatteryTitle => 'Battery exception';
+
+  @override
   String get mockLocationWarning =>
       'Your phone is faking its location. Tracking continues, and the office will see this notice.';
 

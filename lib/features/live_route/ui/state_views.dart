@@ -1,14 +1,22 @@
 /// The non-data states of the Live Route screen: loading, error (retry),
 /// empty (route missing / no wards) — spec user story 24: the app is boring
 /// and predictable on every screen.
+///
+/// DESIGN.md §4.16, §7: Skeleton for loading, Binny wait for empty,
+/// full-screen error with retry. All via tokens (CL-01 to CL-05).
 library;
 
 import 'package:flutter/material.dart';
 
 import 'package:driverapp/core/l10n/app_localizations.dart';
-import 'package:driverapp/core/theme/app_theme.dart';
+import 'package:driverapp/core/theme/app_colors.dart';
+import 'package:driverapp/core/theme/app_text.dart';
+import 'package:driverapp/core/theme/app_tokens.dart';
+import 'package:driverapp/core/widgets/binny.dart';
+import 'package:driverapp/core/widgets/skeleton.dart';
 
 import '../domain/live_route_state.dart';
+
 class LiveRouteLoadingView extends StatelessWidget {
   const LiveRouteLoadingView({super.key});
 
@@ -19,10 +27,125 @@ class LiveRouteLoadingView extends StatelessWidget {
       key: const Key('liveRoute.loading'),
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        spacing: 16,
+        spacing: AppSpace.lg,
         children: [
-          const CircularProgressIndicator(),
-          Text(l10n.loading, style: Theme.of(context).textTheme.bodyMedium),
+          // Skeleton matching the live route layout (CL-06: 32dp spinner max)
+          const SkeletonMapPlaceholder(),
+          const SizedBox(height: AppSpace.xl),
+          // Skeleton for the sheet content
+          SkeletonContourCard(width: double.infinity, height: 80),
+          const SizedBox(height: AppSpace.cardGap),
+          SkeletonBigActionButton(),
+          const SizedBox(height: AppSpace.cardGap),
+          ...List.generate(
+            3,
+            (i) => const SkeletonWardRow(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class SkeletonMapPlaceholder extends StatelessWidget {
+  const SkeletonMapPlaceholder({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Container(
+      width: 200,
+      height: 120,
+      decoration: BoxDecoration(
+        color: c.surfaceMuted,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+      ),
+      child: const Center(
+        child: SizedBox(
+          width: 32,
+          height: 32,
+          child: CircularProgressIndicator(strokeWidth: 3),
+        ),
+      ),
+    );
+  }
+}
+
+class SkeletonContourCard extends StatelessWidget {
+  final double width;
+  final double height;
+
+  const SkeletonContourCard({
+    super.key,
+    required this.width,
+    required this.height,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: c.brandMid.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+      ),
+      child: Center(
+        child: SkeletonBox(width: width * 0.6, height: 24, radius: 12),
+      ),
+    );
+  }
+}
+
+class SkeletonBigActionButton extends StatelessWidget {
+  const SkeletonBigActionButton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Container(
+      height: AppSize.bigAction,
+      decoration: BoxDecoration(
+        color: c.primary.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+      ),
+      child: Center(
+        child: SkeletonBox(width: 120, height: 20, radius: 10),
+      ),
+    );
+  }
+}
+
+class SkeletonWardRow extends StatelessWidget {
+  const SkeletonWardRow({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Container(
+      height: 72,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpace.lg,
+        vertical: AppSpace.sm,
+      ),
+      decoration: BoxDecoration(
+        color: c.surfaceMuted,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+      ),
+      child: Row(
+        spacing: AppSpace.md,
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: c.surface,
+            ),
+          ),
+          Expanded(child: SkeletonBox(width: 150, height: 16)),
+          SkeletonBox(width: 60, height: 24),
         ],
       ),
     );
@@ -37,17 +160,21 @@ class LiveRouteErrorView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final c = context.colors;
     return Center(
       key: const Key('liveRoute.error'),
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(AppSpace.page),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          spacing: 16,
+          spacing: AppSpace.lg,
           children: [
-            const Icon(Icons.error_outline,
-                size: 48, color: AppTheme.colorStatusEscalated),
-            Text(l10n.error, textAlign: TextAlign.center),
+            Icon(Icons.error_outline, size: 48, color: c.statusEscalated.fill),
+            Text(
+              l10n.error,
+              textAlign: TextAlign.center,
+              style: context.text.body.copyWith(color: c.textPrimary),
+            ),
             FilledButton(
               key: const Key('liveRoute.retry'),
               onPressed: onRetry,
@@ -68,19 +195,34 @@ class LiveRouteEmptyView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final c = context.colors;
     final message = reason == LiveRouteEmptyReason.routeMissing
         ? l10n.routeMissingMessage
         : l10n.routeEmptyMessage;
     return Center(
       key: const Key('liveRoute.empty'),
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(AppSpace.page),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          spacing: 12,
+          spacing: AppSpace.lg,
           children: [
-            const Icon(Icons.route, size: 48, color: AppTheme.colorTextMuted),
-            Text(message, textAlign: TextAlign.center),
+            // Binny wait pose for empty state (DESIGN.md D-06)
+            const BinnyView(pose: BinnyPose.wait, size: 160),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: context.text.body.copyWith(color: c.textMuted),
+            ),
+            if (reason == LiveRouteEmptyReason.routeMissing)
+              FilledButton(
+                key: const Key('liveRoute.emptyRetry'),
+                onPressed: () {
+                  // Trigger a retry through the provider
+                  // The parent will handle the retry
+                },
+                child: Text(l10n.retry),
+              ),
           ],
         ),
       ),

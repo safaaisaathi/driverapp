@@ -16,6 +16,7 @@ import '../../../core/l10n/app_localizations.dart';
 import '../../../core/models/models.dart';
 import '../../../core/theme/app_theme.dart';
 import '../domain/notices_flow.dart';
+import 'notice_detail_screen.dart';
 
 /// D3 entry widget. Reachable from D2's app-bar notices badge (the keyed
 /// slot); the flow needs the running shift's van + route context.
@@ -27,20 +28,18 @@ class NoticesScreen extends ConsumerWidget {
     final flow = ref.watch(noticesFlowProvider);
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.noticesTitle),
-      ),
+      appBar: AppBar(title: Text(l10n.noticesTitle)),
       body: switch (flow.phase) {
         NoticesPhase.loading => const _NoticesListLoading(),
         NoticesPhase.empty => const _NoticesListEmpty(),
         NoticesPhase.error => _NoticesListDegraded(
-            message: l10n.error,
-            icon: Icons.error_outline,
-          ),
+          message: l10n.error,
+          icon: Icons.error_outline,
+        ),
         NoticesPhase.offline => _NoticesListDegraded(
-            message: l10n.offline,
-            icon: Icons.cloud_off,
-          ),
+          message: l10n.offline,
+          icon: Icons.cloud_off,
+        ),
         NoticesPhase.ready => _NoticeList(flow: flow),
       },
     );
@@ -123,17 +122,16 @@ class _NoticeList extends StatelessWidget {
       padding: const EdgeInsets.all(AppTheme.spacingUnit * 2),
       children: [
         for (final notice in flow.notices)
-          _NoticeRow(
-            notice: notice,
-            isUnread: flow.unread.contains(notice.id),
-          ),
+          _NoticeRow(notice: notice, isUnread: flow.unread.contains(notice.id)),
       ],
     );
   }
 }
 
 /// One notice: a full-card tap target (≥ 56 dp, one hand, campaign-glove
-/// friendly) with the unread dot and the message — minimal text.
+/// friendly) with the unread dot and the message — minimal text. Tapping
+/// marks it read this session AND opens the WF-19 detail page (the detail
+/// is read-only; the inbox owns the mark-read side effect).
 class _NoticeRow extends ConsumerWidget {
   const _NoticeRow({required this.notice, required this.isUnread});
 
@@ -149,8 +147,14 @@ class _NoticeRow extends ConsumerWidget {
         borderRadius: const BorderRadius.all(
           Radius.circular(AppTheme.radiusMd),
         ),
-        onTap: () =>
-            ref.read(noticesFlowProvider.notifier).markRead(notice.id),
+        onTap: () {
+          ref.read(noticesFlowProvider.notifier).markRead(notice.id);
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => NoticeDetailScreen(notice: notice),
+            ),
+          );
+        },
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 56),
           child: Padding(
@@ -179,10 +183,10 @@ class _NoticeRow extends ConsumerWidget {
                     maxLines: 4,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodyLarge!.copyWith(
-                          color: isUnread
-                              ? AppTheme.colorTextPrimary
-                              : AppTheme.colorTextMuted,
-                        ),
+                      color: isUnread
+                          ? AppTheme.colorTextPrimary
+                          : AppTheme.colorTextMuted,
+                    ),
                   ),
                 ),
               ],

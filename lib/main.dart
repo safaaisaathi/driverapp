@@ -19,6 +19,11 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final container = ProviderContainer();
   unawaited(runBootstrap(container));
+  // Bug Bag fix (2026-10-29): the locale restore used to race the first
+  // frame (fire-and-forget), so a stored gu could flash en for a frame or
+  // two. The read is ~ms, so main() simply awaits it before runApp: the
+  // first frame carries the stored language, deterministically.
+  await container.read(localeControllerProvider.notifier).ensureRestored();
   runApp(UncontrolledProviderScope(container: container, child: const DriverApp()));
 }
 

@@ -316,8 +316,19 @@ void main() {
 
       positions.emit(fixAt(22.67817)); // ~19 m move → accepted at next tick
       await oneTick(); // tick@2 writes + buffers B
-      await Future<void>.delayed(const Duration(milliseconds: 900));
-      // flush tick fired around t=3 s: A and B appended, in order.
+
+      // Outcome-based drain wait (Bug Bag fix 2026-10-29): a loaded CI box
+      // can slip a write resumption past the t=3 s flush tick, so the old
+      // fixed 900 ms settle raced the timers in event-loop FIFO order.
+      // The CONTRACT under test is the drain ORDER, not which tick lands
+      // it: poll until both points are in, bounded.
+      final deadline = DateTime.now().add(const Duration(seconds: 10));
+      while (trips.trips['trip-1']!.gpsTrail.length < 2) {
+        if (DateTime.now().isAfter(deadline)) {
+          fail('trail did not drain within 10 s (flush ticks stalled?)');
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
 
       final trail = trips.trips['trip-1']!.gpsTrail;
       expect(trail.length, 2);

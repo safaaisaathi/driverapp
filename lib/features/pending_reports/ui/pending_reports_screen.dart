@@ -15,6 +15,7 @@ import '../../../core/l10n/app_localizations.dart';
 import '../../../core/models/models.dart';
 import '../../../core/theme/app_theme.dart';
 import '../domain/pending_reports_flow.dart';
+import 'report_detail_screen.dart';
 
 /// D4 entry widget. Reads the running shift's route context from
 /// [pendingReportsFlowProvider]; open the screen while a shift runs
@@ -36,16 +37,18 @@ class PendingReportsScreen extends ConsumerWidget {
     }
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.pendingReportsTitle),
-      ),
+      appBar: AppBar(title: Text(l10n.pendingReportsTitle)),
       body: switch (flow.phase) {
         PendingReportsPhase.loading => const _PendingListLoading(),
         PendingReportsPhase.empty => const _PendingListEmpty(),
-        PendingReportsPhase.error =>
-          _PendingListDegraded(message: l10n.error, icon: Icons.error_outline),
-        PendingReportsPhase.offline =>
-          _PendingListDegraded(message: l10n.offline, icon: Icons.cloud_off),
+        PendingReportsPhase.error => _PendingListDegraded(
+          message: l10n.error,
+          icon: Icons.error_outline,
+        ),
+        PendingReportsPhase.offline => _PendingListDegraded(
+          message: l10n.offline,
+          icon: Icons.cloud_off,
+        ),
         PendingReportsPhase.ready => _ReportList(flow: flow),
       },
     );
@@ -107,9 +110,8 @@ class _PendingListDegraded extends ConsumerWidget {
           const SizedBox(height: AppTheme.spacingUnit * 2),
           OutlinedButton(
             key: const ValueKey('d4-retry-button'),
-            onPressed: () => ref
-                .read(pendingReportsFlowProvider.notifier)
-                .retry(),
+            onPressed: () =>
+                ref.read(pendingReportsFlowProvider.notifier).retry(),
             child: Text(l10n.retry),
           ),
         ],
@@ -139,9 +141,9 @@ class _ReportList extends StatelessWidget {
   }
 }
 
-/// One pending report: the ticket id line and the exactly-two action
-/// buttons ("Will Revisit" / "Done"), each a ≥ 56 dp target reached with
-/// one hand.
+/// One pending report: the ticket id header opens the WF-20 detail page
+/// (≥ 56 dp target), below it the exactly-two action buttons ("Will
+/// Revisit" / "Done"), each a ≥ 56 dp target reached with one hand.
 class _ReportRow extends ConsumerWidget {
   const _ReportRow({required this.complaint, required this.busy});
 
@@ -159,9 +161,37 @@ class _ReportRow extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              complaint.ticketId,
-              style: Theme.of(context).textTheme.titleMedium,
+            // The header tap opens the detail page — actions stay inline
+            // here, the detail adds context (location, time, today count).
+            InkWell(
+              key: ValueKey<String>('d4-open-$complaintId'),
+              borderRadius: const BorderRadius.all(
+                Radius.circular(AppTheme.radiusMd),
+              ),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => ReportDetailScreen(complaint: complaint),
+                ),
+              ),
+              child: SizedBox(
+                height: 56,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        complaint.ticketId,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ),
+                    Icon(
+                      Icons.chevron_right,
+                      color:
+                          Theme.of(context).textTheme.bodySmall?.color
+                              ?.withValues(alpha: 0.5),
+                    ),
+                  ],
+                ),
+              ),
             ),
             const SizedBox(height: AppTheme.spacingUnit),
             Row(
@@ -172,8 +202,8 @@ class _ReportRow extends ConsumerWidget {
                     onPressed: busy
                         ? null
                         : () => ref
-                            .read(pendingReportsFlowProvider.notifier)
-                            .markWillRevisit(complaintId),
+                              .read(pendingReportsFlowProvider.notifier)
+                              .markWillRevisit(complaintId),
                     child: Text(l10n.willRevisit),
                   ),
                 ),
@@ -184,8 +214,8 @@ class _ReportRow extends ConsumerWidget {
                     onPressed: busy
                         ? null
                         : () => ref
-                            .read(pendingReportsFlowProvider.notifier)
-                            .markDone(complaintId),
+                              .read(pendingReportsFlowProvider.notifier)
+                              .markDone(complaintId),
                     child: Text(l10n.markDone),
                   ),
                 ),

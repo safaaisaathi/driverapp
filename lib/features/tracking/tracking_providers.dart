@@ -35,6 +35,9 @@ export 'data/geolocator_tracking_permission_gateway.dart';
 export 'domain/permission_flow.dart';
 export 'domain/permission_gateway.dart';
 export 'domain/tracking_engine.dart';
+export 'tracking_providers.dart' show
+    trackingEngineProvider,
+    trackingPermissionGatewayProvider;
 
 /// The platform GPS fix stream (geolocator), `distanceFilter = minMoveM`.
 final Provider<PositionSource> positionSourceProvider =

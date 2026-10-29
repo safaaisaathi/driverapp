@@ -7,6 +7,7 @@ library;
 import 'package:driverapp/core/l10n/app_localizations.dart';
 import 'package:driverapp/core/models/models.dart';
 import 'package:driverapp/core/repositories/repository_providers.dart';
+import 'package:driverapp/features/shift_start/domain/shift_session.dart';
 import 'package:driverapp/features/tracking/mock_location_banner.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -27,12 +28,32 @@ Trip tripOf(DateTime today, bool detected) => Trip(
       mockLocationDetected: detected,
     );
 
-Future<void> pumpBanner(WidgetTester tester, FakeTripsRepository trips) async {
+ShiftSession sessionFor(DateTime today, String vanId) => ShiftSession(
+      vanId: vanId,
+      tripId: 'trip-1',
+      routeId: 'route-01',
+      startedAt: DateTime(today.year, today.month, today.day, 8),
+      date: today,
+    );
+
+/// Pumps the banner in its own container so tests can drive the shift
+/// session (the banner renders only under a LIVE session for the same
+/// van, Bug Bag fix 2026-10-29). Returns the container for session moves.
+Future<ProviderContainer> pumpBanner(
+  WidgetTester tester,
+  FakeTripsRepository trips, {
+  ShiftSession? session,
+}) async {
+  final container = ProviderContainer(
+    overrides: [tripsRepositoryProvider.overrideWithValue(trips)],
+  );
+  addTearDown(container.dispose);
+  if (session != null) {
+    container.read(shiftControllerProvider.notifier).activate(session);
+  }
   await tester.pumpWidget(
-    ProviderScope(
-      overrides: [
-        tripsRepositoryProvider.overrideWithValue(trips),
-      ],
+    UncontrolledProviderScope(
+      container: container,
       child: const MaterialApp(
         locale: Locale('en'), // locale pinned en (project decision)
         supportedLocales: AppLocalizations.supportedLocales,
@@ -46,6 +67,7 @@ Future<void> pumpBanner(WidgetTester tester, FakeTripsRepository trips) async {
     ),
   );
   await tester.pumpAndSettle();
+  return container;
 }
 
 void main() {
@@ -55,7 +77,7 @@ void main() {
   testWidgets('normal UX: real fixes → no warning banner', (tester) async {
     final trips = FakeTripsRepository([tripOf(today, false)]);
 
-    await pumpBanner(tester, trips);
+    await pumpBanner(tester, trips, session: sessionFor(today, 'van-01'));
 
     expect(find.byKey(const Key('mock_location_banner')), findsNothing);
   });
@@ -64,7 +86,7 @@ void main() {
       (tester) async {
     final trips = FakeTripsRepository([tripOf(today, true)]);
 
-    await pumpBanner(tester, trips);
+    await pumpBanner(tester, trips, session: sessionFor(today, 'van-01'));
 
     expect(find.byKey(const Key('mock_location_banner')), findsOneWidget);
     expect(
@@ -78,7 +100,7 @@ void main() {
 
   testWidgets('latch flips LIVE while the banner is on screen', (tester) async {
     final trips = FakeTripsRepository([tripOf(today, false)]);
-    await pumpBanner(tester, trips);
+    await pumpBanner(tester, trips, session: sessionFor(today, 'van-01'));
     expect(find.byKey(const Key('mock_location_banner')), findsNothing);
 
     // The app stays open when the engine latches mid-shift; the banner must
@@ -87,5 +109,32 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('mock_location_banner')), findsOneWidget);
+  });
+
+  testWidgets('end shift → banner hides even though the latch stays true '
+      '(Bug Bag 2026-10-29)', (tester) async {
+    final trips = FakeTripsRepository([tripOf(today, true)]);
+    final container = await pumpBanner(
+      tester,
+      trips,
+      session: sessionFor(today, 'van-01'),
+    );
+    expect(find.byKey(const Key('mock_location_banner')), findsOneWidget);
+
+    // End Shift clears the session; the trip-doc latch is NEVER unset by
+    // the app (contract), so the session gate is what ends the banner.
+    container.read(shiftControllerProvider.notifier).end();
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('mock_location_banner')), findsNothing);
+  });
+
+  testWidgets('banner is scoped to the session van: another van\'s shift '
+      'never shows it (Bug Bag 2026-10-29)', (tester) async {
+    final trips = FakeTripsRepository([tripOf(today, true)]);
+
+    await pumpBanner(tester, trips, session: sessionFor(today, 'van-02'));
+
+    expect(find.byKey(const Key('mock_location_banner')), findsNothing);
   });
 }

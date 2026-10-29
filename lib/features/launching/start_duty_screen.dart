@@ -4,11 +4,16 @@
 /// hands over to the van-picker / map flow, where the data-backed skeletons
 /// and error states take over. Deliberately NOT wired to Firestore yet —
 /// the connect point lives one screen deeper (ticket 04/06 flow).
+///
+/// DESIGN.md §9.8 (inferred): ContourCard duty card, primary CTA pill,
+/// language toggle top-end. Fade+slide transition from Welcome (dur.base 200ms).
 library;
 
 import 'package:flutter/material.dart';
 
 import '../../../core/l10n/app_localizations.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_text.dart';
 import '../../../core/theme/app_tokens.dart';
 import '../../../core/widgets/contour_card.dart';
 import '../shift_start/ui/language_toggle.dart';
@@ -23,12 +28,14 @@ class StartDutyScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
+    final c = context.colors;
+
     return Scaffold(
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // Language toggle top-end (CL-22)
             Align(
               alignment: AlignmentDirectional.topEnd,
               child: Padding(
@@ -53,15 +60,13 @@ class StartDutyScreen extends StatelessWidget {
                       children: [
                         Text(
                           l10n.dutyTitle,
-                          style: theme.textTheme.headlineSmall!.copyWith(
-                            color: theme.colorScheme.onPrimary,
-                          ),
+                          style: context.text.headline.copyWith(color: c.onBrand),
                         ),
                         const SizedBox(height: AppSpace.sm),
                         Text(
                           l10n.dutySubtitle,
-                          style: theme.textTheme.bodyLarge!.copyWith(
-                            color: theme.colorScheme.onPrimary,
+                          style: context.text.body.copyWith(
+                            color: c.onBrand.withOpacity(0.8),
                           ),
                         ),
                       ],
@@ -70,6 +75,7 @@ class StartDutyScreen extends StatelessWidget {
                 ),
               ),
             ),
+            // Primary CTA pill (CL-07, CL-08)
             Padding(
               padding: const EdgeInsets.fromLTRB(
                 AppSpace.page, 0, AppSpace.page, AppSpace.xxl,
@@ -81,8 +87,12 @@ class StartDutyScreen extends StatelessWidget {
                     onDutyStarted!(context);
                   } else {
                     Navigator.of(context).pushReplacement(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const ShiftStartScreen(),
+                      PageRouteBuilder<void>(
+                        pageBuilder: (_, __, ___) => const ShiftStartScreen(),
+                        transitionsBuilder: (_, animation, __, child) {
+                          return FadeTransition(opacity: animation, child: child);
+                        },
+                        transitionDuration: const Duration(milliseconds: 200),
                       ),
                     );
                   }

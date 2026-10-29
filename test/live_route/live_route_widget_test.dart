@@ -37,8 +37,13 @@ class CountingVansRepository implements VansRepository {
       // onListen — piping straight into `counted` re-enters this controller
       // while it is itself adding ("Cannot add event while adding stream").
       scheduleMicrotask(() {
-        sub = inner.watchVan(vanId).listen(counted.add,
-            onError: counted.addError, onDone: counted.close);
+        sub = inner
+            .watchVan(vanId)
+            .listen(
+              counted.add,
+              onError: counted.addError,
+              onDone: counted.close,
+            );
       });
     };
     counted.onCancel = () {
@@ -58,14 +63,13 @@ class CountingVansRepository implements VansRepository {
     required double lng,
     required double speedKmph,
     DateTime? updatedAt,
-  }) =>
-      inner.updateLastLocation(
-        vanId: vanId,
-        lat: lat,
-        lng: lng,
-        speedKmph: speedKmph,
-        updatedAt: updatedAt,
-      );
+  }) => inner.updateLastLocation(
+    vanId: vanId,
+    lat: lat,
+    lng: lng,
+    speedKmph: speedKmph,
+    updatedAt: updatedAt,
+  );
 
   @override
   Future<void> updateStatus(String vanId, VanStatus status) =>
@@ -128,17 +132,17 @@ void main() {
   final now = DateTime.now();
 
   Ward ward(String id, double lat) => Ward.fromMap({
-        'id': id,
-        'name': 'Ward $id',
-        'nameGu': 'gu',
-        'code': 'c-$id',
-        'type': 'urban',
-        'center': {'lat': lat, 'lng': 73.71},
-        'radiusM': 400,
-        'routeId': 'route-01',
-        'inspectorId': 'staff-01',
-        'escalationTo': 'staff-09',
-      });
+    'id': id,
+    'name': 'Ward $id',
+    'nameGu': 'gu',
+    'code': 'c-$id',
+    'type': 'urban',
+    'center': {'lat': lat, 'lng': 73.71},
+    'radiusM': 400,
+    'routeId': 'route-01',
+    'inspectorId': 'staff-01',
+    'escalationTo': 'staff-09',
+  });
 
   RouteModel route({List<String> wardIds = const ['wa', 'wb', 'wc']}) =>
       RouteModel.fromMap({
@@ -149,34 +153,34 @@ void main() {
       });
 
   Van van({DateTime? updatedAt}) => Van.fromMap({
-        'id': 'van-01',
-        'plateNo': 'GJ-05-AB-1234',
-        'routeId': 'route-01',
-        'status': 'on_shift',
-        'lastLocation': updatedAt == null
-            ? null
-            : {
-                'lat': 22.7759,
-                'lng': 73.7092,
-                'updatedAt': updatedAt,
-                'speedKmph': 12.5,
-              },
-        'currentTripId': null,
-        'batteryPct': 76,
-      });
+    'id': 'van-01',
+    'plateNo': 'GJ-05-AB-1234',
+    'routeId': 'route-01',
+    'status': 'on_shift',
+    'lastLocation': updatedAt == null
+        ? null
+        : {
+            'lat': 22.7759,
+            'lng': 73.7092,
+            'updatedAt': updatedAt,
+            'speedKmph': 12.5,
+          },
+    'currentTripId': null,
+    'batteryPct': 76,
+  });
 
   Trip tripFrom(List<Map<String, Object?>> wardsDone) => Trip.fromMap({
-        'id': 'trip-1',
-        'vanId': 'van-01',
-        'routeId': 'route-01',
-        'date': now,
-        'startedAt': now,
-        'endedAt': null,
-        'wardsDone': wardsDone,
-        'alertedWardIds': [],
-        'gpsTrail': [],
-        'mockLocationDetected': false,
-      });
+    'id': 'trip-1',
+    'vanId': 'van-01',
+    'routeId': 'route-01',
+    'date': now,
+    'startedAt': now,
+    'endedAt': null,
+    'wardsDone': wardsDone,
+    'alertedWardIds': [],
+    'gpsTrail': [],
+    'mockLocationDetected': false,
+  });
 
   final wardA = ward('wa', 22.70);
   final wardB = ward('wb', 22.71);
@@ -219,74 +223,100 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
   }
 
-  testWidgets('data state: map, ordered ward rows, next chip on the first undone',
-      (tester) async {
-    await pumpScreen(
-      tester,
-      [
-        vansRepositoryProvider.overrideWithValue(FakeVansRepository([
-          van(updatedAt: now.add(const Duration(seconds: 5))),
-        ])),
+  testWidgets(
+    'data state: map, ordered ward rows, next chip on the first undone',
+    (tester) async {
+      await pumpScreen(tester, [
+        vansRepositoryProvider.overrideWithValue(
+          FakeVansRepository([
+            van(updatedAt: now.add(const Duration(seconds: 5))),
+          ]),
+        ),
         tripsRepositoryProvider.overrideWithValue(FakeTripsRepository([])),
         wardsRepositoryProvider.overrideWithValue(
-            FakeWardsRepository([wardA, wardB, wardC])),
-        routesRepositoryProvider.overrideWithValue(FakeRoutesRepository([route()])),
-      ],
-    );
-    await settle(tester);
+          FakeWardsRepository([wardA, wardB, wardC]),
+        ),
+        routesRepositoryProvider.overrideWithValue(
+          FakeRoutesRepository([route()]),
+        ),
+      ]);
+      await settle(tester);
 
-    // Map is up (tiles swapped out in tests — no network attempts).
-    expect(find.byKey(const Key('liveRoute.map')), findsOneWidget);
+      // Map is up (tiles swapped out in tests — no network attempts).
+      expect(find.byKey(const Key('liveRoute.map')), findsOneWidget);
 
-    // Glass bar shows the route name + the settings entry (the top-bar
-    // notices bell is gone — PillNav carries notices; the end-trip bar is
-    // gone from the map — End Shift lives in the sheet, 2026-10-28 pass).
-    expect(find.text('Godhra Fort Route'), findsOneWidget);
-    expect(find.byKey(const Key('liveRoute.settings')), findsOneWidget);
-    expect(
-        find.byKey(const Key('liveRoute.endTripPlaceholder')), findsNothing);
+      // Glass bar shows the route name + the settings entry (the top-bar
+      // notices bell is gone — PillNav carries notices; the end-trip bar is
+      // gone from the map — End Shift lives in the sheet, 2026-10-28 pass).
+      expect(find.text('Godhra Fort Route'), findsOneWidget);
+      expect(find.byKey(const Key('liveRoute.settings')), findsOneWidget);
+      expect(
+        find.byKey(const Key('liveRoute.endTripPlaceholder')),
+        findsNothing,
+      );
 
-    // Ward list rows exist for every route ward, in route order (top-to-bottom).
-    final rowOrder = [
-      for (final swap in ['wa', 'wb', 'wc'])
-        tester.getBottomRight(
-            find.byKey(Key('liveRoute.wardRow.$swap'))).dy,
-    ];
-    expect(rowOrder[0] < rowOrder[1] && rowOrder[1] < rowOrder[2], isTrue,
-        reason: 'rows must follow routes.wardIds order, not the load order');
+      // The WF-23 more-options entry sits beside settings and opens the
+      // sheet over the route (skip ward / on break / call for help).
+      expect(find.byKey(const Key('liveRoute.moreOptions')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('liveRoute.moreOptions')));
+      await settle(tester);
+      expect(find.byKey(const Key('moreOptions.header')), findsOneWidget);
+      expect(find.byKey(const Key('moreOptions.skipWard')), findsOneWidget);
+      expect(find.byKey(const Key('moreOptions.onBreak')), findsOneWidget);
+      expect(find.byKey(const Key('moreOptions.callForHelp')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('moreOptions.close')));
+      await settle(tester);
+      expect(find.byKey(const Key('moreOptions.header')), findsNothing);
 
-    // "Next" chip sits in the first undone row, and nowhere earlier.
-    expect(
-      find.descendant(
-        of: find.byKey(const Key('liveRoute.wardRow.wa')),
-        matching: find.byKey(const Key('liveRoute.nextChip')),
-      ),
-      findsOneWidget,
-      reason: 'first undone ward is the next in route order',
-    );
+      // Ward list rows exist for every route ward, in route order (top-to-bottom).
+      final rowOrder = [
+        for (final swap in ['wa', 'wb', 'wc'])
+          tester.getBottomRight(find.byKey(Key('liveRoute.wardRow.$swap'))).dy,
+      ];
+      expect(
+        rowOrder[0] < rowOrder[1] && rowOrder[1] < rowOrder[2],
+        isTrue,
+        reason: 'rows must follow routes.wardIds order, not the load order',
+      );
 
-    // Van marker present (own doc stream).
-    expect(find.byKey(const Key('liveRoute.vanMarker')), findsOneWidget);
-  });
+      // "Next" chip sits in the first undone row, and nowhere earlier.
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('liveRoute.wardRow.wa')),
+          matching: find.byKey(const Key('liveRoute.nextChip')),
+        ),
+        findsOneWidget,
+        reason: 'first undone ward is the next in route order',
+      );
 
-  testWidgets('done ticks from trips.wardsDone of the open trip', (tester) async {
+      // Van marker present (own doc stream).
+      expect(find.byKey(const Key('liveRoute.vanMarker')), findsOneWidget);
+    },
+  );
+
+  testWidgets('done ticks from trips.wardsDone of the open trip', (
+    tester,
+  ) async {
     final freshAt = now.add(const Duration(seconds: 2));
-    await pumpScreen(
-      tester,
-      [
-        vansRepositoryProvider
-            .overrideWithValue(FakeVansRepository([van(updatedAt: freshAt)])),
-        tripsRepositoryProvider.overrideWithValue(FakeTripsRepository([
+    await pumpScreen(tester, [
+      vansRepositoryProvider.overrideWithValue(
+        FakeVansRepository([van(updatedAt: freshAt)]),
+      ),
+      tripsRepositoryProvider.overrideWithValue(
+        FakeTripsRepository([
           tripFrom([
             {'wardId': 'wa', 'doneAt': now, 'flagged': false},
             {'wardId': 'wb', 'doneAt': now, 'flagged': true},
           ]),
-        ])),
-        wardsRepositoryProvider
-            .overrideWithValue(FakeWardsRepository([wardA, wardB, wardC])),
-        routesRepositoryProvider.overrideWithValue(FakeRoutesRepository([route()])),
-      ],
-    );
+        ]),
+      ),
+      wardsRepositoryProvider.overrideWithValue(
+        FakeWardsRepository([wardA, wardB, wardC]),
+      ),
+      routesRepositoryProvider.overrideWithValue(
+        FakeRoutesRepository([route()]),
+      ),
+    ]);
     await settle(tester);
 
     expect(find.byKey(const Key('liveRoute.doneTick.wa')), findsOneWidget);
@@ -308,25 +338,29 @@ void main() {
     );
   });
 
-  testWidgets('route complete: the sheet primary becomes End Shift',
-      (tester) async {
-    await pumpScreen(
-      tester,
-      [
-        vansRepositoryProvider
-            .overrideWithValue(FakeVansRepository([van(updatedAt: now)])),
-        tripsRepositoryProvider.overrideWithValue(FakeTripsRepository([
+  testWidgets('route complete: the sheet primary becomes End Shift', (
+    tester,
+  ) async {
+    await pumpScreen(tester, [
+      vansRepositoryProvider.overrideWithValue(
+        FakeVansRepository([van(updatedAt: now)]),
+      ),
+      tripsRepositoryProvider.overrideWithValue(
+        FakeTripsRepository([
           tripFrom([
             {'wardId': 'wa', 'doneAt': now, 'flagged': false},
             {'wardId': 'wb', 'doneAt': now, 'flagged': true},
             {'wardId': 'wc', 'doneAt': now, 'flagged': false},
           ]),
-        ])),
-        wardsRepositoryProvider
-            .overrideWithValue(FakeWardsRepository([wardA, wardB, wardC])),
-        routesRepositoryProvider.overrideWithValue(FakeRoutesRepository([route()])),
-      ],
-    );
+        ]),
+      ),
+      wardsRepositoryProvider.overrideWithValue(
+        FakeWardsRepository([wardA, wardB, wardC]),
+      ),
+      routesRepositoryProvider.overrideWithValue(
+        FakeRoutesRepository([route()]),
+      ),
+    ]);
     await settle(tester);
 
     // Every ward ticked: no mark control remains, the sheet's one primary
@@ -336,106 +370,115 @@ void main() {
     expect(find.byKey(const Key('liveRoute.endShift')), findsOneWidget);
   });
 
-  testWidgets('van doc stream updates the marker; stale fix shows the caption',
-      (tester) async {
-    final vans = FakeVansRepository([
-      // Start stale: updated 2 min before "now".
-      van(updatedAt: now.add(const Duration(minutes: -2))),
-    ]);
-    await pumpScreen(
-      tester,
-      [
-        vansRepositoryProvider
-            .overrideWithValue(CountingVansRepository(vans)),
+  testWidgets(
+    'van doc stream updates the marker; stale fix shows the caption',
+    (tester) async {
+      final vans = FakeVansRepository([
+        // Start stale: updated 2 min before "now".
+        van(updatedAt: now.add(const Duration(minutes: -2))),
+      ]);
+      await pumpScreen(tester, [
+        vansRepositoryProvider.overrideWithValue(CountingVansRepository(vans)),
         tripsRepositoryProvider.overrideWithValue(FakeTripsRepository([])),
-        wardsRepositoryProvider
-            .overrideWithValue(FakeWardsRepository([wardA, wardB, wardC])),
-        routesRepositoryProvider.overrideWithValue(FakeRoutesRepository([route()])),
-      ],
-    );
-    await settle(tester);
+        wardsRepositoryProvider.overrideWithValue(
+          FakeWardsRepository([wardA, wardB, wardC]),
+        ),
+        routesRepositoryProvider.overrideWithValue(
+          FakeRoutesRepository([route()]),
+        ),
+      ]);
+      await settle(tester);
 
-    // Stale → caption on the list panel; a fresh write through the same
-    // stream drops it.
-    expect(find.byKey(const Key('liveRoute.staleCaption')), findsOneWidget);
-    await tester.runAsync(() => vans.updateLastLocation(
+      // Stale → caption on the list panel; a fresh write through the same
+      // stream drops it.
+      expect(find.byKey(const Key('liveRoute.staleCaption')), findsOneWidget);
+      await tester.runAsync(
+        () => vans.updateLastLocation(
           vanId: 'van-01',
           lat: 22.7,
           lng: 73.7,
           speedKmph: 11,
-        ));
-    await settle(tester);
-    expect(find.byKey(const Key('liveRoute.staleCaption')), findsNothing);
-    // The follow-the-van camera move + marker rebuild take extra frames
-    // after the fresh doc streams in.
-    await tester.pump();
-    await tester.pump();
-    expect(find.byKey(const Key('liveRoute.vanMarker')), findsOneWidget);
-  });
+        ),
+      );
+      await settle(tester);
+      expect(find.byKey(const Key('liveRoute.staleCaption')), findsNothing);
+      // The follow-the-van camera move + marker rebuild take extra frames
+      // after the fresh doc streams in.
+      await tester.pump();
+      await tester.pump();
+      expect(find.byKey(const Key('liveRoute.vanMarker')), findsOneWidget);
+    },
+  );
 
-  testWidgets('trip stream: appendWardDone through the fake ticks the ward list',
-      (tester) async {
-    final trips = FakeTripsRepository([]); // no trip at first → nothing done.
-    await pumpScreen(
-      tester,
-      [
-        vansRepositoryProvider
-            .overrideWithValue(FakeVansRepository([van(updatedAt: now)])),
+  testWidgets(
+    'trip stream: appendWardDone through the fake ticks the ward list',
+    (tester) async {
+      final trips = FakeTripsRepository([]); // no trip at first → nothing done.
+      await pumpScreen(tester, [
+        vansRepositoryProvider.overrideWithValue(
+          FakeVansRepository([van(updatedAt: now)]),
+        ),
         tripsRepositoryProvider.overrideWithValue(trips),
-        wardsRepositoryProvider
-            .overrideWithValue(FakeWardsRepository([wardA, wardB, wardC])),
-        routesRepositoryProvider.overrideWithValue(FakeRoutesRepository([route()])),
-      ],
-    );
-    await settle(tester);
+        wardsRepositoryProvider.overrideWithValue(
+          FakeWardsRepository([wardA, wardB, wardC]),
+        ),
+        routesRepositoryProvider.overrideWithValue(
+          FakeRoutesRepository([route()]),
+        ),
+      ]);
+      await settle(tester);
 
-    // No trip yet → nothing done, so no "next" marker until data settles...
-    // (the first undone ward IS marked next even before a trip exists).
-    expect(
-      find.descendant(
-        of: find.byKey(const Key('liveRoute.wardRow.wa')),
-        matching: find.byKey(const Key('liveRoute.nextChip')),
-      ),
-      findsOneWidget,
-    );
-    // No done ticks yet.
-    expect(find.byKey(const Key('liveRoute.doneTick.wa')), findsNothing);
+      // No trip yet → nothing done, so no "next" marker until data settles...
+      // (the first undone ward IS marked next even before a trip exists).
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('liveRoute.wardRow.wa')),
+          matching: find.byKey(const Key('liveRoute.nextChip')),
+        ),
+        findsOneWidget,
+      );
+      // No done ticks yet.
+      expect(find.byKey(const Key('liveRoute.doneTick.wa')), findsNothing);
 
-    final created = await trips.createTrip(tripFrom([]));
-    await settle(tester);
-    await tester.runAsync(
-        () => trips.appendWardDone(created.id, WardDone(
-              wardId: 'wa',
-              doneAt: now,
-              flagged: false,
-            )));
-    await settle(tester);
+      final created = await trips.createTrip(tripFrom([]));
+      await settle(tester);
+      await tester.runAsync(
+        () => trips.appendWardDone(
+          created.id,
+          WardDone(wardId: 'wa', doneAt: now, flagged: false),
+        ),
+      );
+      await settle(tester);
 
-    expect(find.byKey(const Key('liveRoute.doneTick.wa')), findsOneWidget);
-    expect(
-      find.descendant(
-        of: find.byKey(const Key('liveRoute.wardRow.wb')),
-        matching: find.byKey(const Key('liveRoute.nextChip')),
-      ),
-      findsOneWidget,
-    );
-  });
+      expect(find.byKey(const Key('liveRoute.doneTick.wa')), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('liveRoute.wardRow.wb')),
+          matching: find.byKey(const Key('liveRoute.nextChip')),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
 
-  testWidgets('offline override shows the banner over cached data', (tester) async {
+  testWidgets('offline override shows the banner over cached data', (
+    tester,
+  ) async {
     await pumpScreen(
       tester,
       [
-        vansRepositoryProvider.overrideWithValue(FakeVansRepository([
-          van(updatedAt: now),
-        ])),
+        vansRepositoryProvider.overrideWithValue(
+          FakeVansRepository([van(updatedAt: now)]),
+        ),
         tripsRepositoryProvider.overrideWithValue(FakeTripsRepository([])),
-        wardsRepositoryProvider
-            .overrideWithValue(FakeWardsRepository([wardA, wardB, wardC])),
-        routesRepositoryProvider.overrideWithValue(FakeRoutesRepository([route()])),
+        wardsRepositoryProvider.overrideWithValue(
+          FakeWardsRepository([wardA, wardB, wardC]),
+        ),
+        routesRepositoryProvider.overrideWithValue(
+          FakeRoutesRepository([route()]),
+        ),
       ],
-      extra: [
-        offlineStatusProvider.overrideWith((ref) => Stream.value(true)),
-      ],
+      extra: [offlineStatusProvider.overrideWith((ref) => Stream.value(true))],
     );
     await settle(tester);
 
@@ -444,20 +487,21 @@ void main() {
     expect(find.text('Godhra Fort Route'), findsOneWidget);
   });
 
-  testWidgets('empty route (no wardIds) → empty state, not the map',
-      (tester) async {
-    await pumpScreen(
-      tester,
-      [
-        vansRepositoryProvider
-            .overrideWithValue(FakeVansRepository([van(updatedAt: now)])),
-        tripsRepositoryProvider.overrideWithValue(FakeTripsRepository([])),
-        wardsRepositoryProvider
-            .overrideWithValue(FakeWardsRepository([wardA, wardB, wardC])),
-        routesRepositoryProvider
-            .overrideWithValue(FakeRoutesRepository([route(wardIds: [])])),
-      ],
-    );
+  testWidgets('empty route (no wardIds) → empty state, not the map', (
+    tester,
+  ) async {
+    await pumpScreen(tester, [
+      vansRepositoryProvider.overrideWithValue(
+        FakeVansRepository([van(updatedAt: now)]),
+      ),
+      tripsRepositoryProvider.overrideWithValue(FakeTripsRepository([])),
+      wardsRepositoryProvider.overrideWithValue(
+        FakeWardsRepository([wardA, wardB, wardC]),
+      ),
+      routesRepositoryProvider.overrideWithValue(
+        FakeRoutesRepository([route(wardIds: [])]),
+      ),
+    ]);
     await settle(tester);
 
     expect(find.byKey(const Key('liveRoute.empty')), findsOneWidget);
@@ -465,61 +509,67 @@ void main() {
     expect(find.byKey(const Key('liveRoute.map')), findsNothing);
   });
 
-  testWidgets('route doc missing → empty state with the not-found message',
-      (tester) async {
-    await pumpScreen(
-      tester,
-      [
-        vansRepositoryProvider
-            .overrideWithValue(FakeVansRepository([van(updatedAt: now)])),
-        tripsRepositoryProvider.overrideWithValue(FakeTripsRepository([])),
-        wardsRepositoryProvider
-            .overrideWithValue(FakeWardsRepository([wardA, wardB, wardC])),
-        routesRepositoryProvider.overrideWithValue(FakeRoutesRepository([])),
-      ],
-    );
+  testWidgets('route doc missing → empty state with the not-found message', (
+    tester,
+  ) async {
+    await pumpScreen(tester, [
+      vansRepositoryProvider.overrideWithValue(
+        FakeVansRepository([van(updatedAt: now)]),
+      ),
+      tripsRepositoryProvider.overrideWithValue(FakeTripsRepository([])),
+      wardsRepositoryProvider.overrideWithValue(
+        FakeWardsRepository([wardA, wardB, wardC]),
+      ),
+      routesRepositoryProvider.overrideWithValue(FakeRoutesRepository([])),
+    ]);
     await settle(tester);
 
     expect(find.byKey(const Key('liveRoute.empty')), findsOneWidget);
     expect(find.text('Route not found'), findsOneWidget);
   });
 
-  testWidgets('stream error → error state with a retry button wired to the seam',
-      (tester) async {
-    await pumpScreen(
-      tester,
-      [
+  testWidgets(
+    'stream error → error state with a retry button wired to the seam',
+    (tester) async {
+      await pumpScreen(tester, [
         vansRepositoryProvider.overrideWithValue(ThrowingVansRepository()),
         tripsRepositoryProvider.overrideWithValue(FakeTripsRepository([])),
-        wardsRepositoryProvider
-            .overrideWithValue(FakeWardsRepository([wardA, wardB, wardC])),
-        routesRepositoryProvider.overrideWithValue(FakeRoutesRepository([route()])),
-      ],
-    );
-    await settle(tester);
+        wardsRepositoryProvider.overrideWithValue(
+          FakeWardsRepository([wardA, wardB, wardC]),
+        ),
+        routesRepositoryProvider.overrideWithValue(
+          FakeRoutesRepository([route()]),
+        ),
+      ]);
+      await settle(tester);
 
-    expect(find.byKey(const Key('liveRoute.error')), findsOneWidget);
-    expect(find.byKey(const Key('liveRoute.retry')), findsOneWidget);
-    final retry = find.byKey(const Key('liveRoute.retry'));
-    await tester.tap(retry);
-    await settle(tester);
-    // The retry invalidates and re-subscribes; still failed against the
-    // throwing fake, but the screen must not crash.
-    expect(find.byKey(const Key('liveRoute.error')), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
+      expect(find.byKey(const Key('liveRoute.error')), findsOneWidget);
+      expect(find.byKey(const Key('liveRoute.retry')), findsOneWidget);
+      final retry = find.byKey(const Key('liveRoute.retry'));
+      await tester.tap(retry);
+      await settle(tester);
+      // The retry invalidates and re-subscribes; still failed against the
+      // throwing fake, but the screen must not crash.
+      expect(find.byKey(const Key('liveRoute.error')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
-  testWidgets('0.11: autoDispose cancels the repository listeners on dispose',
-      (tester) async {
+  testWidgets('0.11: autoDispose cancels the repository listeners on dispose', (
+    tester,
+  ) async {
     final realVans = FakeVansRepository([van(updatedAt: now)]);
     final counted = CountingVansRepository(realVans);
     final container = ProviderContainer(
       overrides: [
         vansRepositoryProvider.overrideWithValue(counted),
         tripsRepositoryProvider.overrideWithValue(FakeTripsRepository([])),
-        wardsRepositoryProvider
-            .overrideWithValue(FakeWardsRepository([wardA, wardB, wardC])),
-        routesRepositoryProvider.overrideWithValue(FakeRoutesRepository([route()])),
+        wardsRepositoryProvider.overrideWithValue(
+          FakeWardsRepository([wardA, wardB, wardC]),
+        ),
+        routesRepositoryProvider.overrideWithValue(
+          FakeRoutesRepository([route()]),
+        ),
       ],
     );
     addTearDown(container.dispose);

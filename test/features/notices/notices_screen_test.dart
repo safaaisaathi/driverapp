@@ -46,19 +46,19 @@ const String devRouteId = 'route-1';
 const List<String> devWardIds = <String>['ward-1', 'ward-2'];
 
 RouteModel devRoute() => RouteModel.fromMap(<String, Object?>{
-      'id': devRouteId,
-      'name': 'Vasna–Bavka',
-      'wardIds': devWardIds,
-      'scheduledStartTime': '07:30',
-    });
+  'id': devRouteId,
+  'name': 'Vasna–Bavka',
+  'wardIds': devWardIds,
+  'scheduledStartTime': '07:30',
+});
 
 ShiftSession runningShiftSession() => ShiftSession(
-      vanId: 'van-1',
-      tripId: 'trip-1',
-      routeId: devRouteId,
-      startedAt: shiftStartedAt,
-      date: shiftStartedAt,
-    );
+  vanId: 'van-1',
+  tripId: 'trip-1',
+  routeId: devRouteId,
+  startedAt: shiftStartedAt,
+  date: shiftStartedAt,
+);
 
 // -- seed helpers -------------------------------------------------------------
 
@@ -69,15 +69,14 @@ Map<String, Object?> noticeDocMap({
   String? targetId,
   required String message,
   required Object? createdAt,
-}) =>
-    <String, Object?>{
-      'id': id,
-      'targetType': targetType,
-      'targetId': targetId,
-      'message': message,
-      'createdAt': createdAt,
-      'createdBy': 'inspector-1',
-    };
+}) => <String, Object?>{
+  'id': id,
+  'targetType': targetType,
+  'targetId': targetId,
+  'message': message,
+  'createdAt': createdAt,
+  'createdBy': 'inspector-1',
+};
 
 Notice seedNotice({
   required String id,
@@ -85,14 +84,15 @@ Notice seedNotice({
   String? targetId,
   required String message,
   required DateTime createdAt,
-}) =>
-    Notice.fromMap(noticeDocMap(
-      id: id,
-      targetType: targetType.value,
-      targetId: targetId,
-      message: message,
-      createdAt: Timestamp.fromDate(createdAt),
-    ));
+}) => Notice.fromMap(
+  noticeDocMap(
+    id: id,
+    targetType: targetType.value,
+    targetId: targetId,
+    message: message,
+    createdAt: Timestamp.fromDate(createdAt),
+  ),
+);
 
 final DateTime noonIST = DateTime(2026, 10, 24, 12, 0);
 
@@ -168,9 +168,9 @@ final Notice pushedNotice = seedNotice(
 /// behaviour without touching the shared fakes.
 class RecordingNoticesRepository implements NoticesRepository {
   RecordingNoticesRepository([Iterable<Notice>? seed])
-      : notices = {
-          for (final notice in seed ?? const <Notice>[]) notice.id: notice,
-        };
+    : notices = {
+        for (final notice in seed ?? const <Notice>[]) notice.id: notice,
+      };
 
   final Map<String, Notice> notices;
 
@@ -178,8 +178,13 @@ class RecordingNoticesRepository implements NoticesRepository {
   ({String vanId, List<String> wardIds})? lastQuery;
 
   final _controllers =
-      <({StreamController<List<Notice>> controller, String vanId,
-          List<String> wardIds})>{};
+      <
+        ({
+          StreamController<List<Notice>> controller,
+          String vanId,
+          List<String> wardIds,
+        })
+      >{};
 
   @override
   Stream<List<Notice>> watchNotices({
@@ -192,25 +197,15 @@ class RecordingNoticesRepository implements NoticesRepository {
       // Microtask, not synchronous: controller events may never be added
       // from inside onListen (FakeAsync-safe flush semantics).
       onListen: () {
-        scheduleMicrotask(
-          () => controller.add(_filtered(vanId, wardIds)),
-        );
+        scheduleMicrotask(() => controller.add(_filtered(vanId, wardIds)));
       },
-      onCancel: () => _controllers.remove(
-        (
-          controller: controller,
-          vanId: vanId,
-          wardIds: wardIds,
-        ),
-      ),
-    );
-    _controllers.add(
-      (
+      onCancel: () => _controllers.remove((
         controller: controller,
         vanId: vanId,
         wardIds: wardIds,
-      ),
+      )),
     );
+    _controllers.add((controller: controller, vanId: vanId, wardIds: wardIds));
     return controller.stream;
   }
 
@@ -227,16 +222,17 @@ class RecordingNoticesRepository implements NoticesRepository {
   }
 
   List<Notice> _filtered(String vanId, List<String> wardIds) {
-    final result = notices.values
-        .where(
-          (notice) => switch (notice.targetType) {
-            NoticeTargetType.all => true,
-            NoticeTargetType.van => notice.targetId == vanId,
-            NoticeTargetType.ward => wardIds.contains(notice.targetId),
-          },
-        )
-        .toList()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final result =
+        notices.values
+            .where(
+              (notice) => switch (notice.targetType) {
+                NoticeTargetType.all => true,
+                NoticeTargetType.van => notice.targetId == vanId,
+                NoticeTargetType.ward => wardIds.contains(notice.targetId),
+              },
+            )
+            .toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return result;
   }
 }
@@ -280,8 +276,7 @@ class OfflineWatchNoticesRepository extends FakeNoticesRepository {
   Stream<List<Notice>> watchNotices({
     required String vanId,
     required List<String> wardIds,
-  }) =>
-      Stream<List<Notice>>.error(const _UnavailableShaped('unavailable'));
+  }) => Stream<List<Notice>>.error(const _UnavailableShaped('unavailable'));
 }
 
 /// Never emits a snapshot: the loading state must hold while the first
@@ -293,8 +288,7 @@ class NeverEmittingNoticesRepository extends FakeNoticesRepository {
   Stream<List<Notice>> watchNotices({
     required String vanId,
     required List<String> wardIds,
-  }) =>
-      const Stream<List<Notice>>.empty();
+  }) => const Stream<List<Notice>>.empty();
 }
 
 // -- harness ------------------------------------------------------------------
@@ -305,11 +299,14 @@ Future<ProviderContainer> pumpNotices(
   bool activateShift = true,
   RoutesRepository? routes,
 }) async {
-  final container = ProviderContainer(overrides: [
-    noticesRepositoryProvider.overrideWithValue(notices),
-    routesRepositoryProvider
-        .overrideWithValue(routes ?? FakeRoutesRepository([devRoute()])),
-  ]);
+  final container = ProviderContainer(
+    overrides: [
+      noticesRepositoryProvider.overrideWithValue(notices),
+      routesRepositoryProvider.overrideWithValue(
+        routes ?? FakeRoutesRepository([devRoute()]),
+      ),
+    ],
+  );
   if (activateShift) {
     // D3 runs inside a started shift: activate the session up front so the
     // first build already has the van + route context (no D1 in the harness).
@@ -359,41 +356,46 @@ Key unreadDotKey(String id) => ValueKey<String>('d3-unread-$id');
 
 void main() {
   testWidgets(
-      'watches with exactly the running shift context: vanId + the route '
-      'wardIds in order', (tester) async {
-    final notices = RecordingNoticesRepository([vanNotice]);
-    await pumpNotices(tester, notices: notices);
-    await pumpUntil(tester, find.text(vanNotice.message));
+    'watches with exactly the running shift context: vanId + the route '
+    'wardIds in order',
+    (tester) async {
+      final notices = RecordingNoticesRepository([vanNotice]);
+      await pumpNotices(tester, notices: notices);
+      await pumpUntil(tester, find.text(vanNotice.message));
 
-    final query = notices.lastQuery;
-    expect(query, isNotNull);
-    expect(query!.vanId, 'van-1');
-    expect(query.wardIds, devWardIds);
-  });
+      final query = notices.lastQuery;
+      expect(query, isNotNull);
+      expect(query!.vanId, 'van-1');
+      expect(query.wardIds, devWardIds);
+    },
+  );
 
   testWidgets(
-      'shows only the three matching target shapes — out-of-scope notices '
-      'never leak, even when newer than every in-scope one', (tester) async {
-    final notices = RecordingNoticesRepository([
-      vanNotice,
-      allNotice,
-      ward1Notice,
-      ward2Notice,
-      ...allOutOfScope(),
-    ]);
-    await pumpNotices(tester, notices: notices);
-    await pumpUntil(tester, find.text(vanNotice.message));
+    'shows only the three matching target shapes — out-of-scope notices '
+    'never leak, even when newer than every in-scope one',
+    (tester) async {
+      final notices = RecordingNoticesRepository([
+        vanNotice,
+        allNotice,
+        ward1Notice,
+        ward2Notice,
+        ...allOutOfScope(),
+      ]);
+      await pumpNotices(tester, notices: notices);
+      await pumpUntil(tester, find.text(vanNotice.message));
 
-    expect(find.text(allNotice.message), findsOneWidget);
-    expect(find.text(ward1Notice.message), findsOneWidget);
-    expect(find.text(ward2Notice.message), findsOneWidget);
+      expect(find.text(allNotice.message), findsOneWidget);
+      expect(find.text(ward1Notice.message), findsOneWidget);
+      expect(find.text(ward2Notice.message), findsOneWidget);
 
-    expect(find.text(wrongVanNotice.message), findsNothing);
-    expect(find.text(wrongWardNotice.message), findsNothing);
-  });
+      expect(find.text(wrongVanNotice.message), findsNothing);
+      expect(find.text(wrongWardNotice.message), findsNothing);
+    },
+  );
 
-  testWidgets('newest first: contract sort, newer in-scope notice on top',
-      (tester) async {
+  testWidgets('newest first: contract sort, newer in-scope notice on top', (
+    tester,
+  ) async {
     final notices = RecordingNoticesRepository([
       ward2Notice, // oldest, seeded first
       allNotice,
@@ -407,14 +409,16 @@ void main() {
     expect(
       flow.notices.map((notice) => notice.id).toList(),
       [vanNotice.id, allNotice.id, ward1Notice.id, ward2Notice.id],
-      reason: 'contract sort: descending createdAt — the first row the '
+      reason:
+          'contract sort: descending createdAt — the first row the '
           'driver reads is the freshest notice',
     );
   });
 
   testWidgets('every seeded notice starts unread with the badge count '
-      'matching; opening one clears its dot and decrements the badge',
-      (tester) async {
+      'matching; opening one clears its dot and decrements the badge', (
+    tester,
+  ) async {
     final notices = RecordingNoticesRepository([
       vanNotice,
       allNotice,
@@ -452,7 +456,8 @@ void main() {
     expect(
       notices.notices,
       before,
-      reason: 'mark-read must not touch a single stored field — the '
+      reason:
+          'mark-read must not touch a single stored field — the '
           '`notices` shape belongs to the contract (0.2), not the app',
     );
   });
@@ -474,8 +479,11 @@ void main() {
 
     expect(container.read(unreadNoticesCountProvider), 2);
     expect(find.byKey(unreadDotKey(pushedNotice.id)), findsOneWidget);
-    expect(find.byKey(unreadDotKey(vanNotice.id)), findsNothing,
-        reason: 'opening a notice must survive re-emissions');
+    expect(
+      find.byKey(unreadDotKey(vanNotice.id)),
+      findsNothing,
+      reason: 'opening a notice must survive re-emissions',
+    );
   });
 
   testWidgets('empty state shows the localized no-notices line and the '
@@ -489,8 +497,9 @@ void main() {
     expect(find.byKey(rowKey(vanNotice.id)), findsNothing);
   });
 
-  testWidgets('loading state holds while the first snapshot is pending',
-      (tester) async {
+  testWidgets('loading state holds while the first snapshot is pending', (
+    tester,
+  ) async {
     await pumpNotices(
       tester,
       notices: NeverEmittingNoticesRepository([vanNotice]),
@@ -522,8 +531,9 @@ void main() {
     expect(find.text(enRetry), findsOneWidget);
   });
 
-  testWidgets('each row is a ≥ 56 dp tap target covering the full card',
-      (tester) async {
+  testWidgets('each row is a ≥ 56 dp tap target covering the full card', (
+    tester,
+  ) async {
     await pumpNotices(
       tester,
       notices: RecordingNoticesRepository([vanNotice, allNotice]),
@@ -549,5 +559,25 @@ void main() {
     );
     await pumpUntil(tester, find.text(enError));
     expect(find.text(enRetry), findsOneWidget);
+  });
+
+  testWidgets('tapping a row opens the WF-19 detail (message, sender, '
+      'target) and "Got it" returns to the inbox', (tester) async {
+    await pumpNotices(tester, notices: RecordingNoticesRepository([vanNotice]));
+    await pumpUntil(tester, find.text(vanNotice.message));
+
+    await tester.tap(find.byKey(tapKey(vanNotice.id)));
+    await pumpFrames(tester);
+
+    // The detail page is pushed on top of the inbox.
+    expect(find.byKey(const Key('noticeDetail.message')), findsOneWidget);
+    expect(find.byKey(const Key('noticeDetail.target')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('noticeDetail.gotIt')));
+    await pumpFrames(tester);
+
+    // Back at the inbox: the row is still there, now read (dot gone).
+    expect(find.byKey(rowKey(vanNotice.id)), findsOneWidget);
+    expect(find.byKey(unreadDotKey(vanNotice.id)), findsNothing);
   });
 }

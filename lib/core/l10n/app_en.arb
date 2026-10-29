@@ -47,6 +47,13 @@
   "trackingNotificationBody": "Your van's location is shared while on shift.",
   "trackingOpenLocationSettings": "Open location settings",
 
+  "permissionAllow": "Allow",
+  "permissionNotNow": "Not now",
+  "trackingPermissionLocationTitle": "Location access",
+  "trackingPermissionBackgroundTitle": "Background location",
+  "trackingPermissionNotificationsTitle": "Notifications",
+  "trackingPermissionBatteryTitle": "Battery exception",
+
   "mockLocationWarning": "Your phone is faking its location. Tracking continues, and the office will see this notice.",
 
   "pendingReportsTitle": "Pending reports",

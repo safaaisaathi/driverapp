@@ -8,8 +8,6 @@
 /// localized (CL-21); buttons ≥ 56/64 dp come from `AppTheme` (0.5).
 library;
 
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -17,10 +15,23 @@ import '../../../core/l10n/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_tokens.dart';
-import '../../../core/widgets/skeleton.dart';
-import '../data/shift_tracking_auto_start.dart';
+import '../../../core/widgets/skeleton.dart'
+    show SkeletonVanCard;
+import '../data/shift_tracking_auto_start.dart'
+    show
+        ShiftTrackingAutoStart,
+        ShiftTrackingAutoStartKind,
+        shiftTrackingAutoStartStatusProvider;
 import '../domain/shift_flow.dart';
+import '../domain/shift_session.dart';
 import 'language_toggle.dart';
+import 'package:driverapp/features/tracking/ui/ui_permission_flow.dart'
+    show UIPermissionFlowController;
+import 'package:driverapp/features/tracking/tracking_providers.dart'
+    show
+        trackingPermissionGatewayProvider,
+        trackingEngineProvider,
+        PermissionApproval;
 
 // ignore: implementation_imports
 import '../../live_route/live_route_screen.dart';
@@ -48,44 +59,74 @@ class ShiftStartScreen extends ConsumerWidget {
     if (flow.phase == ShiftFlowPhase.onShift && flow.session != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!context.mounted) return;
-        // F-D2 auto-start: the engine comes up when D1 hands over an
-        // on-shift session (fresh start AND resume both land here) — the
-        // four-stage permission flow runs inside the starter. Fire-and-
-        // forget: a permission denial or tracking failure must never block
-        // the D1 navigation (defect 2026-10-28: nothing started the engine
-        // from the real flow before this).
-        final l10n = AppLocalizations.of(context)!;
-        unawaited(
-          ProviderScope.containerOf(context)
-              .read(shiftTrackingAutoStarterProvider)
-              .startTrackingFor(
-                flow.session!,
-                notificationTitle: l10n.trackingNotificationTitle,
-                notificationBody: l10n.trackingNotificationBody,
-              ),
-        );
-        if (onShiftStarted != null) {
-          onShiftStarted!(context);
-        } else {
-          // F-D1 hand-over: the REAL live route screen (M1 map shell) is the
-          // active-shift destination; D1's van id is passed as the plain
-          // argument the live-route provider families key on. (A nested
-          // ProviderScope override was tried here and RESOLVED WITHOUT the
-          // override on device — Riverpod 3 creates non-overridden providers
-          // in the parent container, so the child's override never applied.
-          // An explicit argument cannot miss; defect 2026-10-28.)
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute<void>(
-              builder: (_) => LiveRouteScreen(vanId: flow.session!.vanId),
-            ),
-          );
-        }
-        // Drop the sticky `onShift` phase so a pop back to D1 re-enters
-        // the picker instead of firing the navigation again.
-        ref.read(shiftStartFlowProvider.notifier).clearNavigated();
+        // F-D2 auto-start: run the UI permission flow with rationale screens
+        // (DESIGN.md §4.19) before starting the tracking engine.
+        // This is now awaited so the driver sees the prompts before the
+        // live route screen appears.
+        _runPermissionFlowAndNavigate(context, ref, flow.session!, onShiftStarted);
       });
     }
     return _OneCtaFlowHost(flow: flow, onShiftStarted: onShiftStarted);
+  }
+
+  /// Runs the permission flow with rationale screens, then starts tracking
+  /// and navigates to the live route screen.
+  static Future<void> _runPermissionFlowAndNavigate(
+    BuildContext context,
+    WidgetRef ref,
+    ShiftSession session,
+    void Function(BuildContext context)? onShiftStarted,
+  ) async {
+    final l10n = AppLocalizations.of(context)!;
+    final gateway = ref.read(trackingPermissionGatewayProvider);
+
+    // Run the UI permission flow (shows rationale screens)
+    final report = await UIPermissionFlowController(gateway, context)
+        .requestAll();
+
+    // Start the tracking engine
+    final started = report.allGranted
+        ? await ref
+            .read(trackingEngineProvider)
+            .start(
+              tripId: session.tripId,
+              vanId: session.vanId,
+              notificationTitle: l10n.trackingNotificationTitle,
+              notificationBody: l10n.trackingNotificationBody,
+            )
+            .then((result) => result.isStarted)
+        : false;
+
+    final gpsOff = report.results.values
+        .any((approval) => approval == PermissionApproval.gpsOff);
+
+    // Surface outcome for the live route screen's tracking state banner
+    final outcome = ShiftTrackingAutoStart(
+      started
+          ? ShiftTrackingAutoStartKind.started
+          : gpsOff
+              ? ShiftTrackingAutoStartKind.gpsOff
+              : ShiftTrackingAutoStartKind.denied,
+    );
+    ref
+        .read(shiftTrackingAutoStartStatusProvider.notifier)
+        .set(outcome);
+
+    // Navigate to live route screen (or test callback)
+    if (context.mounted) {
+      if (onShiftStarted != null) {
+        onShiftStarted!(context);
+      } else {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute<void>(
+            builder: (_) => LiveRouteScreen(vanId: session.vanId),
+          ),
+        );
+      }
+    }
+
+    // Clear navigated state so a pop back to D1 re-enters the picker
+    ref.read(shiftStartFlowProvider.notifier).clearNavigated();
   }
 }
 
@@ -197,7 +238,9 @@ class _OneCtaFlowHostState extends State<_OneCtaFlowHost> {
           ],
         ),
       ),
-      // The M3 CTA bar: one dark pill pinned bottom (§9.8 / CTA-bar rule).
+      // The M3 CTA bar: one dark pill pinned bottom (§9.8 / CTA-bar
+      // rule). Label and action follow the flow phase; hidden entirely on
+      // loading/error/empty phases.
       bottomNavigationBar: _CtaBar(
         flow: flow,
         busy: _busy,

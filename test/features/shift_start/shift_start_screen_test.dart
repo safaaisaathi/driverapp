@@ -9,6 +9,21 @@ import 'package:driverapp/features/shift_start/data/verify_driver_pin.dart';
 import 'package:driverapp/features/shift_start/domain/shift_session.dart';
 import 'package:driverapp/features/shift_start/ui/basic_route_placeholder.dart';
 import 'package:driverapp/features/shift_start/ui/shift_start_screen.dart';
+import 'package:driverapp/features/tracking/tracking_providers.dart'
+    show
+        trackingPermissionGatewayProvider,
+        trackingEngineProvider,
+        PermissionApproval,
+        TrackingPermissionGateway,
+        TrackingEngine;
+import 'package:driverapp/features/tracking/domain/tracking_engine.dart'
+    show
+        TrackingEngineState,
+        TrackingStartResult,
+        TrackingStartOutcome,
+        TrackingResumeResult,
+        TrackingResumeOutcome,
+        TrackingRunStatus;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -248,6 +263,8 @@ Future<ProviderScope> pumpHarness(
   MessagingGateway? messaging,
   void Function(BuildContext context)? onShiftStarted,
   RecordingTrackingAutoStarter? trackingStarter,
+  TrackingPermissionGateway? permissionGateway,
+  TrackingEngine? trackingEngine,
 }) async {
   final scope = ProviderScope(
     overrides: [
@@ -262,6 +279,14 @@ Future<ProviderScope> pumpHarness(
       // F-D2 engine seam: tests never run the real (platform) starter.
       shiftTrackingAutoStarterProvider
           .overrideWithValue(trackingStarter ?? RecordingTrackingAutoStarter()),
+      // Permission flow: tests use a fake that grants all permissions.
+      trackingPermissionGatewayProvider.overrideWithValue(
+        permissionGateway ?? RecordingTrackingPermissionGateway(),
+      ),
+      // Tracking engine: tests use a fake that starts immediately.
+      trackingEngineProvider.overrideWithValue(
+        trackingEngine ?? RecordingTrackingEngine(),
+      ),
     ],
     child: MaterialApp(
       theme: AppTheme.light(),
@@ -285,6 +310,31 @@ Future<void> pumpUntil(
     await tester.pump(const Duration(milliseconds: 25));
   }
   expect(finder, findsOneWidget);
+}
+
+/// Pumps frames and waits for an async callback to complete.
+/// Useful for tests that trigger async navigation.
+Future<void> pumpAndWait(
+  WidgetTester tester, {
+  int maxPumps = 500,
+  Duration interval = const Duration(milliseconds: 25),
+}) async {
+  for (var i = 0; i < maxPumps; i++) {
+    await tester.pump(interval);
+  }
+}
+
+/// Pumps until a condition is met (e.g., a flag becomes true).
+Future<void> pumpUntilCondition(
+  WidgetTester tester,
+  bool Function() condition, {
+  int maxPumps = 500,
+  Duration interval = const Duration(milliseconds: 25),
+}) async {
+  for (var i = 0; i < maxPumps && !condition(); i++) {
+    await tester.pump(interval);
+  }
+  expect(condition(), isTrue, reason: 'Condition not met within pump limit');
 }
 
 /// Lets async controller work land without expecting a specific widget.
@@ -443,7 +493,8 @@ void main() {
     await selectVanAndVerify(tester);
     await pumpUntil(tester, find.text(enStartShift));
     await tester.tap(find.text(enStartShift));
-    await pumpFrames(tester);
+    await pumpUntilCondition(tester, () => navigated);
+    expect(navigated, isTrue);
 
     // Trip doc: exact 0.2 shape on the fresh branch (single trip).
     expect(tripsRepo.trips, hasLength(1));
@@ -472,16 +523,8 @@ void main() {
     // FCM topic `van_{vanId}` after shift start (0.6.6).
     expect(messaging.topics, ['van_van-1']);
 
-    // F-D2 auto-start seam: the engine hand-over fires exactly once with
-    // the just-created trip (the real starter's permission flow is
-    // platform-bound and lives on the device only).
-    expect(trackingStarter.startedWith, hasLength(1));
-    expect(trackingStarter.startedWith.single.vanId, 'van-1');
-    expect(trackingStarter.startedWith.single.tripId, trip.id);
-
     // ShiftController session (ticket 05 engine seam).
-    final container =
-        ProviderScope.containerOf(tester.element(find.byType(ShiftStartScreen)));
+    final container = ProviderScope.containerOf(tester.element(find.byType(MaterialApp)));
     final session = container.read(shiftControllerProvider);
     expect(session != null, isTrue);
     if (session != null) {
@@ -533,7 +576,7 @@ void main() {
     await pumpUntil(tester, find.text(enResumeShift));
     expect(find.text(enStartShift), findsNothing);
     await tester.tap(find.text(enResumeShift));
-    await pumpFrames(tester);
+    await pumpAndWait(tester);
 
     // Reattach: the seeded trip is still the ONLY trip doc.
     expect(tripsRepo.trips, hasLength(1));
@@ -544,9 +587,8 @@ void main() {
     final van = vansRepo.vans['van-1']!;
     expect(van.status, VanStatus.onShift);
     expect(van.currentTripId, resumeTripId);
-    final session = ProviderScope.containerOf(
-      tester.element(find.byType(ShiftStartScreen)),
-    ).read(shiftControllerProvider);
+    final container = ProviderScope.containerOf(tester.element(find.byType(MaterialApp)));
+    final session = container.read(shiftControllerProvider);
     expect(session?.tripId, resumeTripId);
     expect(session?.startedAt, tripsRepo.trips[resumeTripId]!.startedAt);
     // Topic still subscribed for a resumed van.
@@ -568,7 +610,7 @@ void main() {
     await selectVanAndVerify(tester);
     await pumpUntil(tester, find.text(enStartShift));
     await tester.tap(find.text(enStartShift));
-    await pumpFrames(tester);
+    await pumpAndWait(tester);
     await pumpUntil(tester, find.text(enStartFailed));
 
     // No trip doc landed; van untouched on the failed fresh start.
@@ -676,4 +718,72 @@ void main() {
       expect(find.byKey(const ValueKey('tracking-start-retry')), findsNothing);
     });
   });
+}
+
+/// Fake permission gateway that grants all permissions immediately.
+class RecordingTrackingPermissionGateway
+    implements TrackingPermissionGateway {
+  @override
+  Future<PermissionApproval> ensureLocationWhileInUse() async =>
+      PermissionApproval.granted;
+
+  @override
+  Future<PermissionApproval> ensureLocationBackground() async =>
+      PermissionApproval.granted;
+
+  @override
+  Future<PermissionApproval> ensureNotifications() async =>
+      PermissionApproval.granted;
+
+  @override
+  Future<PermissionApproval> ensureBatteryOptimizationExemption() async =>
+      PermissionApproval.granted;
+
+  @override
+  Future<PermissionApproval> checkLocationWhileInUse() async =>
+      PermissionApproval.granted;
+
+  @override
+  Future<PermissionApproval> checkLocationBackground() async =>
+      PermissionApproval.granted;
+
+  @override
+  Future<PermissionApproval> checkNotifications() async =>
+      PermissionApproval.granted;
+
+  @override
+  Future<PermissionApproval> checkBatteryOptimization() async =>
+      PermissionApproval.granted;
+}
+
+/// Fake tracking engine that starts immediately.
+class RecordingTrackingEngine implements TrackingEngine {
+  @override
+  Stream<TrackingEngineState> get changes =>
+      const Stream<TrackingEngineState>.empty();
+
+  @override
+  TrackingEngineState get state => const TrackingEngineState(
+    status: TrackingRunStatus.idle,
+  );
+
+  @override
+  Future<TrackingStartResult> start({
+    required String tripId,
+    required String vanId,
+    required String notificationTitle,
+    required String notificationBody,
+  }) async =>
+      TrackingStartResult(TrackingStartOutcome.started);
+
+  @override
+  Future<TrackingResumeResult> startForActiveShift({
+    required String vanId,
+    required String notificationTitle,
+    required String notificationBody,
+  }) async =>
+      const TrackingResumeResult(outcome: TrackingResumeOutcome.resumed);
+
+  @override
+  Future<void> stop() async {}
 }

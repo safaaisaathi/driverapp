@@ -9,10 +9,10 @@ service cloud.firestore {
     match /vans/{vanId} {
       allow read: if request.auth != null;
       // 0.8 write scope: the driver's own van writes only (location /
-      // status / battery), nothing else.
+      // status / battery / currentTripId), nothing else.
       allow update: if request.auth != null
         && request.resource.data.diff(resource.data).affectedKeys()
-           .hasOnly(['lastLocation', 'status', 'batteryPct']);
+           .hasOnly(['lastLocation', 'status', 'batteryPct', 'currentTripId']);
     }
     match /routes/{routeId} {
       allow read: if request.auth != null;

@@ -146,7 +146,6 @@ class _OptionTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return ListTile(
-      key: key,
       contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 2),
       leading: Icon(icon, color: context.colors.textPrimary),
       title: Text(label),

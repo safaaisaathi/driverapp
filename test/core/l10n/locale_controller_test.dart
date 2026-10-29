@@ -13,12 +13,11 @@ import 'locale_fakes.dart';
 const Locale en = Locale('en');
 const Locale gu = Locale('gu');
 
-/// Lets the controller's fire-and-forget restore land deterministically.
-Future<void> flushRestore() async {
-  for (var i = 0; i < 8; i++) {
-    await Future<void>.delayed(Duration.zero);
-  }
-}
+/// Deterministically lands the restore by awaiting the controller's own
+/// handle (Bug Bag fix 2026-10-29: the restore is awaitable now, no
+/// event-loop pumping games).
+Future<void> awaitRestored(ProviderContainer container) =>
+    container.read(localeControllerProvider.notifier).ensureRestored();
 
 void main() {
   group('locale codec (stored code ↔ Locale)', () {
@@ -63,7 +62,7 @@ void main() {
         'the dev-phase fallback keeps the app on en)', () async {
       // First read = the app mounting its watch (DriverApp); kicks restore.
       container.read(localeControllerProvider);
-      await flushRestore();
+      await awaitRestored(container);
       expect(container.read(localeControllerProvider), isNull);
     });
 
@@ -71,7 +70,7 @@ void main() {
         () async {
       store.values[localePrefKey] = 'gu';
       container.read(localeControllerProvider);
-      await flushRestore();
+      await awaitRestored(container);
       expect(container.read(localeControllerProvider), const Locale('gu'));
     });
 
@@ -79,7 +78,7 @@ void main() {
         () async {
       store.values[localePrefKey] = 'hi';
       container.read(localeControllerProvider);
-      await flushRestore();
+      await awaitRestored(container);
       expect(container.read(localeControllerProvider), isNull);
     });
 
@@ -110,7 +109,7 @@ void main() {
       addTearDown(restarted.dispose);
       // First read = the fresh app mounting its watch; then let restore land.
       restarted.read(localeControllerProvider);
-      await flushRestore();
+      await awaitRestored(restarted);
 
       expect(restarted.read(localeControllerProvider), const Locale('gu'));
     });
@@ -130,7 +129,8 @@ void main() {
       await racing
           .read(localeControllerProvider.notifier)
           .setLocale(const Locale('gu'));
-      await Future<void>.delayed(const Duration(milliseconds: 250));
+      // Deterministic: await the restore itself; the tap must win.
+      await awaitRestored(racing);
 
       expect(
         racing.read(localeControllerProvider),

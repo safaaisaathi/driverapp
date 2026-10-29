@@ -81,6 +81,43 @@ class GeolocatorTrackingPermissionGateway
         : PermissionApproval.denied;
   }
 
+  @override
+  Future<PermissionApproval> checkLocationWhileInUse() async {
+    final servicesOn = await _isLocationServiceOn();
+    if (!servicesOn) return PermissionApproval.gpsOff;
+
+    final permission = await Geolocator.checkPermission();
+    return _approvalFor(permission);
+  }
+
+  @override
+  Future<PermissionApproval> checkLocationBackground() async {
+    final servicesOn = await _isLocationServiceOn();
+    if (!servicesOn) return PermissionApproval.gpsOff;
+
+    final permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.always) {
+      return PermissionApproval.granted;
+    }
+    return PermissionApproval.denied;
+  }
+
+  @override
+  Future<PermissionApproval> checkNotifications() async {
+    final permission = await FlutterForegroundTask.checkNotificationPermission();
+    return permission == NotificationPermission.granted
+        ? PermissionApproval.granted
+        : PermissionApproval.denied;
+  }
+
+  @override
+  Future<PermissionApproval> checkBatteryOptimization() async {
+    if (await FlutterForegroundTask.isIgnoringBatteryOptimizations) {
+      return PermissionApproval.granted;
+    }
+    return PermissionApproval.denied;
+  }
+
   Future<bool> _isLocationServiceOn() async {
     try {
       return await Geolocator.isLocationServiceEnabled();

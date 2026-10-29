@@ -151,6 +151,24 @@ class AppLocalizationsGu extends AppLocalizations {
   String get trackingOpenLocationSettings => 'લોકેશન સેટિંગ્સ ખોલો';
 
   @override
+  String get permissionAllow => 'મંજૂર';
+
+  @override
+  String get permissionNotNow => 'હાલ માટે નહીં';
+
+  @override
+  String get trackingPermissionLocationTitle => 'લોકેશન પહોંચ';
+
+  @override
+  String get trackingPermissionBackgroundTitle => 'બેકગ્રાઉન્ડ લોકેશન';
+
+  @override
+  String get trackingPermissionNotificationsTitle => 'નોટિફિકેશન';
+
+  @override
+  String get trackingPermissionBatteryTitle => 'બેટરી અપવાદ';
+
+  @override
   String get mockLocationWarning =>
       'તમારો ફોન લોકેશન ખોટી રીતે બતાવી રહ્યો છે. ટ્રેકિંગ ચાલુ રહેશે, અને કચેરીને આ નોંધ દેખાશે.';
 

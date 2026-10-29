@@ -17,6 +17,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:driverapp/core/domain/ist_clock.dart';
 import 'package:driverapp/core/l10n/app_localizations.dart';
 import 'package:driverapp/core/repositories/repository_providers.dart';
+import 'package:driverapp/features/shift_start/domain/shift_session.dart';
 
 /// The mock-location LATCH for the van's open trip, read where it lives:
 /// `trips.mockLocationDetected` (contract field). `true` for the rest of the
@@ -52,9 +53,15 @@ class MockLocationWarningBanner extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Live-shift surface (Bug Bag fix 2026-10-29): the trip-doc latch is
+    // never unset by the app (contract, admin reviews it), so after End
+    // Shift the latch alone would keep this banner up under a dead
+    // session. Gate on the shift session: same van, still running.
+    final session = ref.watch(shiftControllerProvider);
+    final liveShift = session != null && session.vanId == vanId;
     final latched =
         ref.watch(mockLocationWarningProvider(vanId)).value ?? false;
-    if (!latched) return const SizedBox.shrink();
+    if (!liveShift || !latched) return const SizedBox.shrink();
 
     final l10n = AppLocalizations.of(context)!;
     return Semantics(

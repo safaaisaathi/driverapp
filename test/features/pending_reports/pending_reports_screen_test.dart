@@ -45,19 +45,19 @@ const String devRouteId = 'route-1';
 const List<String> devWardIds = <String>['ward-1', 'ward-2'];
 
 RouteModel devRoute() => RouteModel.fromMap(<String, Object?>{
-      'id': devRouteId,
-      'name': 'Vasna–Bavka',
-      'wardIds': devWardIds,
-      'scheduledStartTime': '07:30',
-    });
+  'id': devRouteId,
+  'name': 'Vasna–Bavka',
+  'wardIds': devWardIds,
+  'scheduledStartTime': '07:30',
+});
 
 ShiftSession runningShiftSession() => ShiftSession(
-      vanId: 'van-1',
-      tripId: 'trip-1',
-      routeId: devRouteId,
-      startedAt: shiftStartedAt,
-      date: expectedDay,
-    );
+  vanId: 'van-1',
+  tripId: 'trip-1',
+  routeId: devRouteId,
+  startedAt: shiftStartedAt,
+  date: expectedDay,
+);
 
 // -- seed helpers ------------------------------------------------------------
 
@@ -74,24 +74,23 @@ Map<String, Object?> complaintDocMap({
   String? assignedTo,
   int escalationLevel = 0,
   String? note = '',
-}) =>
-    <String, Object?>{
-      'id': id,
-      'ticketId': ticketId,
-      'deviceId': 'device-1',
-      'category': category,
-      'photoUrl': 'complaints/$id/photo.jpg',
-      'location': {'lat': 22.7751, 'lng': 73.7088},
-      'wardId': wardId,
-      'createdAt': createdAt,
-      'status': status,
-      'assignedTo': assignedTo,
-      'escalationLevel': escalationLevel,
-      'resolvedPhotoUrl': null,
-      'resolvedAt': resolvedAt,
-      'mergedInto': null,
-      'note': note,
-    };
+}) => <String, Object?>{
+  'id': id,
+  'ticketId': ticketId,
+  'deviceId': 'device-1',
+  'category': category,
+  'photoUrl': 'complaints/$id/photo.jpg',
+  'location': {'lat': 22.7751, 'lng': 73.7088},
+  'wardId': wardId,
+  'createdAt': createdAt,
+  'status': status,
+  'assignedTo': assignedTo,
+  'escalationLevel': escalationLevel,
+  'resolvedPhotoUrl': null,
+  'resolvedAt': resolvedAt,
+  'mergedInto': null,
+  'note': note,
+};
 
 Complaint seedComplaint({
   required String id,
@@ -103,18 +102,19 @@ Complaint seedComplaint({
   DateTime? resolvedAt,
   String? assignedTo,
   int escalationLevel = 0,
-}) =>
-    Complaint.fromMap(complaintDocMap(
-      id: id,
-      ticketId: ticketId,
-      wardId: wardId,
-      category: category,
-      status: status,
-      createdAt: Timestamp.fromDate(createdAt),
-      resolvedAt: resolvedAt == null ? null : Timestamp.fromDate(resolvedAt),
-      assignedTo: assignedTo,
-      escalationLevel: escalationLevel,
-    ));
+}) => Complaint.fromMap(
+  complaintDocMap(
+    id: id,
+    ticketId: ticketId,
+    wardId: wardId,
+    category: category,
+    status: status,
+    createdAt: Timestamp.fromDate(createdAt),
+    resolvedAt: resolvedAt == null ? null : Timestamp.fromDate(resolvedAt),
+    assignedTo: assignedTo,
+    escalationLevel: escalationLevel,
+  ),
+);
 
 /// The complaints the fake's day-window sees as "today". The repository
 /// seam (fake and Firestore impl alike) brackets the day range from the
@@ -202,13 +202,13 @@ final Complaint nextDayReceived = seedComplaint(
 
 /// Every complaint that must NEVER surface on D4.
 List<Complaint> allOutOfScope() => [
-      wrongWardReceived,
-      wrongCategoryReceived,
-      resolvedStatusToday,
-      escalatedStatusToday,
-      yesterdayReceived,
-      nextDayReceived,
-    ];
+  wrongWardReceived,
+  wrongCategoryReceived,
+  resolvedStatusToday,
+  escalatedStatusToday,
+  yesterdayReceived,
+  nextDayReceived,
+];
 
 // -- scripted fakes (test-local, layered on the shared fakes) -----------------
 
@@ -218,11 +218,8 @@ class RecordingComplaintsRepository extends FakeComplaintsRepository {
   RecordingComplaintsRepository([super.seed]);
 
   /// Last watch arguments, verbatim from the controller.
-  ({
-    List<String> wardIds,
-    DateTime day,
-    List<ComplaintStatus> statuses,
-  })? lastQuery;
+  ({List<String> wardIds, DateTime day, List<ComplaintStatus> statuses})?
+  lastQuery;
 
   /// One entry per `updateStatus` call: `"complaintId:status"`.
   final List<String> statusCalls = [];
@@ -349,10 +346,12 @@ Future<ProviderContainer> pumpPendingReports(
   required ComplaintsRepository complaints,
   required RoutesRepository routes,
 }) async {
-  final container = ProviderContainer(overrides: [
-    complaintsRepositoryProvider.overrideWithValue(complaints),
-    routesRepositoryProvider.overrideWithValue(routes),
-  ]);
+  final container = ProviderContainer(
+    overrides: [
+      complaintsRepositoryProvider.overrideWithValue(complaints),
+      routesRepositoryProvider.overrideWithValue(routes),
+    ],
+  );
   // D4 runs inside a started shift: activate the session up front so the
   // first build already has the route context (no D1 in this harness).
   container
@@ -414,10 +413,10 @@ void expectFieldsUntouched(
 // -- tests -------------------------------------------------------------------
 
 void main() {
-  testWidgets(
-      'loads through the exact repository query: route wardIds, '
-      'Today (IST) of the running shift, statuses received + assigned',
-      (tester) async {
+  testWidgets('loads through the exact repository query: route wardIds, '
+      'Today (IST) of the running shift, statuses received + assigned', (
+    tester,
+  ) async {
     final complaints = RecordingComplaintsRepository([inScopeReceived]);
     await pumpPendingReports(
       tester,
@@ -428,8 +427,11 @@ void main() {
 
     final query = complaints.lastQuery;
     expect(query, isNotNull);
-    expect(query!.wardIds, devWardIds,
-        reason: 'the route wardIds in visiting order');
+    expect(
+      query!.wardIds,
+      devWardIds,
+      reason: 'the route wardIds in visiting order',
+    );
     // Today (IST): the collection-day calendar date the repository seam
     // brackets — fields resolved by the domain clock (IST), never the
     // runner's zone.
@@ -437,14 +439,13 @@ void main() {
     expect(query.day.year, istDay.year);
     expect(query.day.month, istDay.month);
     expect(query.day.day, istDay.day);
-    expect(
-      query.statuses,
-      [ComplaintStatus.received, ComplaintStatus.assigned],
-    );
+    expect(query.statuses, [
+      ComplaintStatus.received,
+      ComplaintStatus.assigned,
+    ]);
   });
 
-  testWidgets(
-      'lists exactly the in-scope reports (today, route wards, '
+  testWidgets('lists exactly the in-scope reports (today, route wards, '
       'missed_collection, received/assigned); all out-of-scope ones never '
       'appear', (tester) async {
     final complaints = RecordingComplaintsRepository([
@@ -491,8 +492,9 @@ void main() {
     expect(find.text(enPendingReportsTitle), findsOneWidget);
   });
 
-  testWidgets('loading state holds while the first snapshot is pending',
-      (tester) async {
+  testWidgets('loading state holds while the first snapshot is pending', (
+    tester,
+  ) async {
     await pumpPendingReports(
       tester,
       complaints: NeverEmittingComplaintsRepository([inScopeReceived]),
@@ -528,10 +530,10 @@ void main() {
     expect(find.text(enRetry), findsOneWidget);
   });
 
-  testWidgets(
-      'Will Revisit writes exactly `status = assigned` of the tapped '
-      'complaint only — one single write, other complaint untouched',
-      (tester) async {
+  testWidgets('Will Revisit writes exactly `status = assigned` of the tapped '
+      'complaint only — one single write, other complaint untouched', (
+    tester,
+  ) async {
     final complaints = RecordingComplaintsRepository([
       inScopeReceived,
       inScopeAssigned,
@@ -548,13 +550,19 @@ void main() {
     // The write: `c-1` → assigned, resolvedAt unset; field-accurate.
     final updated = complaints.complaints['c-1']!;
     expect(updated.status, ComplaintStatus.assigned);
-    expect(updated.resolvedAt, isNull,
-        reason: 'Will Revisit never sets a resolution time');
+    expect(
+      updated.resolvedAt,
+      isNull,
+      reason: 'Will Revisit never sets a resolution time',
+    );
     expectFieldsUntouched(updated, inScopeReceived, {'status'});
 
     // The other (untouched) complaint stays identical, not even by write.
-    expect(complaints.complaints['c-2'], inScopeAssigned,
-        reason: 'writes only ever touch the tapped complaint');
+    expect(
+      complaints.complaints['c-2'],
+      inScopeAssigned,
+      reason: 'writes only ever touch the tapped complaint',
+    );
 
     // Per-complaint write policy: exactly one single-doc update call.
     expect(complaints.statusCalls, ['c-1:assigned']);
@@ -562,8 +570,7 @@ void main() {
     expect(complaints.resolvedAtCalls.single, isNull);
   });
 
-  testWidgets(
-      'Done writes exactly `status = resolved` + resolvedAt (contract '
+  testWidgets('Done writes exactly `status = resolved` + resolvedAt (contract '
       'shape; resolvedPhotoUrl stays unset), row leaves the list, other '
       'complaint untouched', (tester) async {
     final complaints = RecordingComplaintsRepository([
@@ -595,8 +602,11 @@ void main() {
       isTrue,
       reason: 'resolvedAt stamped around the Done tap',
     );
-    expect(updated.resolvedPhotoUrl, isNull,
-        reason: 'no contract field requires the driver to add one');
+    expect(
+      updated.resolvedPhotoUrl,
+      isNull,
+      reason: 'no contract field requires the driver to add one',
+    );
     expectFieldsUntouched(updated, inScopeReceived, {'status', 'resolvedAt'});
 
     // The other complaint untouched; writes stay per-complaint (no batch).
@@ -606,10 +616,8 @@ void main() {
     expect(complaints.resolvedAtCalls.single, isNotNull);
   });
 
-  testWidgets(
-      'failed write surfaces the error state; the complaint stays '
-      'untouched; a second Done (after retry) resolves it',
-      (tester) async {
+  testWidgets('failed write surfaces the error state; the complaint stays '
+      'untouched; a second Done (after retry) resolves it', (tester) async {
     final complaints = FlakyWriteComplaintsRepository(1, [
       inScopeReceived,
       inScopeAssigned,
@@ -684,6 +692,37 @@ void main() {
     expect(
       tester.getSize(find.byKey(const ValueKey('d4-done-c-2'))).height,
       greaterThanOrEqualTo(56),
+    );
+  });
+
+  testWidgets('tapping a row header opens the WF-20 detail (ticket, '
+      'category · ward, actions) and Back returns to the list', (tester) async {
+    await pumpPendingReports(
+      tester,
+      complaints: RecordingComplaintsRepository([inScopeReceived]),
+      routes: FakeRoutesRepository([devRoute()]),
+    );
+    await pumpFrames(tester);
+    await pumpUntil(tester, find.text('PMH-20261024-0001'));
+
+    await tester.tap(find.byKey(ValueKey('d4-open-${inScopeReceived.id}')));
+    await pumpFrames(tester);
+
+    // The detail page is pushed on top of the list.
+    expect(find.byKey(const Key('reportDetail.title')), findsOneWidget);
+    expect(find.byKey(const Key('reportDetail.back')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('reportDetail.back')));
+    await pumpFrames(tester);
+
+    // Back at the list: the row and its inline actions are still there.
+    expect(
+      find.byKey(ValueKey('d4-row-${inScopeReceived.id}')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(ValueKey('d4-revisit-${inScopeReceived.id}')),
+      findsOneWidget,
     );
   });
 }

@@ -22,14 +22,23 @@ final localeStoreProvider = Provider<LocaleStore>(
 /// The driver's chosen language. `null` = no stored choice (system
 /// default — English during development per the grilled decision).
 class LocaleController extends Notifier<Locale?> {
+  Future<void>? _restoring;
+
   @override
   Locale? build() {
     // Fire-and-forget restore: the app renders its fallback (en) while
     // storage answers — the same degrade-don't-crash idiom as bootstrap
-    // (ticket 02).
-    unawaited(_restore());
+    // (ticket 02). main() awaits the SAME future before runApp, so the
+    // first frame already carries the stored language (Bug Bag fix
+    // 2026-10-29: no first-frame en flash before a stored gu lands).
+    unawaited(ensureRestored());
     return null;
   }
+
+  /// Awaitable restore handle. [build] fires it unawaited; main() awaits
+  /// it before runApp; tests await it instead of sleeping on the event
+  /// loop. One future per controller lifetime (the provider builds once).
+  Future<void> ensureRestored() => _restoring ??= _restore();
 
   Future<void> _restore() async {
     try {

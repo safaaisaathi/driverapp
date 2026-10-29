@@ -42,4 +42,17 @@ abstract class TrackingPermissionGateway {
   /// Battery-optimization exemption so the service survives Doze through
   /// long shifts (flutter_foreground_task's dedicated API).
   Future<PermissionApproval> ensureBatteryOptimizationExemption();
+
+  /// Check current permission status WITHOUT prompting the user.
+  /// Used by UI layer to decide whether to show rationale screens.
+  Future<PermissionApproval> checkLocationWhileInUse();
+
+  /// Check current background location permission status.
+  Future<PermissionApproval> checkLocationBackground();
+
+  /// Check current notification permission status.
+  Future<PermissionApproval> checkNotifications();
+
+  /// Check current battery optimization exemption status.
+  Future<PermissionApproval> checkBatteryOptimization();
 }

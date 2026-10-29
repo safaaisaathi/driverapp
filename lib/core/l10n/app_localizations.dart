@@ -362,6 +362,42 @@ abstract class AppLocalizations {
   /// **'Open location settings'**
   String get trackingOpenLocationSettings;
 
+  /// No description provided for @permissionAllow.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow'**
+  String get permissionAllow;
+
+  /// No description provided for @permissionNotNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get permissionNotNow;
+
+  /// No description provided for @trackingPermissionLocationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Location access'**
+  String get trackingPermissionLocationTitle;
+
+  /// No description provided for @trackingPermissionBackgroundTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Background location'**
+  String get trackingPermissionBackgroundTitle;
+
+  /// No description provided for @trackingPermissionNotificationsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get trackingPermissionNotificationsTitle;
+
+  /// No description provided for @trackingPermissionBatteryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Battery exception'**
+  String get trackingPermissionBatteryTitle;
+
   /// No description provided for @mockLocationWarning.
   ///
   /// In en, this message translates to:

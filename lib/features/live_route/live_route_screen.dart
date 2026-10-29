@@ -36,6 +36,7 @@ import 'domain/live_route_state.dart';
 import 'live_route_providers.dart';
 import 'mark_ward_done_flow.dart';
 import 'ui/live_route_map.dart';
+import 'ui/more_options_sheet.dart';
 import 'ui/state_views.dart';
 import 'ui/ward_list_panel.dart';
 
@@ -137,6 +138,22 @@ class _LiveRouteScreenState extends ConsumerState<LiveRouteScreen> {
           isGlass: true,
           semanticsLabel: l10n.settingsTitle,
           tooltip: l10n.settingsTitle,
+        ),
+        // The WF-23 more-options entry: skip ward / on break / call for
+        // help (settings also lives inside the sheet). [wardId] is the
+        // NEXT undone ward — the one the skip dialog offers; empty when
+        // the route is complete (skip is then meaningless).
+        AppIconButton(
+          key: const Key('liveRoute.moreOptions'),
+          onPressed: () => showMoreOptionsSheet(
+            context,
+            wardId: data?.nextWard?.ward.id ?? '',
+          ),
+          icon: Icons.more_vert,
+          size: 48,
+          isGlass: true,
+          semanticsLabel: l10n.moreOptionsTitle,
+          tooltip: l10n.moreOptionsTitle,
         ),
       ],
       showLanguageToggle: true,
