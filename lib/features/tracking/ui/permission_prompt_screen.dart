@@ -16,6 +16,7 @@ import 'package:driverapp/core/theme/app_colors.dart';
 import 'package:driverapp/core/theme/app_text.dart';
 import 'package:driverapp/core/theme/app_tokens.dart';
 import 'package:driverapp/core/widgets/app_icon_button.dart';
+import 'package:driverapp/features/shift_start/ui/language_toggle.dart';
 
 /// The permission stage being prompted for.
 enum PermissionPromptStage {
@@ -59,18 +60,24 @@ class _PermissionPromptScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Round close button top-left (M3 shell)
-            Align(
-              alignment: Alignment.topLeft,
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpace.md),
-                child: AppIconButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  icon: Icons.close,
-                  size: 48,
-                  semanticsLabel: MaterialLocalizations.of(context)
-                      .closeButtonTooltip,
-                ),
+            // Round close button top-left (M3 shell); the app's shared
+            // language toggle sits top-end beside it (DESIGN-driver-app.md
+            // §4.18): the driver can switch language mid-setup. The toggle
+            // stays secondary - the screen keeps exactly one primary.
+            Padding(
+              padding: const EdgeInsets.all(AppSpace.md),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  AppIconButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    icon: Icons.close,
+                    size: 48,
+                    semanticsLabel: MaterialLocalizations.of(context)
+                        .closeButtonTooltip,
+                  ),
+                  const LanguageToggleButton(),
+                ],
               ),
             ),
             const Spacer(),
