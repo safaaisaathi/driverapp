@@ -1,6 +1,7 @@
 /// D1 (new) — Start-shift screen for the driver identity (ticket 4,
 /// PRD-2 §0.16), M3 flow shell per DESIGN-driver-app.md §9.6, with the
-/// ticket-5 welcome-back mode per §9.27.
+/// ticket-5 welcome-back mode per §9.27 and the ticket-10 smart keyboard
+/// on the code field (pure decisions in code_keyboard.dart).
 ///
 /// One `XX-0000` code field (accepts any case and a missing dash; a bad
 /// shape shows the inline error BEFORE any lookup) → confirm card (name,
@@ -20,7 +21,6 @@
 library;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/l10n/app_localizations.dart';
@@ -42,6 +42,7 @@ import '../data/shift_tracking_auto_start.dart'
         shiftTrackingAutoStartStatusProvider;
 import '../domain/identity_flow.dart';
 import '../domain/shift_session.dart';
+import 'code_keyboard.dart';
 import 'language_toggle.dart';
 
 // ignore: implementation_imports
@@ -352,7 +353,11 @@ class _CodeStartHostState extends ConsumerState<_CodeStartHost> {
 
 /// The single `XX-0000` field (4.5): height 64, radius 20, `surface` fill,
 /// 1.5 `borderStrong` outline; error outline + InlineError below on a bad
-/// shape. Auto-uppercases and auto-inserts the dash after 2 characters.
+/// shape. Auto-uppercases and auto-inserts the dash when the 2nd letter
+/// lands. The keyboard type is the pure content decision
+/// [codeFieldKeyboardType] (ticket 10): text while the letters are typed,
+/// numeric from the digit half on — Flutter updates the live IME config
+/// when it changes, and the host rebuilds on every keystroke.
 class _CodeField extends StatelessWidget {
   const _CodeField({
     required this.controller,
@@ -388,8 +393,8 @@ class _CodeField extends StatelessWidget {
             controller: controller,
             focusNode: focusNode,
             enabled: enabled,
-            inputFormatters: [_DriverCodeFormatter()],
-            keyboardType: TextInputType.text,
+            inputFormatters: [const DriverCodeInputFormatter()],
+            keyboardType: codeFieldKeyboardType(controller.text),
             textCapitalization: TextCapitalization.characters,
             autocorrect: false,
             enableSuggestions: false,
@@ -429,28 +434,6 @@ class _CodeField extends StatelessWidget {
           ),
         ],
       ],
-    );
-  }
-}
-
-/// Keeps the entry shaped like `XX-0000`: uppercase, one dash after the
-/// two letters, nothing beyond 6 alphanumerics. The flow still normalizes
-/// (and rejects) on submit — this is only the typing nicety.
-class _DriverCodeFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    final compact = newValue.text.toUpperCase().replaceAll('-', '');
-    final clamped =
-        compact.length > 6 ? compact.substring(0, 6) : compact;
-    final formatted = clamped.length <= 2
-        ? clamped
-        : '${clamped.substring(0, 2)}-${clamped.substring(2)}';
-    return TextEditingValue(
-      text: formatted,
-      selection: TextSelection.collapsed(offset: formatted.length),
     );
   }
 }

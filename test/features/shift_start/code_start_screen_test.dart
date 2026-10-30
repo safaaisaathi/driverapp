@@ -13,7 +13,7 @@ import 'package:driverapp/core/models/models.dart';
 import 'package:driverapp/core/repositories/repositories.dart';
 import 'package:driverapp/core/config/firebase_bootstrap.dart';
 import 'package:driverapp/core/theme/app_theme.dart';
-import 'package:driverapp/features/shift_start/data/verify_driver_pin.dart'
+import 'package:driverapp/features/shift_start/data/fcm_topics.dart'
     show driverMessagingGatewayProvider;
 import 'package:driverapp/features/shift_start/domain/shift_session.dart';
 import 'package:driverapp/features/shift_start/ui/code_start_screen.dart';
@@ -306,6 +306,23 @@ Future<void> submitCode(WidgetTester tester, String raw) async {
   await tester.pump();
 }
 
+/// The code field under test (the d1-* seam), read back as a widget.
+TextField _codeFieldOf(WidgetTester tester) =>
+    tester.widget<TextField>(find.byKey(const ValueKey('d1-code-field')));
+
+/// Types [keystrokes] one keystroke at a time into the code field
+/// (ticket 10: the flip is per-keystroke, so every keystroke must reach
+/// the formatter the way the real IME sends it - appended to the field's
+/// CURRENT content, the auto-dash included).
+Future<void> typeCode(WidgetTester tester, String keystrokes) async {
+  final field = find.byKey(const ValueKey('d1-code-field'));
+  for (final char in keystrokes.split('')) {
+    final current = tester.widget<TextField>(field).controller!.text;
+    await tester.enterText(field, '$current$char');
+    await tester.pump();
+  }
+}
+
 // -- tests -------------------------------------------------------------------
 
 void main() {
@@ -476,6 +493,170 @@ void main() {
     expect(find.text(enCodeHint), findsOneWidget);
     expect(find.text(enContinue), findsOneWidget);
     expect(find.byKey(const ValueKey('d1-code-error')), findsNothing);
+  });
+
+  // -- smart keyboard on the code field (ticket 10, issue #11) ---------------
+
+  testWidgets('fresh code field: text keyboard, characters capitalized, '
+      'autocorrect and suggestions off', (tester) async {
+    await pumpScreen(
+      tester,
+      driversRepo: FakeDriversRepository(),
+      vans: FakeVansRepository([sampleVan()]),
+      trips: FakeTripsRepository(),
+    );
+
+    final field = _codeFieldOf(tester);
+    expect(field.keyboardType, TextInputType.text);
+    expect(field.textCapitalization, TextCapitalization.characters);
+    expect(field.autocorrect, isFalse);
+    expect(field.enableSuggestions, isFalse);
+  });
+
+  testWidgets('typing: the 2nd letter lands, dash auto-inserted, keyboard '
+      'flips to numeric; backspacing below re-flips to text', (tester) async {
+    await pumpScreen(
+      tester,
+      driversRepo: FakeDriversRepository(),
+      vans: FakeVansRepository([sampleVan()]),
+      trips: FakeTripsRepository(),
+    );
+
+    await typeCode(tester, 'A');
+    expect(_codeFieldOf(tester).controller!.text, 'A');
+    expect(_codeFieldOf(tester).keyboardType, TextInputType.text);
+
+    // The 2nd letter lands: the dash follows it and the keyboard flips to
+    // the numeric keypad - the field keeps its focus and its content.
+    await typeCode(tester, 'B');
+    expect(_codeFieldOf(tester).controller!.text, 'AB-');
+    expect(_codeFieldOf(tester).keyboardType, TextInputType.number);
+    expect(_codeFieldOf(tester).focusNode!.hasFocus, isTrue);
+
+    // The digits follow the dash on the numeric keypad.
+    await typeCode(tester, '1234');
+    expect(_codeFieldOf(tester).controller!.text, 'AB-1234');
+    expect(_codeFieldOf(tester).keyboardType, TextInputType.number);
+
+    // Backspace the dash: the letter half is still complete, so the
+    // keyboard stays numeric, and the dash must not bounce back.
+    await tester.enterText(find.byKey(const ValueKey('d1-code-field')), 'AB');
+    await tester.pump();
+    expect(_codeFieldOf(tester).controller!.text, 'AB');
+    expect(_codeFieldOf(tester).keyboardType, TextInputType.number);
+
+    // Backspace again, below the letter half: flip back to text.
+    await tester.enterText(find.byKey(const ValueKey('d1-code-field')), 'A');
+    await tester.pump();
+    expect(_codeFieldOf(tester).controller!.text, 'A');
+    expect(_codeFieldOf(tester).keyboardType, TextInputType.text);
+  });
+
+  testWidgets('paste: any accepted shape lands as a sane XX-0000 value '
+      '(<= 7 chars) and the flip state matches the content', (tester) async {
+    await pumpScreen(
+      tester,
+      driversRepo: FakeDriversRepository(),
+      vans: FakeVansRepository([sampleVan()]),
+      trips: FakeTripsRepository(),
+    );
+
+    for (final pasted in ['ab1234', 'AB-1234', 'ab-1234']) {
+      await tester.enterText(find.byKey(const ValueKey('d1-code-field')), '');
+      await tester.pump();
+      await tester.enterText(find.byKey(const ValueKey('d1-code-field')), pasted);
+      await tester.pump();
+
+      final field = _codeFieldOf(tester);
+      expect(field.controller!.text, 'AB-1234', reason: 'pasting "$pasted"');
+      expect(field.controller!.text.length, lessThanOrEqualTo(7),
+          reason: 'pasting "$pasted"');
+      expect(field.keyboardType, TextInputType.number,
+          reason: 'pasting "$pasted"');
+    }
+  });
+
+  testWidgets('paste: one letter plus a digit keeps the text keyboard (the '
+      'flip counts letters, not characters)', (tester) async {
+    await pumpScreen(
+      tester,
+      driversRepo: FakeDriversRepository(),
+      vans: FakeVansRepository([sampleVan()]),
+      trips: FakeTripsRepository(),
+    );
+
+    // The driver pasted a letter and a digit. The letter half is not done,
+    // so the text keyboard must stay, otherwise the driver cannot type the
+    // 2nd letter at all.
+    await tester.enterText(find.byKey(const ValueKey('d1-code-field')), 'A1');
+    await tester.pump();
+
+    final field = _codeFieldOf(tester);
+    expect(field.controller!.text, 'A1');
+    expect(field.keyboardType, TextInputType.text);
+  });
+
+  testWidgets('paste over the code already typed: the pasted shape wins '
+      'and the dash is (re)inserted', (tester) async {
+    await pumpScreen(
+      tester,
+      driversRepo: FakeDriversRepository(),
+      vans: FakeVansRepository([sampleVan()]),
+      trips: FakeTripsRepository(),
+    );
+
+    await typeCode(tester, 'AB');
+    expect(_codeFieldOf(tester).controller!.text, 'AB-');
+
+    // The driver selects the old code and pastes a shorter one: the paste
+    // brings characters, so the canonical shape is rebuilt.
+    await tester.enterText(find.byKey(const ValueKey('d1-code-field')), 'ab12');
+    await tester.pump();
+    expect(_codeFieldOf(tester).controller!.text, 'AB-12');
+    expect(_codeFieldOf(tester).keyboardType, TextInputType.number);
+  });
+
+  testWidgets('only letters, digits and the auto-dash are accepted; the '
+      'field caps at 7 display chars', (tester) async {
+    await pumpScreen(
+      tester,
+      driversRepo: FakeDriversRepository(),
+      vans: FakeVansRepository([sampleVan()]),
+      trips: FakeTripsRepository(),
+    );
+
+    await tester.enterText(
+        find.byKey(const ValueKey('d1-code-field')), 'ab@#123456789');
+    await tester.pump();
+    expect(_codeFieldOf(tester).controller!.text, 'AB-1234');
+    expect(_codeFieldOf(tester).controller!.text.length, 7);
+
+    // Junk before the letters is dropped as well.
+    await tester.enterText(find.byKey(const ValueKey('d1-code-field')), '@#ab');
+    await tester.pump();
+    expect(_codeFieldOf(tester).controller!.text, 'AB-');
+    expect(_codeFieldOf(tester).keyboardType, TextInputType.number);
+  });
+
+  testWidgets('change-code mode: the same entry form flips the keyboard '
+      'identically (no welcome-mode behavior change)', (tester) async {
+    final drivers = FakeDriversRepository([sampleDriver()]);
+    await pumpScreen(
+      tester,
+      driversRepo: drivers,
+      vans: FakeVansRepository([sampleVan()]),
+      trips: FakeTripsRepository(),
+      identityStore: returningStore('AB-1234'),
+    );
+    await pumpUntil(tester, find.byKey(const ValueKey('d1-welcome-card')));
+
+    await tester.tap(find.byKey(const ValueKey('d1-change-code')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('d1-code-field')), findsOneWidget);
+
+    await typeCode(tester, 'AB');
+    expect(_codeFieldOf(tester).controller!.text, 'AB-');
+    expect(_codeFieldOf(tester).keyboardType, TextInputType.number);
   });
 
   // -- welcome-back card + change-code (ticket 5, PRD-2 §0.16) ----------------
