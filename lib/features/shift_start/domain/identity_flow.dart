@@ -182,7 +182,14 @@ class IdentityFlowController extends Notifier<IdentityFlowState> {
         vanPlate: van?.plateNo,
         lastRawCode: raw,
       );
-    } on Exception {
+    } on Exception catch (error) {
+      // The trace that was missing when the cold-start failure had to be
+      // reverse-engineered (issue #21). Debug-only, per the AVV rule.
+      assert(() {
+        // ignore: avoid_print
+        print('identity lookup failed for $code: $error');
+        return true;
+      }());
       state = state.copyWith(
         phase: IdentityFlowPhase.lookupFailed,
         lastRawCode: raw,

@@ -106,10 +106,10 @@ const Duration sessionGateCap = Duration(seconds: 8);
 final sessionGateProvider = Provider<Future<void>>((ref) {
   final boot = ref.read(bootstrapProvider.notifier);
   if (!boot.bootStarted) return Future<void>.value();
-  return Future.any<void>([
-    boot.sessionReady(),
-    boot.done().then((_) {}),
-  ]).timeout(sessionGateCap, onTimeout: () {});
+  // ONLY a real session releases the gate (issue #21): the boot's first
+  // verdict may be `degraded`, which means no app and no token, and
+  // releasing on that verdict would fire the unauthenticated read again.
+  return boot.sessionReady().timeout(sessionGateCap, onTimeout: () {});
 });
 
 /// Holds the boot state; `main()` starts [run], the app can watch
@@ -157,9 +157,6 @@ class BootstrapController extends Notifier<BootstrapStatus> {
       try {
         await _runOnce(progress, effectiveBackend);
         state = BootstrapStatus.ready(anonymousUid: progress.anonymousUid!);
-        // Release the first-read gate (issue #18): the session now exists.
-        final session = _sessionReady;
-        if (session != null && !session.isCompleted) session.complete();
         break;
       } catch (error, stackTrace) {
         state = BootstrapStatus.degraded(error: error);
@@ -219,6 +216,11 @@ class BootstrapController extends Notifier<BootstrapStatus> {
     }
     // 4. Anonymous session at launch.
     progress.anonymousUid ??= await signInAnonymously(progress.app!);
+    // Release the first-read gate (issues #18/#21) the moment the session
+    // exists: Firestore needs the token, not FCM, so the driver never waits
+    // on the messaging round trip.
+    final session = _sessionReady;
+    if (session != null && !session.isCompleted) session.complete();
     // 5. FCM: init + one-time topic `all` subscription.
     if (!progress.messagingReady) {
       await messagingGateway.init();
@@ -313,16 +315,27 @@ Future<void> runBootstrap(ProviderContainer container) async {
   // `firebaseFirestoreProvider`, and with no Firebase app that read throws
   // `[core/no-app]` every launch (observed defect on device: the service
   // never started because it was read before `.run()` initialized app).
-  // `.run()` never throws; it only degrades internally, so starting the
-  // drain after it (ready OR degraded) is always well-defined.
-  await container.read(bootstrapProvider.notifier).run();
-  // The sync drain starts with boot and is idempotent; a host without
-  // platform channels (tests, CLI) just logs and boots on (ticket 02 rule).
-  try {
-    container.read(offlineSyncServiceProvider).start();
-  } catch (error) {
-    debugPrint('bootstrap: offline sync service not started: $error');
-  }
+  // `.run()` never throws; it only degrades internally.
+  //
+  // The drain starts the moment the boot is (or becomes) READY. Awaiting
+  // `run()` here would block forever on a degraded boot (its retry loop is
+  // endless), so the drain never started at all in that case; the listener
+  // also covers a degraded boot that recovers on a later retry (issue #21).
+  // The drain start is idempotent; a host without platform channels
+  // (tests, CLI) just logs and boots on (ticket 02 rule).
+  unawaited(container.read(bootstrapProvider.notifier).run());
+  container.listen<BootstrapStatus>(
+    bootstrapProvider,
+    (previous, next) {
+      if (next is! BootstrapReady) return;
+      try {
+        container.read(offlineSyncServiceProvider).start();
+      } catch (error) {
+        debugPrint('bootstrap: offline sync service not started: $error');
+      }
+    },
+    fireImmediately: true,
+  );
 }
 
 /// Silent-retry backoff, `attempt` is 1-based. Cheap calls first so a

@@ -143,6 +143,36 @@ void main() {
       },
     );
   });
+
+  group('first-read gate milestone (issues #18/#21)', () {
+    test('a ready boot completes sessionReady the moment the session lands, '
+        'and bootStarted tracks run()', () async {
+      final harness = _boot(FakeFirebasePlatform(registrySynced: true));
+      final controller = harness.container.read(bootstrapProvider.notifier);
+      expect(
+        controller.bootStarted,
+        isFalse,
+        reason: 'before run() there is no boot to wait for',
+      );
+
+      var sessionReady = false;
+      unawaited(controller.sessionReady().then((_) => sessionReady = true));
+
+      final resolved = _firstResolvedStatus(harness);
+      harness.startBoot();
+      expect(controller.bootStarted, isTrue);
+
+      final status = await resolved;
+      expect(status, isA<BootstrapReady>());
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        sessionReady,
+        isTrue,
+        reason: 'the first-read gate opens as soon as the session exists',
+      );
+      harness.dispose();
+    });
+  });
 }
 
 /// The boot harness: the real controller + real `run()` wiring, with every

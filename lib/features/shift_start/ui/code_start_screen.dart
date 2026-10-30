@@ -222,7 +222,6 @@ class _CodeStartHostState extends ConsumerState<_CodeStartHost> {
         // focus after the search) and hand the CTA to the result action.
         _setEditing(false);
         _codeFocus.unfocus();
-        _maybePrefillRememberedCode(newPhase);
       default:
         break; // lookingUp / invalidCode / onShift keep the current mode.
     }
@@ -231,22 +230,6 @@ class _CodeStartHostState extends ConsumerState<_CodeStartHost> {
   void _setEditing(bool editing) {
     if (_editing == editing) return;
     setState(() => _editing = editing);
-  }
-
-  /// An auto-lookup (welcome back) failed or hit an unknown code: the
-  /// driver saw an error about a code they never typed. Fill the boxes
-  /// with the remembered code so they SEE what was checked and can edit it
-  /// (the launch-time "Couldn't check the code" demo report 10/2026).
-  void _maybePrefillRememberedCode(IdentityFlowPhase phase) {
-    if (phase != IdentityFlowPhase.notFound &&
-        phase != IdentityFlowPhase.lookupFailed) {
-      return;
-    }
-    if (_changeMode || _codeController.text.isNotEmpty) return;
-    final identity = ref.read(driverIdentityControllerProvider);
-    final code = identity.rememberedCode;
-    if (code == null || code.isEmpty) return;
-    _codeController.text = code;
   }
 
   /// The returning-device view (ticket 5): the identity controller
@@ -331,10 +314,11 @@ class _CodeStartHostState extends ConsumerState<_CodeStartHost> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Spec story 15: the language toggle stays reachable on the
-            // new screens, same top-end slot as the old D1. In change-code
-            // mode a back button sits at the top-start (page margin, level
-            // with the toggle and the headline) so the new-user detour is
-            // reversible (demo feedback 10/2026).
+            // new screens, same top-end slot as the old D1. A back button
+            // sits at the top-start (page margin, level with the toggle and
+            // the headline) ONLY for a returning driver who tapped
+            // "Different driver?" — there is a welcome card to return to.
+            // A fresh device has nothing to go back to (issue #20).
             Padding(
               padding: const EdgeInsetsDirectional.only(
                 start: AppSpace.page,
@@ -343,7 +327,7 @@ class _CodeStartHostState extends ConsumerState<_CodeStartHost> {
               ),
               child: Row(
                 children: [
-                  if (_changeMode)
+                  if (_changeMode && identity.isReturning)
                     SizedBox(
                       width: AppSize.iconButtonDriver,
                       height: AppSize.iconButtonDriver,
@@ -424,10 +408,11 @@ class _CodeStartHostState extends ConsumerState<_CodeStartHost> {
     );
 
     // System back inside the change-code form returns to the welcome card
-    // instead of leaving the app (demo feedback 10/2026). Outside
-    // change-code mode the default applies.
+    // instead of leaving the app. Only a RETURNING driver has that card to
+    // return to; a fresh device keeps the default pop (issue #20).
+    final changeBack = _changeMode && identity.isReturning;
     return PopScope(
-      canPop: !_changeMode,
+      canPop: !changeBack,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _exitChangeMode();
       },

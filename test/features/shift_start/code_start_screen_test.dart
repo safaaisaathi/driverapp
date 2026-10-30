@@ -864,6 +864,27 @@ void main() {
     expect(find.byKey(const ValueKey('d1-welcome-start')), findsOneWidget);
   });
 
+  testWidgets('a fresh device never shows the back arrow: there is no '
+      'welcome card to return to (issue #20)', (tester) async {
+    await pumpScreen(
+      tester,
+      driversRepo: FakeDriversRepository([sampleDriver()]),
+      vans: FakeVansRepository([sampleVan()]),
+      trips: FakeTripsRepository(),
+    );
+
+    await submitCode(tester, 'AB-1234');
+    await pumpUntil(tester, find.byKey(const ValueKey('d1-confirm-card')));
+    // The confirm card is up; the change-code arrow is not (the driver is
+    // new to this device, so back would go nowhere).
+    expect(find.byKey(const ValueKey('d1-change-back')), findsNothing);
+
+    // Tapping the boxes to edit keeps it hidden too.
+    await tester.tap(find.byKey(const ValueKey('d1-code-cell-0')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('d1-change-back')), findsNothing);
+  });
+
   testWidgets('change-code is reversible: the top-left back button returns '
       'to the welcome card and the auto-lookup re-lands', (tester) async {
     final drivers = FakeDriversRepository([sampleDriver()]);
