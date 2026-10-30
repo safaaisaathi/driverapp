@@ -255,42 +255,14 @@ class _CodeStartHostState extends ConsumerState<_CodeStartHost> {
   bool _isWelcomeMode(DriverIdentityState identity) =>
       identity.isReturning && !_changeMode;
 
-  /// The welcome-back card is up: the auto-lookup landed on the confirm
-  /// phase for the remembered driver (starting keeps the card up while
-  /// the start writes run, exactly like the confirm card).
-  bool _showsWelcomeCard(DriverIdentityState identity) =>
-      _isWelcomeMode(identity) &&
-      (widget.flow.phase == IdentityFlowPhase.confirmReady ||
-          widget.flow.phase == IdentityFlowPhase.starting);
+  /// The entry form is the DRIVER's explicit choice only (issue #19): a
+  /// returning driver never sees the boxes, not even after a failed lookup.
+  /// The form appears after the "Different driver?" tap (change mode) and
+  /// is the fresh-install surface for a new driver.
+  bool _showsEntryForm(DriverIdentityState identity) =>
+      !_isWelcomeMode(identity);
 
-  /// The pinned CTA carries the welcome action: from a resting welcome
-  /// state through the confirm/start phases (startFailed falls back to
-  /// the regular confirm-card CTA with its error line).
-  bool _welcomeCta(DriverIdentityState identity) =>
-      _isWelcomeMode(identity) &&
-      switch (widget.flow.phase) {
-        IdentityFlowPhase.initial ||
-        IdentityFlowPhase.lookingUp ||
-        IdentityFlowPhase.confirmReady ||
-        IdentityFlowPhase.starting =>
-          true,
-        _ => false,
-      };
 
-  /// The entry form is back: the driver opted in, or the flow landed in a
-  /// failure state while welcoming (a stale remembered code, an offline
-  /// auto-lookup, a corrupt stored code) — the existing recovery UX
-  /// applies and the driver can type a correct code.
-  bool _showsEntryForm(DriverIdentityState identity) {
-    if (!_isWelcomeMode(identity)) return true;
-    return switch (widget.flow.phase) {
-      IdentityFlowPhase.notFound ||
-      IdentityFlowPhase.lookupFailed ||
-      IdentityFlowPhase.invalidCode =>
-        true,
-      _ => false,
-    };
-  }
 
   /// Fires the welcome auto-lookup once per remembered code value, only
   /// from a resting entry phase, after the frame (the navigation
@@ -400,7 +372,11 @@ class _CodeStartHostState extends ConsumerState<_CodeStartHost> {
                   children: [
                     Text(l10n.identityStartTitle, style: text.headline),
                     const SizedBox(height: AppSpace.sectionGap),
-                    if (_showsWelcomeCard(identity)) ...[
+                    if (_isWelcomeMode(identity)) ...[
+                      // The returning driver's surface (issue #19): the card
+                      // is ALWAYS the content, in every phase, and a failure
+                      // renders INSIDE it; the code boxes never appear (that
+                      // is the "Different driver?" escape).
                       _WelcomeCard(
                         flow: flow,
                         code: identity.rememberedCode!,
@@ -440,10 +416,7 @@ class _CodeStartHostState extends ConsumerState<_CodeStartHost> {
       bottomNavigationBar: _CtaBar(
         flow: flow,
         busy: _busy,
-        welcomeCta: _welcomeCta(identity),
-        entryRecovery: _isWelcomeMode(identity) &&
-            (flow.phase == IdentityFlowPhase.notFound ||
-                flow.phase == IdentityFlowPhase.lookupFailed),
+        welcome: _isWelcomeMode(identity),
         editing: _editing,
         codeText: () => _codeController.text,
         onManualSubmit: _markManualEntry,
@@ -812,6 +785,12 @@ class _ConfirmRow extends StatelessWidget {
 /// The welcome-back card (4.19 / 9.27, ticket 5): white card radius 28,
 /// padding 20 — greeting, body, then the live-fetched record as the same
 /// label-over-value rows the confirm card uses (name, code, ward count).
+///
+/// Issue #19: the card is the returning driver's ONLY surface, so it
+/// renders in every welcome phase. Until the lookup lands (`driver == null`)
+/// the remembered Code row still shows; name and wards appear with the
+/// record. A failure phase appends its inline line separately, under the
+/// card.
 class _WelcomeCard extends StatelessWidget {
   const _WelcomeCard({required this.flow, required this.code});
 
@@ -823,7 +802,7 @@ class _WelcomeCard extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final colors = context.colors;
     final text = context.text;
-    final driver = flow.driver!;
+    final driver = flow.driver;
     return Container(
       key: const ValueKey('d1-welcome-card'),
       width: double.infinity,
@@ -846,21 +825,96 @@ class _WelcomeCard extends StatelessWidget {
             style: text.bodySmall.copyWith(color: colors.textMuted),
           ),
           const SizedBox(height: AppSpace.sm),
-          _ConfirmRow(
-            icon: Icons.person_outline,
-            label: l10n.identityFieldName,
-            value: driver.name,
-          ),
+          if (driver != null)
+            _ConfirmRow(
+              icon: Icons.person_outline,
+              label: l10n.identityFieldName,
+              value: driver.name,
+            ),
           _ConfirmRow(
             icon: Icons.badge_outlined,
             label: l10n.identityCodeLabel,
             value: code,
           ),
-          _ConfirmRow(
-            icon: Icons.map_outlined,
-            label: l10n.identityFieldWards,
-            value: l10n.identityWardsAllotted(driver.wardIds.length),
+          if (driver != null)
+            _ConfirmRow(
+              icon: Icons.map_outlined,
+              label: l10n.identityFieldWards,
+              value: l10n.identityWardsAllotted(driver.wardIds.length),
+            ),
+          // The failure copy lives INSIDE the card (issue #19): the ruling
+          // is "the welcome card itself carries the error", including the
+          // title the driver reported ("Couldn't check the code").
+          _WelcomeErrorBlock(phase: flow.phase),
+        ],
+      ),
+    );
+  }
+}
+
+/// The welcome card's inline failure block (issue #19): title + body in the
+/// error tint, keyed by the same `d1-*` seam the standalone error states
+/// use. Renders nothing outside the failure phases.
+class _WelcomeErrorBlock extends StatelessWidget {
+  const _WelcomeErrorBlock({required this.phase});
+
+  final IdentityFlowPhase phase;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colors = context.colors;
+    final text = context.text;
+    // (key, title, body): a saved-but-unusable code reads like an unknown
+    // one; the start failure keeps the single-sentence treatment the
+    // confirm card uses.
+    final (String key, String? title, String body) = switch (phase) {
+      IdentityFlowPhase.lookupFailed => (
+          'd1-lookup-failed',
+          l10n.identityLookupFailedTitle,
+          l10n.identityLookupFailedBody,
+        ),
+      IdentityFlowPhase.notFound => (
+          'd1-not-found',
+          l10n.identityNotFoundTitle,
+          l10n.identityNotFoundBody,
+        ),
+      IdentityFlowPhase.invalidCode => (
+          'd1-saved-code-invalid',
+          l10n.identityNotFoundTitle,
+          l10n.identityNotFoundBody,
+        ),
+      IdentityFlowPhase.startFailed => ('d1-start-error', null, l10n.shiftStartFailed),
+      _ => ('', null, ''),
+    };
+    if (key.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      key: ValueKey(key),
+      padding: const EdgeInsets.only(top: AppSpace.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.error_outline,
+                  size: AppSize.iconSmall, color: colors.error),
+              const SizedBox(width: AppSpace.xs),
+              Flexible(
+                child: Text(
+                  title ?? body,
+                  style: text.bodySmall.copyWith(color: colors.error),
+                ),
+              ),
+            ],
           ),
+          if (title != null) ...[
+            const SizedBox(height: AppSpace.xs),
+            Text(
+              body,
+              style: text.bodySmall.copyWith(color: colors.textMuted),
+            ),
+          ],
         ],
       ),
     );
@@ -998,8 +1052,7 @@ class _CtaBar extends StatelessWidget {
   const _CtaBar({
     required this.flow,
     required this.busy,
-    required this.welcomeCta,
-    required this.entryRecovery,
+    required this.welcome,
     required this.editing,
     required this.codeText,
     required this.onManualSubmit,
@@ -1007,11 +1060,11 @@ class _CtaBar extends StatelessWidget {
 
   final IdentityFlowState flow;
   final bool busy;
-  final bool welcomeCta;
 
-  /// Welcome mode sitting in a failure phase (not-found / offline): the
-  /// entry form is back and a typed code submits through Continue.
-  final bool entryRecovery;
+  /// The returning-driver surface (issue #19): the pill carries the welcome
+  /// action for the whole phase range (Start my Shift / Retry), never the
+  /// entry form's Continue.
+  final bool welcome;
 
   /// The driver is editing the code (fresh entry, or re-entry by tapping
   /// the boxes on a result): the search (Continue) CTA rules apply instead
@@ -1028,58 +1081,74 @@ class _CtaBar extends StatelessWidget {
     final VoidCallback? onPressed;
     final String label;
     final String ctaKey;
-    switch (flow.phase) {
-      case IdentityFlowPhase.confirmReady:
-      case IdentityFlowPhase.startFailed:
-      case IdentityFlowPhase.starting:
-        if (!welcomeCta && editing) {
-          // The driver tapped the boxes on a result card: the search
-          // button returns with the code in view (demo feedback 10/2026).
-          final hasText = codeText().trim().isNotEmpty;
-          onPressed = busy || !hasText
-              ? null
-              : () {
-                  onManualSubmit();
-                  _flowOf(context).submitCode(codeText());
-                };
-          label = l10n.identityCodeContinue;
-          ctaKey = 'd1-code-continue';
-        } else {
-          // The welcome start IS the confirm-card start (same flow start()).
-          onPressed = busy ? null : () => _flowOf(context).start();
-          label = welcomeCta ? l10n.identityStartMyShift : l10n.startShift;
-          ctaKey = welcomeCta ? 'd1-welcome-start' : 'd1-confirm-start';
-        }
-      case IdentityFlowPhase.notFound:
-      case IdentityFlowPhase.lookupFailed:
-        // Welcome-mode recovery (ticket 5) or a box-tap edit on a manual
-        // failure: a typed code submits through Continue; an empty field
-        // keeps the retry of the remembered / failed code (the existing
-        // not-found and offline seams).
-        if ((entryRecovery || editing) && codeText().trim().isNotEmpty) {
-          onPressed = () {
-            onManualSubmit();
-            _flowOf(context).submitCode(codeText());
-          };
-          label = l10n.identityCodeContinue;
-          ctaKey = 'd1-code-continue';
-        } else {
+    if (welcome) {
+      // The returning driver's pill (issue #19): the welcome action for the
+      // whole phase range. Failures retry the remembered code; the entry
+      // form's Continue is never the welcome CTA.
+      switch (flow.phase) {
+        case IdentityFlowPhase.lookupFailed:
+        case IdentityFlowPhase.notFound:
           onPressed = () => _flowOf(context).retry();
           label = l10n.retry;
           ctaKey = flow.phase == IdentityFlowPhase.notFound
               ? 'd1-not-found-retry'
               : 'd1-lookup-failed-retry';
-        }
-      case IdentityFlowPhase.initial:
-      case IdentityFlowPhase.invalidCode:
-      case IdentityFlowPhase.lookingUp:
-        if (welcomeCta) {
-          // The auto-lookup owns the flow; the pill waits as Start my
-          // Shift (spinner while the lookup runs).
+        case IdentityFlowPhase.confirmReady:
+        case IdentityFlowPhase.startFailed:
+          // The welcome start IS the confirm-card start (same flow start()).
+          onPressed = busy ? null : () => _flowOf(context).start();
+          label = l10n.identityStartMyShift;
+          ctaKey = 'd1-welcome-start';
+        default:
+          // initial / lookingUp / starting: the auto-lookup or the start
+          // writes own the flow; the pill waits (spinner while busy).
           onPressed = null;
           label = l10n.identityStartMyShift;
           ctaKey = 'd1-welcome-start';
-        } else {
+      }
+    } else {
+      switch (flow.phase) {
+        case IdentityFlowPhase.confirmReady:
+        case IdentityFlowPhase.startFailed:
+        case IdentityFlowPhase.starting:
+          if (editing) {
+            // The driver tapped the boxes on a result card: the search
+            // button returns with the code in view (demo feedback 10/2026).
+            final hasText = codeText().trim().isNotEmpty;
+            onPressed = busy || !hasText
+                ? null
+                : () {
+                    onManualSubmit();
+                    _flowOf(context).submitCode(codeText());
+                  };
+            label = l10n.identityCodeContinue;
+            ctaKey = 'd1-code-continue';
+          } else {
+            onPressed = busy ? null : () => _flowOf(context).start();
+            label = l10n.startShift;
+            ctaKey = 'd1-confirm-start';
+          }
+        case IdentityFlowPhase.notFound:
+        case IdentityFlowPhase.lookupFailed:
+          // A box-tap edit on a manual failure: a typed code submits
+          // through Continue; otherwise the retry of the failed code.
+          if (editing && codeText().trim().isNotEmpty) {
+            onPressed = () {
+              onManualSubmit();
+              _flowOf(context).submitCode(codeText());
+            };
+            label = l10n.identityCodeContinue;
+            ctaKey = 'd1-code-continue';
+          } else {
+            onPressed = () => _flowOf(context).retry();
+            label = l10n.retry;
+            ctaKey = flow.phase == IdentityFlowPhase.notFound
+                ? 'd1-not-found-retry'
+                : 'd1-lookup-failed-retry';
+          }
+        case IdentityFlowPhase.initial:
+        case IdentityFlowPhase.invalidCode:
+        case IdentityFlowPhase.lookingUp:
           final hasText = codeText().trim().isNotEmpty;
           onPressed = busy || !hasText
               ? null
@@ -1089,11 +1158,11 @@ class _CtaBar extends StatelessWidget {
                 };
           label = l10n.identityCodeContinue;
           ctaKey = 'd1-code-continue';
-        }
-      case IdentityFlowPhase.onShift:
-        onPressed = null;
-        label = l10n.startShift;
-        ctaKey = 'd1-confirm-start';
+        case IdentityFlowPhase.onShift:
+          onPressed = null;
+          label = l10n.startShift;
+          ctaKey = 'd1-confirm-start';
+      }
     }
 
     final child = busy

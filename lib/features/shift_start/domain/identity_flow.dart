@@ -146,7 +146,10 @@ class IdentityFlowController extends Notifier<IdentityFlowState> {
       state = const IdentityFlowState(phase: IdentityFlowPhase.invalidCode);
       return;
     }
-    state = IdentityFlowState(
+    // copyWith (issue #19): the confirm data survives into the failure
+    // phases, exactly as the state contract documents, so a failed retry
+    // keeps the driver's name on the welcome card.
+    state = state.copyWith(
       phase: IdentityFlowPhase.lookingUp,
       lastRawCode: raw,
     );
@@ -158,7 +161,7 @@ class IdentityFlowController extends Notifier<IdentityFlowState> {
     try {
       final driver = await _drivers.fetchDriver(code);
       if (driver == null || !driver.active) {
-        state = IdentityFlowState(
+        state = state.copyWith(
           phase: IdentityFlowPhase.notFound,
           lastRawCode: raw,
         );
@@ -180,7 +183,7 @@ class IdentityFlowController extends Notifier<IdentityFlowState> {
         lastRawCode: raw,
       );
     } on Exception {
-      state = IdentityFlowState(
+      state = state.copyWith(
         phase: IdentityFlowPhase.lookupFailed,
         lastRawCode: raw,
       );
