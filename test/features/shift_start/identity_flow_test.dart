@@ -54,6 +54,12 @@ Driver sampleDriver({bool active = true}) => Driver.fromMap(<String, Object?>{
       'active': active,
     });
 
+/// A second driver for the ticket-5 change-code reset.
+Driver otherDriver() => Driver.fromMap(<String, Object?>{
+      ...driverDocMap(id: 'CD-5678'),
+      'name': 'Suresh Shah',
+    });
+
 class RecordingMessagingGateway implements MessagingGateway {
   final List<String> topics = [];
 
@@ -147,6 +153,9 @@ final class Harness {
 
   Future<void> retry() =>
       container.read(identityFlowProvider.notifier).retry();
+
+  void resetToEntry() =>
+      container.read(identityFlowProvider.notifier).resetToEntry();
 }
 
 void main() {
@@ -308,6 +317,37 @@ void main() {
 
       expect(harness.state.phase, IdentityFlowPhase.initial);
       expect((harness.trips as FakeTripsRepository).trips, isEmpty);
+    });
+
+    test('resetToEntry (ticket 5 change-code): drops the confirm context '
+        'back to a resting entry, the remembered code stays', () async {
+      final harness = Harness(
+        driversSeed: [sampleDriver(), otherDriver()],
+        vansSeed: [sampleVan()],
+      );
+      await harness.submit('AB-1234');
+      expect(harness.state.phase, IdentityFlowPhase.confirmReady);
+
+      harness.resetToEntry();
+
+      // A resting entry state with no confirm data left behind.
+      expect(harness.state.phase, IdentityFlowPhase.initial);
+      expect(harness.state.driver, isNull);
+      // Change-code does NOT clear the remembered code; only a new confirm
+      // overwrites it.
+      expect(harness.identityStore.storedDriverCode, 'AB-1234');
+
+      // The entry path works right after, and its confirm overwrites.
+      await harness.submit('CD-5678');
+      expect(harness.state.phase, IdentityFlowPhase.confirmReady);
+      expect(harness.state.driver?.name, 'Suresh Shah');
+      expect(harness.identityStore.storedDriverCode, 'CD-5678');
+
+      // A running shift is never clobbered by the reset.
+      await harness.start();
+      expect(harness.state.phase, IdentityFlowPhase.onShift);
+      harness.resetToEntry();
+      expect(harness.state.phase, IdentityFlowPhase.onShift);
     });
   });
 

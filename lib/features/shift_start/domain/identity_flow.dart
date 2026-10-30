@@ -225,6 +225,23 @@ class IdentityFlowController extends Notifier<IdentityFlowState> {
     }
   }
 
+  /// "Different driver?" on the welcome-back card (ticket 5): drops the
+  /// current confirm context back to a resting [IdentityFlowPhase.initial]
+  /// entry. The remembered code stays on-device (only a new confirm
+  /// overwrites it); a lookup or a start in flight is untouched, and a
+  /// running shift is never clobbered.
+  void resetToEntry() {
+    switch (state.phase) {
+      case IdentityFlowPhase.lookingUp:
+      case IdentityFlowPhase.starting:
+      case IdentityFlowPhase.onShift:
+        return; // Never over an in-flight or a running flow.
+      default:
+        break;
+    }
+    state = const IdentityFlowState(phase: IdentityFlowPhase.initial);
+  }
+
   /// Called after the successful-start navigation: returns the flow to a
   /// fresh code entry (the shift itself keeps running in
   /// [shiftControllerProvider]).

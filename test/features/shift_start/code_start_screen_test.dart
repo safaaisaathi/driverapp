@@ -59,6 +59,11 @@ const String enLookupFailedTitle = "Couldn't check the code";
 const String enLookupFailedBody = 'Check your connection and try again.';
 const String enStartFailed =
     "Couldn't start the shift. Check the connection and try again.";
+const String enWelcomeBackTitle = 'Welcome back';
+const String enWelcomeBackBody = 'This phone remembers you.';
+const String enStartMyShift = 'Start my Shift';
+const String enChangeCode = 'Different driver?';
+const String enOtherDriverName = 'Suresh Shah';
 
 // -- fixtures ----------------------------------------------------------------
 
@@ -82,6 +87,23 @@ Driver sampleDriver({bool active = true}) => Driver.fromMap(<String, Object?>{
       'routeId': 'route-driver',
       'active': active,
     });
+
+/// A second driver for the change-code path (a colleague sharing the
+/// device enters a different code, spec story 14).
+Driver otherDriver() => Driver.fromMap(<String, Object?>{
+      ...driverDocMap(id: 'CD-5678'),
+      'name': enOtherDriverName,
+    });
+
+/// A store pre-seeded as a returning device (ticket 3): setup done and
+/// [code] remembered. The writes land synchronously into the map.
+InMemoryDriverIdentityStore returningStore(String code) {
+  final store = InMemoryDriverIdentityStore();
+  store
+    ..writeSetupDone(true)
+    ..writeDriverCode(code);
+  return store;
+}
 
 class RecordingMessagingGateway implements MessagingGateway {
   final List<String> topics = [];
@@ -454,5 +476,173 @@ void main() {
     expect(find.text(enCodeHint), findsOneWidget);
     expect(find.text(enContinue), findsOneWidget);
     expect(find.byKey(const ValueKey('d1-code-error')), findsNothing);
+  });
+
+  // -- welcome-back card + change-code (ticket 5, PRD-2 §0.16) ----------------
+
+  testWidgets('returning device: welcome-back card from a live fetch, the '
+      'code field never shows first', (tester) async {
+    final drivers = FakeDriversRepository([sampleDriver()]);
+    await pumpScreen(
+      tester,
+      driversRepo: drivers,
+      vans: FakeVansRepository([sampleVan()]),
+      trips: FakeTripsRepository(),
+      identityStore: returningStore('AB-1234'),
+    );
+
+    // The lookup runs on its own; no tap anywhere.
+    await pumpUntil(tester, find.byKey(const ValueKey('d1-welcome-card')));
+
+    // Card content is the LIVE-fetched record — the store only held the
+    // code (story 13: name + code + ward count).
+    expect(find.text(enWelcomeBackTitle), findsOneWidget);
+    expect(find.text(enWelcomeBackBody), findsOneWidget);
+    expect(find.text(enDriverName), findsOneWidget);
+    expect(find.text('AB-1234'), findsOneWidget);
+    expect(find.text(enTwoWardsAllotted), findsOneWidget);
+    // No code entry first; the change-code option is visible below.
+    expect(find.byKey(const ValueKey('d1-code-field')), findsNothing);
+    expect(find.byKey(const ValueKey('d1-change-code')), findsOneWidget);
+    expect(find.text(enChangeCode), findsOneWidget);
+    // The primary CTA is Start my Shift on the pinned bar.
+    expect(find.byKey(const ValueKey('d1-welcome-start')), findsOneWidget);
+    expect(find.text(enStartMyShift), findsOneWidget);
+    // Exactly one lookup, fired by the mount itself.
+    expect(drivers.lookups, ['AB-1234']);
+  });
+
+  testWidgets('change-code reveals the entry form; a new confirm overwrites '
+      'the remembered code and never re-fires the auto-lookup', (tester) async {
+    final drivers = FakeDriversRepository([sampleDriver(), otherDriver()]);
+    final identityStore = returningStore('AB-1234');
+    await pumpScreen(
+      tester,
+      driversRepo: drivers,
+      vans: FakeVansRepository([sampleVan()]),
+      trips: FakeTripsRepository(),
+      identityStore: identityStore,
+    );
+    await pumpUntil(tester, find.byKey(const ValueKey('d1-welcome-card')));
+
+    await tester.tap(find.byKey(const ValueKey('d1-change-code')));
+    await tester.pump();
+
+    // The regular entry form; the remembered code is NOT cleared (only a
+    // new confirm overwrites it).
+    expect(find.byKey(const ValueKey('d1-code-field')), findsOneWidget);
+    expect(find.byKey(const ValueKey('d1-welcome-card')), findsNothing);
+    expect(identityStore.storedDriverCode, 'AB-1234');
+
+    // A colleague confirms with their own code (story 14; any case works).
+    await submitCode(tester, 'cd-5678');
+    await pumpUntil(tester, find.byKey(const ValueKey('d1-confirm-card')));
+    expect(find.text(enOtherDriverName), findsOneWidget);
+    // The welcome card stays gone; the remembered code was replaced.
+    expect(find.byKey(const ValueKey('d1-welcome-card')), findsNothing);
+    expect(identityStore.storedDriverCode, 'CD-5678');
+    // One auto-lookup (the old code) + the manual entry. The new remembered
+    // code never re-looked-up itself on rebuild.
+    expect(drivers.lookups, ['AB-1234', 'CD-5678']);
+  });
+
+  testWidgets('stale remembered code: not-found with the entry form back, '
+      'no re-trigger loop, and a fresh entry recovers', (tester) async {
+    final drivers = FakeDriversRepository();
+    final identityStore = returningStore('ZZ-9999');
+    await pumpScreen(
+      tester,
+      driversRepo: drivers,
+      vans: FakeVansRepository([sampleVan()]),
+      trips: FakeTripsRepository(),
+      identityStore: identityStore,
+    );
+
+    // The auto-lookup lands in the flow's not-found phase.
+    await pumpUntil(tester, find.byKey(const ValueKey('d1-not-found')));
+    expect(find.text(enNotFoundTitle), findsOneWidget);
+    expect(find.text(enNotFoundBody), findsOneWidget);
+    expect(drivers.lookups, ['ZZ-9999']);
+    // The entry form is available again; with an empty field the pinned
+    // CTA is still the retry of the remembered code.
+    expect(find.byKey(const ValueKey('d1-code-field')), findsOneWidget);
+    expect(find.byKey(const ValueKey('d1-not-found-retry')), findsOneWidget);
+
+    // The stale code must not re-trigger lookups on rebuilds.
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(drivers.lookups, ['ZZ-9999'],
+        reason: 'the stale code is attempted once');
+
+    // A fresh entry recovers; the stale code is overwritten.
+    drivers.drivers['AB-1234'] = sampleDriver();
+    await submitCode(tester, 'AB-1234');
+    await pumpUntil(tester, find.byKey(const ValueKey('d1-confirm-card')));
+    expect(find.text(enDriverName), findsOneWidget);
+    expect(identityStore.storedDriverCode, 'AB-1234');
+  });
+
+  testWidgets('offline auto-lookup: lookup-failed state with the entry form '
+      'back; a fresh entry recovers through it', (tester) async {
+    final inner = FakeDriversRepository([sampleDriver()]);
+    await pumpScreen(
+      tester,
+      driversRepo: FlakyDriversRepository(inner, 1),
+      vans: FakeVansRepository([sampleVan()]),
+      trips: FakeTripsRepository(),
+      identityStore: returningStore('AB-1234'),
+    );
+
+    // The auto-lookup fails offline; the connection copy shows.
+    await pumpUntil(tester, find.byKey(const ValueKey('d1-lookup-failed')));
+    expect(find.text(enLookupFailedTitle), findsOneWidget);
+    expect(find.text(enLookupFailedBody), findsOneWidget);
+    expect(find.byKey(const ValueKey('d1-code-field')), findsOneWidget);
+
+    // The driver types their code and recovers through the same form.
+    await submitCode(tester, 'AB-1234');
+    await pumpUntil(tester, find.byKey(const ValueKey('d1-confirm-card')));
+    expect(find.text(enDriverName), findsOneWidget);
+  });
+
+  testWidgets('Start from the welcome-back card activates the session like '
+      'the confirm card start', (tester) async {
+    final vans = FakeVansRepository([sampleVan()]);
+    final trips = FakeTripsRepository();
+    final identityStore = returningStore('AB-1234');
+    var navigated = false;
+    await pumpScreen(
+      tester,
+      driversRepo: FakeDriversRepository([sampleDriver()]),
+      vans: vans,
+      trips: trips,
+      identityStore: identityStore,
+      onShiftStarted: (_) => navigated = true,
+    );
+    await pumpUntil(tester, find.byKey(const ValueKey('d1-welcome-card')));
+
+    await tester.tap(find.byKey(const ValueKey('d1-welcome-start')));
+    await pumpUntilCondition(tester, () => navigated);
+
+    // The same activation as the confirm-card start (ticket 4): session
+    // built from the driver's van, trip recorded, van marked, topic
+    // subscribed, tracking hand-over.
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(CodeStartScreen)),
+    );
+    final session = container.read(shiftControllerProvider);
+    expect(session, isNotNull);
+    expect(session!.vanId, 'van-01');
+    final trip = trips.trips.values.single;
+    expect(trip.vanId, 'van-01');
+    expect(trip.routeId, 'route-van', reason: 'routeId comes from the van');
+    expect(session.tripId, trip.id);
+    expect(vans.vans['van-01']!.status, VanStatus.onShift);
+    expect(vans.vans['van-01']!.currentTripId, trip.id);
+    expect(_messagingOf(tester).topics, ['van_van-01']);
+    expect(identityStore.storedDriverCode, 'AB-1234');
+    final engine = _engineOf(tester);
+    expect(engine.startedWith.single.tripId, trip.id);
+    expect(engine.startedWith.single.vanId, 'van-01');
   });
 }
