@@ -1,11 +1,20 @@
 /// DEVELOPMENT-ONLY desktop entrypoint — DevFlowPreviewApp.
 ///
-/// Runs the REAL launching flow (Splash → Welcome → Start Duty → D1)
-/// against the `DevDesktopSeed` doubles, because Linux/Windows desktop
-/// hosts have no Firebase plugins: with the real bootstrap the D1 data
-/// spine degrades to its error state there and nothing visual below the
-/// launching screens can be demoed. This is the same trick
-/// `dev_live_route.dart` uses for D2, extended to the full D1 flow.
+/// Runs the NEW driver-identity launching flow (Splash → Welcome → the
+/// one-time permission setup → CodeStartScreen, PRD-2 §0.16) against dev
+/// doubles, because Linux/Windows desktop hosts have no Firebase plugins:
+/// with the real bootstrap the Firestore-backed drivers lookup degrades to
+/// its error state there and nothing of the flow can be demoed. Same trick
+/// as `dev_identity_start.dart` (DevDesktopSeed + seam doubles); the PIN
+/// double is gone — a DevDriverLookup seeds the `drivers` collection per
+/// the identity spec.
+///
+/// Seeded world (stable for demo checks):
+/// - the setup gateway pre-grants every stage, so the Welcome CTA completes
+///   without rationale screens and lands on the start-shift page;
+/// - driver `AB-1234` Ramesh Patel, van-01, 3 wards — the happy path;
+/// - driver `CD-5678` INACTIVE — demos the not-found flow rule;
+/// - the code `XX-9999` simulates an offline lookup (lookup-failed state).
 ///
 /// NOT referenced by `main.dart`; run with:
 ///   `flutter run -t lib/dev_flow_preview.dart -d linux`
@@ -20,81 +29,122 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'core/config/firebase_bootstrap.dart';
-import 'core/domain/ist_clock.dart';
+import 'core/config/firebase_bootstrap.dart'
+    show NoopMessagingGateway, runBootstrap;
+import 'core/identity/driver_identity_controller.dart';
 import 'core/l10n/app_localizations.dart';
 import 'core/l10n/locale_controller.dart';
+import 'core/models/models.dart';
 import 'core/repositories/repository_providers.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_mode_controller.dart';
-import 'features/live_route/dev/desktop_demo_seed.dart';
+import 'features/live_route/dev/desktop_demo_seed.dart'
+    show DevDesktopSeed, DevTripsRepository, devSeedRouteId, devSeedVanId;
 import 'features/launching/splash_screen.dart';
-import 'features/shift_start/data/verify_driver_pin.dart';
-import 'features/shift_start/domain/shift_session.dart';
+import 'features/shift_start/data/verify_driver_pin.dart'
+    show driverMessagingGatewayProvider;
+import 'features/shift_start/dev_identity_start.dart'
+    show
+        DevDriverLookup,
+        DevIdentityStore,
+        DevPermissionGateway,
+        DevTrackingEngine;
+import 'features/tracking/tracking_providers.dart'
+    show
+        trackingEngineProvider,
+        trackingPermissionGatewayProvider;
 
-/// The dev seed contract (from `desktop_demo_seed.dart`): the demo van /
-/// route / trip trio the doubles derive everything from.
-const String devPreviewVanId = devSeedVanId;
+/// Seeded `drivers` docs for the preview (same trio as the dev demo world;
+/// see the file header for what each code demos).
+Driver devDriver({
+  required String code,
+  required String name,
+  required String phone,
+  required bool active,
+  List<String> wardIds = const ['ward-1', 'ward-2', 'ward-3'],
+}) =>
+    Driver(
+      id: code,
+      name: name,
+      phone: phone,
+      vanId: devSeedVanId,
+      routeId: devSeedRouteId,
+      wardIds: wardIds,
+      active: active,
+    );
 
-/// Desktop PIN double: any 4 digits verify, except `0000` which replays
-/// the wrong-PIN state so the red error treatment is checkable at the
-/// table (PRD seed demo; real verify is the `verifyDriverPin` callable).
-class DevPinVerifier implements DriverPinVerifier {
-  const DevPinVerifier();
+/// The seed's trips double keys every doc by the id it is handed — and
+/// Start Shift builds the trip with an empty id (the Firestore repo mints
+/// the real one). This thin wrapper assigns a stable dev id so the created
+/// trip, `vans.currentTripId` and the session all point somewhere real.
+/// (Same wrapper as `dev_identity_start.dart`; kept local so both dev
+/// entrypoints stay self-contained.)
+class _IdAssigningTripsRepository extends DevTripsRepository {
+  int _counter = 0;
 
   @override
-  Future<String> verifyPin({
-    required String vanId,
-    required String pin,
-  }) async {
-    await Future<void>.delayed(const Duration(milliseconds: 400));
-    if (pin == '0000') {
-      throw const DriverPinException(DriverPinFailureKind.wrongPin);
-    }
-    return 'dev-token-$vanId';
-  }
-}
-
-/// Desktop auth double: the flow only needs a uid to bind the session to.
-class DevAuthGateway implements DriverAuthGateway {
-  const DevAuthGateway();
-
-  @override
-  Future<String> signInWithCustomToken(String token) async => 'dev-driver-uid';
+  Future<Trip> createTrip(Trip trip) => super.createTrip(
+        Trip(
+          id: 'dev-trip-${++_counter}',
+          vanId: trip.vanId,
+          routeId: trip.routeId,
+          date: trip.date,
+          startedAt: trip.startedAt,
+          endedAt: trip.endedAt,
+          wardsDone: trip.wardsDone,
+          alertedWardIds: trip.alertedWardIds,
+          gpsTrail: trip.gpsTrail,
+          mockLocationDetected: trip.mockLocationDetected,
+        ),
+      );
 }
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final seed = DevDesktopSeed();
-  final now = DateTime.now();
   final container = ProviderContainer(
     overrides: [
       vansRepositoryProvider.overrideWithValue(seed.vans),
-      tripsRepositoryProvider.overrideWithValue(seed.trips),
+      tripsRepositoryProvider.overrideWithValue(_IdAssigningTripsRepository()),
       routesRepositoryProvider.overrideWithValue(seed.routes),
       wardsRepositoryProvider.overrideWithValue(seed.wards),
       noticesRepositoryProvider.overrideWithValue(seed.notices),
       complaintsRepositoryProvider.overrideWithValue(seed.complaints),
-      pinVerifierProvider.overrideWithValue(const DevPinVerifier()),
-      driverAuthGatewayProvider.overrideWithValue(const DevAuthGateway()),
+      driversRepositoryProvider.overrideWithValue(
+        DevDriverLookup({
+          'AB-1234': devDriver(
+            code: 'AB-1234',
+            name: 'Ramesh Patel',
+            phone: '+919876543210',
+            active: true,
+          ),
+          // Inactive on purpose: the flow treats it as not-found (0.16).
+          'CD-5678': devDriver(
+            code: 'CD-5678',
+            name: 'Jayesh Shah',
+            phone: '9123456780',
+            active: false,
+            wardIds: ['ward-1'],
+          ),
+        }),
+      ),
+      // The identity store is in-memory: nothing touches the
+      // SharedPreferences channel on the desktop host.
+      driverIdentityStoreProvider.overrideWithValue(DevIdentityStore()),
       driverMessagingGatewayProvider.overrideWithValue(
         const NoopMessagingGateway(),
       ),
+      // The one-time setup pre-grants every stage on the desktop host.
+      trackingPermissionGatewayProvider
+          .overrideWithValue(const DevPermissionGateway()),
+      trackingEngineProvider.overrideWithValue(DevTrackingEngine()),
     ],
   );
-  // D3 context for the live-route screen after start (same self-serve
-  // activation dev_live_route.dart uses).
-  container
-      .read(shiftControllerProvider.notifier)
-      .activate(
-        ShiftSession(
-          vanId: devPreviewVanId,
-          tripId: devSeedTripId,
-          routeId: devSeedRouteId,
-          startedAt: now,
-          date: utcStartOfIstDay(now),
-        ),
-      );
+  debugPrint('dev-flow-preview: driver code AB-1234 (active), '
+      'CD-5678 (inactive), XX-9999 (offline)');
+  // The bootstrap runs behind the scenes exactly like main.dart; on the
+  // desktop host it simply degrades (no Firebase plugins) and is never
+  // awaited by the launching flow.
   unawaited(runBootstrap(container));
   runApp(
     UncontrolledProviderScope(
