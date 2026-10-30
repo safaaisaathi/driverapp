@@ -172,6 +172,14 @@ class _CodeStartHostState extends ConsumerState<_CodeStartHost> {
     _codeController.addListener(() {
       if (mounted) setState(() {});
     });
+    // Tapping the boxes re-focuses the hidden field (the row's tap seam).
+    // On a result phase that means "I want to fix the code": flip back to
+    // editing so the search button returns (demo feedback 10/2026).
+    _codeFocus.addListener(() {
+      if (mounted && _codeFocus.hasFocus && !_editing) {
+        setState(() => _editing = true);
+      }
+    });
   }
 
   @override
@@ -184,6 +192,62 @@ class _CodeStartHostState extends ConsumerState<_CodeStartHost> {
   bool get _busy =>
       widget.flow.phase == IdentityFlowPhase.lookingUp ||
       widget.flow.phase == IdentityFlowPhase.starting;
+
+  /// True while the driver is editing the code (fresh entry, or re-entry
+  /// after tapping the boxes on a result). False once a search lands on a
+  /// result phase: the boxes sit unfocused and the CTA carries the result
+  /// action (Start / Retry) per the demo feedback 10/2026.
+  bool _editing = true;
+
+  @override
+  void didUpdateWidget(_CodeStartHost oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final newPhase = widget.flow.phase;
+    // Compare state INSTANCES, not phases: a re-search coalesces
+    // confirmReady → lookingUp → confirmReady between frames, and a
+    // phase-only check would miss the fresh landing (the card would stay
+    // hidden while editing).
+    if (identical(oldWidget.flow, widget.flow)) return;
+    switch (newPhase) {
+      case IdentityFlowPhase.initial:
+        // A fresh entry (change-code reset, post-shift return): editing
+        // from the start.
+        _setEditing(true);
+      case IdentityFlowPhase.confirmReady:
+      case IdentityFlowPhase.starting:
+      case IdentityFlowPhase.startFailed:
+      case IdentityFlowPhase.notFound:
+      case IdentityFlowPhase.lookupFailed:
+        // A search landed: drop focus (the demo asked for the boxes out of
+        // focus after the search) and hand the CTA to the result action.
+        _setEditing(false);
+        _codeFocus.unfocus();
+        _maybePrefillRememberedCode(newPhase);
+      default:
+        break; // lookingUp / invalidCode / onShift keep the current mode.
+    }
+  }
+
+  void _setEditing(bool editing) {
+    if (_editing == editing) return;
+    setState(() => _editing = editing);
+  }
+
+  /// An auto-lookup (welcome back) failed or hit an unknown code: the
+  /// driver saw an error about a code they never typed. Fill the boxes
+  /// with the remembered code so they SEE what was checked and can edit it
+  /// (the launch-time "Couldn't check the code" demo report 10/2026).
+  void _maybePrefillRememberedCode(IdentityFlowPhase phase) {
+    if (phase != IdentityFlowPhase.notFound &&
+        phase != IdentityFlowPhase.lookupFailed) {
+      return;
+    }
+    if (_changeMode || _codeController.text.isNotEmpty) return;
+    final identity = ref.read(driverIdentityControllerProvider);
+    final code = identity.rememberedCode;
+    if (code == null || code.isEmpty) return;
+    _codeController.text = code;
+  }
 
   /// The returning-device view (ticket 5): the identity controller
   /// reports a remembered driver and the driver has not opted into the
@@ -255,6 +319,18 @@ class _CodeStartHostState extends ConsumerState<_CodeStartHost> {
     ref.read(identityFlowProvider.notifier).resetToEntry();
   }
 
+  /// The change-code back seam (demo feedback 10/2026): the new-user form
+  /// is reachable BACK to the welcome card, by the top-left button or the
+  /// system back gesture. The flow drops to a resting entry and the
+  /// welcome auto-lookup is allowed to run again for the remembered code,
+  /// so the card re-lands exactly like on launch.
+  void _exitChangeMode() {
+    if (_busy) return; // Never mid-lookup or mid-start.
+    setState(() => _changeMode = false);
+    ref.read(identityFlowProvider.notifier).resetToEntry();
+    _attemptedRememberedCode = null;
+  }
+
   /// A manual code submit (the Continue CTA): the driver has taken over
   /// the entry path, so the welcome view never returns this session.
   void _markManualEntry() {
@@ -275,22 +351,41 @@ class _CodeStartHostState extends ConsumerState<_CodeStartHost> {
     final flow = widget.flow;
     final l10n = AppLocalizations.of(context)!;
     final text = context.text;
-    return Scaffold(
+    final colors = context.colors;
+    final scaffold = Scaffold(
       body: SafeArea(
         bottom: false,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Spec story 15: the language toggle stays reachable on the
-            // new screens, same top-end slot as the old D1.
-            Align(
-              alignment: AlignmentDirectional.topEnd,
-              child: Padding(
-                padding: const EdgeInsetsDirectional.only(
-                  end: AppSpace.page,
-                  top: AppSpace.xs,
-                ),
-                child: const LanguageToggleButton(),
+            // new screens, same top-end slot as the old D1. In change-code
+            // mode a back button sits at the top-start (page margin, level
+            // with the toggle and the headline) so the new-user detour is
+            // reversible (demo feedback 10/2026).
+            Padding(
+              padding: const EdgeInsetsDirectional.only(
+                start: AppSpace.page,
+                end: AppSpace.page,
+                top: AppSpace.xs,
+              ),
+              child: Row(
+                children: [
+                  if (_changeMode)
+                    SizedBox(
+                      width: AppSize.iconButtonDriver,
+                      height: AppSize.iconButtonDriver,
+                      child: IconButton(
+                        key: const ValueKey('d1-change-back'),
+                        onPressed: _busy ? null : _exitChangeMode,
+                        icon: const Icon(Icons.arrow_back),
+                        color: colors.textPrimary,
+                        padding: EdgeInsets.zero,
+                      ),
+                    ),
+                  const Spacer(),
+                  const LanguageToggleButton(),
+                ],
               ),
             ),
             Expanded(
@@ -326,7 +421,12 @@ class _CodeStartHostState extends ConsumerState<_CodeStartHost> {
                         IdentityFlowPhase.confirmReady ||
                         IdentityFlowPhase.starting ||
                         IdentityFlowPhase.startFailed =>
-                          _ConfirmCard(flow: flow),
+                          // Editing hides the card: the driver is changing
+                          // the code and the search CTA takes over (demo
+                          // feedback 10/2026).
+                          _editing
+                              ? const SizedBox.shrink()
+                              : _ConfirmCard(flow: flow),
                         _ => const SizedBox.shrink(),
                       },
                     ],
@@ -344,20 +444,38 @@ class _CodeStartHostState extends ConsumerState<_CodeStartHost> {
         entryRecovery: _isWelcomeMode(identity) &&
             (flow.phase == IdentityFlowPhase.notFound ||
                 flow.phase == IdentityFlowPhase.lookupFailed),
+        editing: _editing,
         codeText: () => _codeController.text,
         onManualSubmit: _markManualEntry,
       ),
     );
+
+    // System back inside the change-code form returns to the welcome card
+    // instead of leaving the app (demo feedback 10/2026). Outside
+    // change-code mode the default applies.
+    return PopScope(
+      canPop: !_changeMode,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _exitChangeMode();
+      },
+      child: scaffold,
+    );
   }
 }
 
-/// The single `XX-0000` field (4.5): height 64, radius 20, `surface` fill,
-/// 1.5 `borderStrong` outline; error outline + InlineError below on a bad
-/// shape. Auto-uppercases and auto-inserts the dash when the 2nd letter
-/// lands. The keyboard type is the pure content decision
-/// [codeFieldKeyboardType] (ticket 10): text while the letters are typed,
-/// numeric from the digit half on — Flutter updates the live IME config
-/// when it changes, and the host rebuilds on every keystroke.
+/// The `XX-0000` entry (4.5, amended by the driver demo feedback 10/2026:
+/// OTP-style boxes instead of one input pill). Label + a row of six focused
+/// cells — one box per character: 2 letter boxes, the pre-rendered `-`
+/// (NOT a box itself — the driver never types it), then 4 digit boxes —
+/// with the inline error below on a bad shape.
+///
+/// The editing model is unchanged on purpose: the real TextField keeps the
+/// `d1-code-field` seam (formatter, paste, backspace-safe dash per ticket
+/// 10) but is painted transparent behind the boxes and ignore-pointer'd —
+/// the row tap just focuses it, so typing stays append-at-the-caret-end
+/// exactly as the formatter enforces. The keyboard type is the pure
+/// content decision [codeFieldKeyboardType] (ticket 10); the host
+/// rebuilds on every keystroke, which repaints the boxes.
 class _CodeField extends StatelessWidget {
   const _CodeField({
     required this.controller,
@@ -374,46 +492,17 @@ class _CodeField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colors = context.colors;
-    final text = context.text;
-    final outline = BorderSide(
-      color: errored ? colors.error : colors.borderStrong,
-      width: 1.5,
-    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(l10n.identityCodeLabel, style: text.label),
+        Text(l10n.identityCodeLabel, style: context.text.label),
         const SizedBox(height: AppSpace.sm),
-        SizedBox(
-          // 3.3: the code field is driver-height 64 (AppSize.buttonDriver).
-          height: AppSize.buttonDriver,
-          child: TextField(
-            key: const ValueKey('d1-code-field'),
-            controller: controller,
-            focusNode: focusNode,
-            enabled: enabled,
-            inputFormatters: [const DriverCodeInputFormatter()],
-            keyboardType: codeFieldKeyboardType(controller.text),
-            textCapitalization: TextCapitalization.characters,
-            autocorrect: false,
-            enableSuggestions: false,
-            maxLength: 7,
-            decoration: InputDecoration(
-              counterText: '',
-              hintText: l10n.identityCodeHint,
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppRadius.control),
-                borderSide: outline,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppRadius.control),
-                borderSide: errored
-                    ? BorderSide(color: colors.error, width: 1.5)
-                    : BorderSide(color: colors.brand, width: 2.5),
-              ),
-            ),
-          ),
+        _CodeBoxes(
+          controller: controller,
+          focusNode: focusNode,
+          errored: errored,
+          enabled: enabled,
+          hint: l10n.identityCodeHint,
         ),
         if (errored) ...[
           const SizedBox(height: AppSpace.sm),
@@ -422,18 +511,186 @@ class _CodeField extends StatelessWidget {
           Row(
             key: const ValueKey('d1-code-error'),
             children: [
-              Icon(Icons.error_outline, size: AppSize.iconSmall, color: colors.error),
+              Icon(Icons.error_outline, size: AppSize.iconSmall, color: context.colors.error),
               const SizedBox(width: AppSpace.xs),
               Flexible(
                 child: Text(
                   l10n.identityCodeError,
-                  style: text.bodySmall.copyWith(color: colors.error),
+                  style: context.text.bodySmall.copyWith(color: context.colors.error),
                 ),
               ),
             ],
           ),
         ],
       ],
+    );
+  }
+}
+
+/// The visible box row behind the [TextField]: one cell per character of
+/// the 6-char alphanumeric entry, the `-` rendered as plain text (no box —
+/// it is never typed, it pre-reads `XX-0000`).
+class _CodeBoxes extends StatelessWidget {
+  const _CodeBoxes({
+    required this.controller,
+    required this.focusNode,
+    required this.errored,
+    required this.enabled,
+    required this.hint,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final bool errored;
+  final bool enabled;
+  final String hint;
+
+  /// Box structure: 2 letter cells + the pre-rendered dash + 4 digit
+  /// cells (D-104's 7 visible slots carry over; the driver's demo feedback
+  /// 2026-10-30 splits the flat field into OTP boxes and keeps the dash
+  /// as plain text — never a typed box).
+  ///
+  /// Dimensions from the DESIGN-driver-app.md rules, no invented values:
+  /// cell size = [AppSize.codeBox] (§2.3 driver sizes, the dedicated code
+  /// box token), cell radius = [AppRadius.control] (inputs 20 dp rule,
+  /// the same radius §4.5 pinned on the flat field), outline 1.5
+  /// `borderStrong` (escalated `error` on a bad shape, brand 2.5 on the
+  /// active cell), fill `surface`, per-box text `text.headline`.
+  static const _letterCells = 2;
+  static const _cellCount = 6;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final text = context.text;
+    // Painted content: the alphanumeric characters in order — the dash
+    // never consumes a cell. A bad shape ('A1') still shows its characters
+    // in the natural order (identical to the old flat field), and the
+    // inline error explains the shape on submit.
+    final chars = alnumEntryOf(controller.text).split('');
+
+    // The ACTIVE cell (the next keystroke's landing spot; the formatter
+    // keeps the caret at the end, so this is derived from the content,
+    // not the caret position).
+    final int? activeIndex =
+        focusNode.hasFocus && !errored && chars.length < 6 ? chars.length : null;
+    final Color borderColor = errored ? colors.error : colors.borderStrong;
+
+    Widget cell(int index) {
+      final filled = index < chars.length;
+      return Container(
+        // The first cell doubles as the tap-test seam for the edit cycle.
+        key: index == 0 ? const ValueKey('d1-code-cell-0') : null,
+        width: AppSize.codeBox,
+        height: AppSize.codeBox,
+        decoration: BoxDecoration(
+          color: colors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.control),
+          border: Border.all(
+            color: index == activeIndex ? colors.brand : borderColor,
+            width: index == activeIndex ? 2.5 : 1.5,
+          ),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          filled ? chars[index] : '',
+          style: text.headline.copyWith(color: colors.textPrimary),
+        ),
+      );
+    }
+
+    return Semantics(
+      hint: hint,
+      child: GestureDetector(
+        onTap: enabled ? focusNode.requestFocus : null,
+        child: ExcludeSemantics(
+          child: Stack(
+            key: const ValueKey('d1-code-boxes'),
+            alignment: Alignment.center,
+            children: [
+              // The visible row: 2 letter cells + pre-rendered dash (plain
+              // text) + 4 digit cells. Fixed 56 dp cells per
+              // DESIGN-driver-app.md §2.3 codeBox token. The natural row
+              // (~380 dp) exceeds a 360 dp screen, so FittedBox scales the
+              // whole row down proportionally instead of overflowing
+              // (the 73 px overflow band seen on the device).
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    cell(0),
+                    for (var i = 1; i < _cellCount; i++) ...[
+                      if (i == _letterCells)
+                        // The dash is pre-rendered text, NOT a box (driver
+                        // demo feedback: "dash pe box mat rakhna, vo pehle
+                        // se wahi hoga").
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpace.sm,
+                          ),
+                          child: Text(
+                            '-',
+                            style: text.headline.copyWith(
+                              color: colors.textMuted,
+                              height: 1,
+                            ),
+                          ),
+                        )
+                      else
+                        const SizedBox(width: AppSpace.sm),
+                      cell(i),
+                    ],
+                  ],
+                ),
+              ),
+              // The real entry (seam `d1-code-field`, ticket 10
+              // keyboard-flip + dash brain): painted transparent and
+              // ignore-pointer'd (the row tap above handles focus), so the
+              // IME behaviour — paste, backspace walk, per-keystroke flip —
+              // is EXACTLY the tested one.
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: TextField(
+                    key: const ValueKey('d1-code-field'),
+                    controller: controller,
+                    focusNode: focusNode,
+                    enabled: enabled,
+                    inputFormatters: [const DriverCodeInputFormatter()],
+                    keyboardType: codeFieldKeyboardType(controller.text),
+                    textCapitalization: TextCapitalization.characters,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    maxLength: 7,
+                    cursorColor: Colors.transparent,
+                    style: const TextStyle(color: Colors.transparent),
+                    decoration: InputDecoration(
+                      counterText: '',
+                      filled: false,
+                      hintText: hint,
+                      // None ALL border states: the app decorationTheme
+                      // paints an OutlineInputBorder on any unspecified
+                      // state, and an unspecified border on the invisible
+                      // field painted the stray full-width pill outline
+                      // over the boxes (the driver's "big border" report).
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      disabledBorder: InputBorder.none,
+                      errorBorder: InputBorder.none,
+                      focusedErrorBorder: InputBorder.none,
+                      hintStyle: const TextStyle(
+                        color: Colors.transparent,
+                        height: 0,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -743,6 +1000,7 @@ class _CtaBar extends StatelessWidget {
     required this.busy,
     required this.welcomeCta,
     required this.entryRecovery,
+    required this.editing,
     required this.codeText,
     required this.onManualSubmit,
   });
@@ -754,6 +1012,11 @@ class _CtaBar extends StatelessWidget {
   /// Welcome mode sitting in a failure phase (not-found / offline): the
   /// entry form is back and a typed code submits through Continue.
   final bool entryRecovery;
+
+  /// The driver is editing the code (fresh entry, or re-entry by tapping
+  /// the boxes on a result): the search (Continue) CTA rules apply instead
+  /// of the result action, per the demo feedback 10/2026.
+  final bool editing;
   final String Function() codeText;
   final VoidCallback onManualSubmit;
 
@@ -769,17 +1032,31 @@ class _CtaBar extends StatelessWidget {
       case IdentityFlowPhase.confirmReady:
       case IdentityFlowPhase.startFailed:
       case IdentityFlowPhase.starting:
-        // The welcome start IS the confirm-card start (same flow start()).
-        onPressed =
-            busy ? null : () => _flowOf(context).start();
-        label = welcomeCta ? l10n.identityStartMyShift : l10n.startShift;
-        ctaKey = welcomeCta ? 'd1-welcome-start' : 'd1-confirm-start';
+        if (!welcomeCta && editing) {
+          // The driver tapped the boxes on a result card: the search
+          // button returns with the code in view (demo feedback 10/2026).
+          final hasText = codeText().trim().isNotEmpty;
+          onPressed = busy || !hasText
+              ? null
+              : () {
+                  onManualSubmit();
+                  _flowOf(context).submitCode(codeText());
+                };
+          label = l10n.identityCodeContinue;
+          ctaKey = 'd1-code-continue';
+        } else {
+          // The welcome start IS the confirm-card start (same flow start()).
+          onPressed = busy ? null : () => _flowOf(context).start();
+          label = welcomeCta ? l10n.identityStartMyShift : l10n.startShift;
+          ctaKey = welcomeCta ? 'd1-welcome-start' : 'd1-confirm-start';
+        }
       case IdentityFlowPhase.notFound:
       case IdentityFlowPhase.lookupFailed:
-        // Welcome-mode recovery (ticket 5): a typed code submits through
-        // Continue; an empty field keeps the retry of the remembered /
-        // failed code (the existing not-found and offline seams).
-        if (entryRecovery && codeText().trim().isNotEmpty) {
+        // Welcome-mode recovery (ticket 5) or a box-tap edit on a manual
+        // failure: a typed code submits through Continue; an empty field
+        // keeps the retry of the remembered / failed code (the existing
+        // not-found and offline seams).
+        if ((entryRecovery || editing) && codeText().trim().isNotEmpty) {
           onPressed = () {
             onManualSubmit();
             _flowOf(context).submitCode(codeText());

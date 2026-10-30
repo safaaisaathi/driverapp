@@ -25,6 +25,11 @@ const int maxDriverCodeAlnum = 6;
 
 final RegExp _junk = RegExp('[^A-Z0-9]');
 
+/// The raw alphanumeric entry content of [fieldText] — the paint-side view
+/// used by the OTP-box renderer (one visible box per character, the dash
+/// never occupying a cell).
+String alnumEntryOf(String fieldText) => _alnumOf(fieldText);
+
 /// Uppercases, drops everything but letters and digits, and caps at
 /// [maxDriverCodeAlnum] — the raw alphabet of the entry.
 String _alnumOf(String raw) {

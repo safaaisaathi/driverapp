@@ -31,6 +31,7 @@ class AppSize {
 
   // Driver-only additions (DESIGN-driver-app.md §2.3)
   static const double permissionIconCircle = 96; // [est] neutral-icon circle
+  static const double codeBox = 56; // code-entry cell, XX-0000 box (§2.3)
 }
 
 /// Elevation tokens (BoxShadow only, never Material elevation tint)

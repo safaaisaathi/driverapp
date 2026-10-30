@@ -134,29 +134,11 @@ abstract class AppLocalizations {
   /// **'Retry'**
   String get retry;
 
-  /// No description provided for @shiftStartTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Shift start'**
-  String get shiftStartTitle;
-
   /// No description provided for @vanLabel.
   ///
   /// In en, this message translates to:
   /// **'Van'**
   String get vanLabel;
-
-  /// No description provided for @pinLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'PIN'**
-  String get pinLabel;
-
-  /// No description provided for @routeSetByAdmin.
-  ///
-  /// In en, this message translates to:
-  /// **'(set by admin)'**
-  String get routeSetByAdmin;
 
   /// No description provided for @splashTagline.
   ///
@@ -182,113 +164,17 @@ abstract class AppLocalizations {
   /// **'Get started'**
   String get welcomeCta;
 
-  /// No description provided for @dutyTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Today\'s duty'**
-  String get dutyTitle;
-
-  /// No description provided for @dutySubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Connect with your van and start the route.'**
-  String get dutySubtitle;
-
-  /// No description provided for @startDuty.
-  ///
-  /// In en, this message translates to:
-  /// **'Start duty'**
-  String get startDuty;
-
-  /// No description provided for @gettingReady.
-  ///
-  /// In en, this message translates to:
-  /// **'Getting the route ready…'**
-  String get gettingReady;
-
-  /// No description provided for @pickVanPrompt.
-  ///
-  /// In en, this message translates to:
-  /// **'Pick your van'**
-  String get pickVanPrompt;
-
-  /// No description provided for @vansEmpty.
-  ///
-  /// In en, this message translates to:
-  /// **'No vans found'**
-  String get vansEmpty;
-
-  /// No description provided for @vanListError.
-  ///
-  /// In en, this message translates to:
-  /// **'Couldn\'t load vans'**
-  String get vanListError;
-
-  /// No description provided for @routeLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Route'**
-  String get routeLabel;
-
-  /// No description provided for @routeUnknown.
-  ///
-  /// In en, this message translates to:
-  /// **'Route not set'**
-  String get routeUnknown;
-
-  /// No description provided for @enterPinPrompt.
-  ///
-  /// In en, this message translates to:
-  /// **'Enter the 4-digit PIN'**
-  String get enterPinPrompt;
-
-  /// No description provided for @verifyPin.
-  ///
-  /// In en, this message translates to:
-  /// **'Verify PIN'**
-  String get verifyPin;
-
-  /// No description provided for @readyToStartInfo.
-  ///
-  /// In en, this message translates to:
-  /// **'Van confirmed. Ready to start.'**
-  String get readyToStartInfo;
-
   /// No description provided for @startShift.
   ///
   /// In en, this message translates to:
   /// **'Start Shift'**
   String get startShift;
 
-  /// No description provided for @resumeShift.
-  ///
-  /// In en, this message translates to:
-  /// **'Resume shift'**
-  String get resumeShift;
-
-  /// No description provided for @wrongPin.
-  ///
-  /// In en, this message translates to:
-  /// **'Wrong PIN. Try again.'**
-  String get wrongPin;
-
-  /// No description provided for @pinLockedOut.
-  ///
-  /// In en, this message translates to:
-  /// **'Too many attempts. Please wait a few minutes and try again.'**
-  String get pinLockedOut;
-
   /// No description provided for @shiftStartFailed.
   ///
   /// In en, this message translates to:
   /// **'Couldn\'t start the shift. Check the connection and try again.'**
   String get shiftStartFailed;
-
-  /// No description provided for @verificationUnavailable.
-  ///
-  /// In en, this message translates to:
-  /// **'Couldn\'t reach the office server. Check the connection and try again.'**
-  String get verificationUnavailable;
 
   /// No description provided for @shiftStarted.
   ///

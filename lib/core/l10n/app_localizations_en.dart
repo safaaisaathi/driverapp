@@ -28,16 +28,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get retry => 'Retry';
 
   @override
-  String get shiftStartTitle => 'Shift start';
-
-  @override
   String get vanLabel => 'Van';
-
-  @override
-  String get pinLabel => 'PIN';
-
-  @override
-  String get routeSetByAdmin => '(set by admin)';
 
   @override
   String get splashTagline => 'Clean city, one route at a time.';
@@ -52,61 +43,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get welcomeCta => 'Get started';
 
   @override
-  String get dutyTitle => 'Today\'s duty';
-
-  @override
-  String get dutySubtitle => 'Connect with your van and start the route.';
-
-  @override
-  String get startDuty => 'Start duty';
-
-  @override
-  String get gettingReady => 'Getting the route ready…';
-
-  @override
-  String get pickVanPrompt => 'Pick your van';
-
-  @override
-  String get vansEmpty => 'No vans found';
-
-  @override
-  String get vanListError => 'Couldn\'t load vans';
-
-  @override
-  String get routeLabel => 'Route';
-
-  @override
-  String get routeUnknown => 'Route not set';
-
-  @override
-  String get enterPinPrompt => 'Enter the 4-digit PIN';
-
-  @override
-  String get verifyPin => 'Verify PIN';
-
-  @override
-  String get readyToStartInfo => 'Van confirmed. Ready to start.';
-
-  @override
   String get startShift => 'Start Shift';
-
-  @override
-  String get resumeShift => 'Resume shift';
-
-  @override
-  String get wrongPin => 'Wrong PIN. Try again.';
-
-  @override
-  String get pinLockedOut =>
-      'Too many attempts. Please wait a few minutes and try again.';
 
   @override
   String get shiftStartFailed =>
       'Couldn\'t start the shift. Check the connection and try again.';
-
-  @override
-  String get verificationUnavailable =>
-      'Couldn\'t reach the office server. Check the connection and try again.';
 
   @override
   String get shiftStarted => 'Shift started';

@@ -480,6 +480,78 @@ void main() {
     expect(trips.trips, hasLength(1));
   });
 
+  // -- demo feedback 10/2026: the edit cycle after a search --------------------
+
+  testWidgets('after a search the boxes sit unfocused; tapping them brings '
+      'the search button back and hides the card, and the cycle repeats',
+      (tester) async {
+    final drivers = FakeDriversRepository([sampleDriver()]);
+    await pumpScreen(
+      tester,
+      driversRepo: drivers,
+      vans: FakeVansRepository([sampleVan()]),
+      trips: FakeTripsRepository(),
+    );
+
+    await submitCode(tester, 'AB-1234');
+    await pumpUntil(tester, find.byKey(const ValueKey('d1-confirm-card')));
+    // Search done: the boxes dropped focus and the CTA is Start.
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const ValueKey('d1-code-field')))
+          .focusNode!
+          .hasFocus,
+      isFalse,
+    );
+    expect(find.byKey(const ValueKey('d1-confirm-start')), findsOneWidget);
+
+    // Tapping the boxes re-enters editing: the search button returns and
+    // the confirm card hides.
+    await tester.tap(find.byKey(const ValueKey('d1-code-cell-0')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('d1-code-continue')), findsOneWidget);
+    expect(find.byKey(const ValueKey('d1-confirm-card')), findsNothing);
+
+    // Re-searching lands on the card again, unfocused (the cycle).
+    await submitCode(tester, 'AB-1234');
+    await pumpUntil(tester, find.byKey(const ValueKey('d1-confirm-card')));
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const ValueKey('d1-code-field')))
+          .focusNode!
+          .hasFocus,
+      isFalse,
+    );
+    expect(drivers.lookups, ['AB-1234', 'AB-1234']);
+  });
+
+  testWidgets('a searched wrong code is correctable: tapping the boxes swaps '
+      'Retry for Continue with the code in view', (tester) async {
+    final drivers = FakeDriversRepository();
+    await pumpScreen(
+      tester,
+      driversRepo: drivers,
+      vans: FakeVansRepository([sampleVan()]),
+      trips: FakeTripsRepository(),
+    );
+
+    await submitCode(tester, 'ZZ-9999');
+    await pumpUntil(tester, find.byKey(const ValueKey('d1-not-found')));
+    expect(find.byKey(const ValueKey('d1-not-found-retry')), findsOneWidget);
+
+    // Tapping the boxes re-enters editing: Continue returns for the code
+    // in view — the correction path the demo asked for.
+    await tester.tap(find.byKey(const ValueKey('d1-code-cell-0')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('d1-code-continue')), findsOneWidget);
+
+    // The corrected code recovers through the same search.
+    drivers.drivers['AB-1234'] = sampleDriver();
+    await submitCode(tester, 'AB-1234');
+    await pumpUntil(tester, find.byKey(const ValueKey('d1-confirm-card')));
+    expect(find.text(enDriverName), findsOneWidget);
+  });
+
   testWidgets('code hint and label render on the fresh screen', (tester) async {
     await pumpScreen(
       tester,
@@ -744,10 +816,11 @@ void main() {
     expect(find.text(enNotFoundTitle), findsOneWidget);
     expect(find.text(enNotFoundBody), findsOneWidget);
     expect(drivers.lookups, ['ZZ-9999']);
-    // The entry form is available again; with an empty field the pinned
-    // CTA is still the retry of the remembered code.
+    // The entry form is available again with the stale code PRE-FILLED in
+    // the boxes (the driver sees what was checked, demo feedback
+    // 10/2026); the CTA carries the Continue of the visible code.
     expect(find.byKey(const ValueKey('d1-code-field')), findsOneWidget);
-    expect(find.byKey(const ValueKey('d1-not-found-retry')), findsOneWidget);
+    expect(find.byKey(const ValueKey('d1-code-continue')), findsOneWidget);
 
     // The stale code must not re-trigger lookups on rebuilds.
     await tester.pump(const Duration(milliseconds: 50));
@@ -761,6 +834,55 @@ void main() {
     await pumpUntil(tester, find.byKey(const ValueKey('d1-confirm-card')));
     expect(find.text(enDriverName), findsOneWidget);
     expect(identityStore.storedDriverCode, 'AB-1234');
+  });
+
+  testWidgets('change-code is reversible: the top-left back button returns '
+      'to the welcome card and the auto-lookup re-lands', (tester) async {
+    final drivers = FakeDriversRepository([sampleDriver()]);
+    final identityStore = returningStore('AB-1234');
+    await pumpScreen(
+      tester,
+      driversRepo: drivers,
+      vans: FakeVansRepository([sampleVan()]),
+      trips: FakeTripsRepository(),
+      identityStore: identityStore,
+    );
+    await pumpUntil(tester, find.byKey(const ValueKey('d1-welcome-card')));
+
+    await tester.tap(find.byKey(const ValueKey('d1-change-code')));
+    await tester.pump();
+    // The new-user form carries the top-left back button.
+    expect(find.byKey(const ValueKey('d1-change-back')), findsOneWidget);
+
+    // Back returns to the welcome card; the remembered code re-looks-up
+    // so the card re-lands exactly like on launch.
+    await tester.tap(find.byKey(const ValueKey('d1-change-back')));
+    await pumpUntil(tester, find.byKey(const ValueKey('d1-welcome-card')));
+    expect(find.byKey(const ValueKey('d1-change-back')), findsNothing);
+    expect(drivers.lookups, ['AB-1234', 'AB-1234']);
+  });
+
+  testWidgets('system back inside the change-code form returns to the '
+      'welcome card instead of leaving the app', (tester) async {
+    final drivers = FakeDriversRepository([sampleDriver()]);
+    await pumpScreen(
+      tester,
+      driversRepo: drivers,
+      vans: FakeVansRepository([sampleVan()]),
+      trips: FakeTripsRepository(),
+      identityStore: returningStore('AB-1234'),
+    );
+    await pumpUntil(tester, find.byKey(const ValueKey('d1-welcome-card')));
+
+    await tester.tap(find.byKey(const ValueKey('d1-change-code')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('d1-change-back')), findsOneWidget);
+
+    // The Android back gesture: maybePop honours the PopScope and lands
+    // back on the welcome card.
+    await tester.state<NavigatorState>(find.byType(Navigator)).maybePop();
+    await pumpUntil(tester, find.byKey(const ValueKey('d1-welcome-card')));
+    expect(find.byKey(const ValueKey('d1-change-back')), findsNothing);
   });
 
   testWidgets('offline auto-lookup: lookup-failed state with the entry form '
@@ -779,6 +901,18 @@ void main() {
     expect(find.text(enLookupFailedTitle), findsOneWidget);
     expect(find.text(enLookupFailedBody), findsOneWidget);
     expect(find.byKey(const ValueKey('d1-code-field')), findsOneWidget);
+
+    // The failed remembered code is pre-filled in the boxes (demo
+    // feedback 10/2026): the driver sees what was checked, and the CTA
+    // carries the Continue of the code in view.
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const ValueKey('d1-code-field')))
+          .controller!
+          .text,
+      'AB-1234',
+    );
+    expect(find.byKey(const ValueKey('d1-code-continue')), findsOneWidget);
 
     // The driver types their code and recovers through the same form.
     await submitCode(tester, 'AB-1234');
@@ -825,5 +959,103 @@ void main() {
     final engine = _engineOf(tester);
     expect(engine.startedWith.single.tripId, trip.id);
     expect(engine.startedWith.single.vanId, 'van-01');
+  });
+
+  // OTP-box rendering (driver demo feedback 2026-10-30): the code entry
+  // paints one box per character — 2 letter cells, the pre-rendered dash
+  // (never a box), 4 digit cells — while the d1-code-field TextField
+  // keeps the invisible edit seam.
+  group('the code entry box row', () {
+    Finder charBox(char) => find.descendant(
+          of: find.byKey(const ValueKey('d1-code-boxes')),
+          matching: find.text(char),
+        );
+
+    testWidgets('renders empty: 6 border cells + the pre-rendered dash, '
+        'no characters', (tester) async {
+      await pumpScreen(
+        tester,
+        driversRepo: FakeDriversRepository(),
+        vans: FakeVansRepository([sampleVan()]),
+        trips: FakeTripsRepository(),
+      );
+      await pumpUntil(tester, find.byKey(const ValueKey('d1-code-boxes')));
+
+      expect(charBox('-'), findsOneWidget,
+          reason: 'the dash is pre-rendered text, not a cell');
+      for (final char in ['A', 'B', '1', '2', '3', '4']) {
+        expect(charBox(char), findsNothing, reason: 'char "$char" absent');
+      }
+      expect(
+        tester.widgetList<TextField>(
+          find.descendant(
+            of: find.byKey(const ValueKey('d1-code-boxes')),
+            matching: find.byKey(const ValueKey('d1-code-field')),
+          ),
+        ),
+        isNotEmpty,
+        reason: 'the editing seam keeps the d1-code-field TextField',
+      );
+    });
+
+    testWidgets('typed characters each land in their own cell ' 
+        '(letters then digits), no dash cell', (tester) async {
+      await pumpScreen(
+        tester,
+        driversRepo: FakeDriversRepository(),
+        vans: FakeVansRepository([sampleVan()]),
+        trips: FakeTripsRepository(),
+      );
+      await pumpUntil(tester, find.byKey(const ValueKey('d1-code-boxes')));
+
+      await typeCode(tester, 'AB');
+      expect(charBox('A'), findsOneWidget);
+      expect(charBox('B'), findsOneWidget);
+      expect(charBox('-'), findsOneWidget);
+      for (final char in ['1', '2', '3', '4']) {
+        expect(charBox(char), findsNothing);
+      }
+
+      await typeCode(tester, '12');
+      expect(charBox('1'), findsOneWidget);
+      expect(charBox('2'), findsOneWidget);
+      for (final char in ['3', '4']) {
+        expect(charBox(char), findsNothing);
+      }
+    });
+
+    testWidgets('junk and a whole pasted code render through the same '
+        'cells (the box row mirrors the hidden field value)', (tester) async {
+      await pumpScreen(
+        tester,
+        driversRepo: FakeDriversRepository(),
+        vans: FakeVansRepository([sampleVan()]),
+        trips: FakeTripsRepository(),
+      );
+      await pumpUntil(tester, find.byKey(const ValueKey('d1-code-boxes')));
+
+      // A full paste shows six chars: A B dash 1 2 3 4 — the dash is text,
+      // the digits land per cell.
+      await tester.enterText(
+          find.byKey(const ValueKey('d1-code-field')), 'AB-1234');
+      await tester.pump();
+      expect(charBox('A'), findsOneWidget);
+      expect(charBox('B'), findsOneWidget);
+      expect(charBox('1'), findsOneWidget);
+      expect(charBox('2'), findsOneWidget);
+      expect(charBox('3'), findsOneWidget);
+      expect(charBox('4'), findsOneWidget);
+
+      // A bad shape ('A1'): the same per-cell order, no invented dash.
+      await tester.enterText(find.byKey(const ValueKey('d1-code-field')), '');
+      await tester.pump();
+      await tester.enterText(find.byKey(const ValueKey('d1-code-field')), 'A1');
+      await tester.pump();
+      expect(charBox('A'), findsOneWidget);
+      expect(charBox('1'), findsOneWidget);
+      for (final char in ['B', '2', '3', '4']) {
+        expect(charBox(char), findsNothing);
+      }
+    });
   });
 }
