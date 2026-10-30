@@ -405,7 +405,7 @@ Empty-state replacement rule: wherever DESIGN.md specifies Binny `wait` (empty N
 
 ### 4.18 Permission prompt screen
 
-M3 shell. No Binny [removed-T8]. Icon circle 96 dp `brandSoft` fill with relevant icon (location p1, bell p15, battery p16). Title `headline`, body `body`, `primary` "Allow →" / "Open settings →", `text` "Not now" / "Later". Denied state: Info card with reason + "Open settings" `tonal` button.
+M3 shell. No Binny [removed-T8]. Icon circle 96 dp `brandSoft` fill with relevant icon (location p1, bell p15, battery p16). Title `headline`, body `body`, `primary` "Allow →" / "Open settings →", `text` "Not now" / "Later". Denied state: Info card with reason + "Open settings" `tonal` button. Top-end, beside the round close button: the app's shared `LanguageToggleButton` (reuse, no new component) so the driver can switch language mid-setup; it stays secondary, the screen keeps exactly one primary (CL-D07).
 
 ### 4.19 Welcome-back card [new]
 
