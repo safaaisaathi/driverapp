@@ -72,8 +72,8 @@ Ties: see beats think, think beats code, code beats run. Correct reading beats f
 
 | Rule | Meaning |
 |---|---|
-| Name the profile and the model when spawning | Never rely on the default model |
-| Profile not exposed by the harness | Spawn `general` with that profile's model id |
+| Name the profile when spawning | The profile carries its own `model:` and the server applies it, never rely on the default model |
+| Profile not exposed by the harness | Spawn `general` and pass that profile's model id explicitly |
 | Sub-agents never commit | The main agent reviews, verifies, and commits |
 | One agent per file set | Two agents in the same files corrupt each other |
 | Free models only | No paid tiers (bedrock, paid openrouter) |
