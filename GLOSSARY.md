@@ -94,7 +94,7 @@ Login architecture change: driver enters a unique code `XX-0000` (admin allots v
 
 ### Improvement Bag
 - [ ] Productionize build config per the "Production-grade config & security plan" (2026-10-29): Android flavors `dev`/`prod` + per-flavor gitignored `google-services.json` + apply the Gradle plugin + plain `initializeApp()`; App Check + Play Integrity on staging/prod; key restrictions (SHA-256 bind); CI secrets (JSONs + keystore) + AAB pipeline; kill `DEMO_SEED_BYPASS`. AFTER ticket 14 (restructures the Android build). *(me, after ticket 14)*
-- [ ] Locale flip `en` → `gu` before demo (grilled decision; arb files ready). *(me)*
+- [x] Locale flip `en` → `gu` before demo — DONE (issue #14, B1): the SHIPPING default is now Gujarati (`defaultAppLocale = Locale('gu')` in `core/l10n/locale_controller.dart`; MaterialApp fallback + toggle fallback read it). A stored choice wins in either direction; deviation pinned in `test/core/l10n/default_locale_test.dart`. 407/407 green.
 - [ ] `whereIn` >30-ward chunking (ruling 12) — build when demo routes exceed 30 wards. *(me)*
 - [ ] Delete dev entrypoints at integration: `dev_tracking.dart`, `dev_pending_reports.dart`, `dev_live_route.dart`, `dev_notices.dart`, `dev_min.dart`. *(me → 14)*
 - [ ] Index seeds for Backend Owner: notices OR-branch sort, pending-reports `(wardId, createdAt)`, trip `(vanId, date)` (rulings 10/11/16). *(Backend Owner)*

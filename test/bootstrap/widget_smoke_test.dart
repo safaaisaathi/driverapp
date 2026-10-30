@@ -64,7 +64,9 @@ void main() {
     expect(find.byType(MaterialApp), findsOneWidget);
     expect(find.byType(Scaffold), findsOneWidget);
     expect(find.byKey(const ValueKey('d1-code-field')), findsOneWidget);
-    expect(find.text('Start shift'), findsOneWidget);
+    // Issue #14: the shipping default is Gujarati, so the fresh-install
+    // frame shows the gu title.
+    expect(find.text('શિફ્ટ શરૂ કરો'), findsOneWidget);
   });
 
   testWidgets('bootstrap status reads degraded, never crashed', (tester) async {

@@ -10,8 +10,7 @@ library;
 
 import 'package:driverapp/core/l10n/app_localizations.dart';
 import 'package:driverapp/core/l10n/locale_controller.dart';
-import 'package:driverapp/features/tracking/ui/permission_prompt_screen.dart';
-import 'package:flutter/material.dart';
+import 'package:driverapp/features/tracking/ui/permission_prompt_screen.dart';import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -31,8 +30,9 @@ class _AppShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Dev-phase default pinned en (issue #14 flips it to gu separately).
-    final locale = ref.watch(localeControllerProvider) ?? const Locale('en');
+    // No stored choice sits on the Gujarati default (issue #14), the same
+    // fallback as the real MaterialApp wiring in main.dart.
+    final locale = ref.watch(localeControllerProvider) ?? defaultAppLocale;
     return MaterialApp(
       locale: locale,
       supportedLocales: AppLocalizations.supportedLocales,
@@ -94,21 +94,25 @@ void main() {
       find.byKey(const ValueKey('permissionAllow_locationWhileInUse')),
       findsOneWidget,
     );
-    // The rationale copy renders in English on the first frame.
-    expect(find.text(enLocationTitle), findsOneWidget);
+    // The rationale copy renders in Gujarati on the first frame (issue #14:
+    // the shipping default for a fresh install).
+    expect(find.text(guLocationTitle), findsOneWidget);
+    // The toggle offers the other language, named in that language.
+    expect(find.text(enToggleName), findsOneWidget);
+    expect(find.text(guToggleName), findsNothing);
   });
 
-  testWidgets('tapping the toggle flips the rationale copy to Gujarati '
+  testWidgets('tapping the toggle flips the rationale copy to English '
       'instantly (no restart, same screen)', (tester) async {
     await pumpRationale(tester);
 
     await tester.tap(find.byKey(const ValueKey('d1-language-toggle')));
-    await pumpUntil(tester, find.text(guLocationTitle));
+    await pumpUntil(tester, find.text(enLocationTitle));
 
-    expect(find.text(enLocationTitle), findsNothing);
-    // The toggle now points back at English, named natively.
-    expect(find.text(enToggleName), findsOneWidget);
-    expect(find.text(guToggleName), findsNothing);
+    expect(find.text(guLocationTitle), findsNothing);
+    // The toggle now points back at Gujarati, named natively.
+    expect(find.text(guToggleName), findsOneWidget);
+    expect(find.text(enToggleName), findsNothing);
   });
 
   testWidgets('the flipped choice persists through the LocaleStore seam '
@@ -117,10 +121,10 @@ void main() {
     await pumpRationale(tester, store: store);
 
     await tester.tap(find.byKey(const ValueKey('d1-language-toggle')));
-    await pumpUntil(tester, find.text(guLocationTitle));
+    await pumpUntil(tester, find.text(enLocationTitle));
 
     // The choice landed in storage; the next launch restores it the same
     // way the welcome/start-shift toggles do (no per-screen wiring).
-    expect(store.stored, 'gu');
+    expect(store.stored, 'en');
   });
 }

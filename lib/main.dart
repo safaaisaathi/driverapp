@@ -54,12 +54,7 @@ class DriverApp extends ConsumerWidget {
       // F-D10 (ticket 13): the D1 toggle drives the language app-wide and
       // instantly (this watch rebuilds MaterialApp), restored across
       // launches by LocaleController.
-      locale: ref.watch(localeControllerProvider) ??
-          // English fallback for "no stored choice" is a DEVELOPMENT-PHASE
-          // decision (grill round 1, Q7): without it, null would follow the
-          // device locale. Gujarati becomes the default before the demo —
-          // revisit this line then.
-          const Locale('en'),
+      locale: ref.watch(localeControllerProvider) ?? defaultAppLocale,
       supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       // Launching flow (static, no API): Splash → Welcome → Start Duty,

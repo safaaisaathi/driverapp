@@ -7,6 +7,7 @@ import 'package:driverapp/core/config/firebase_bootstrap.dart';
 import 'package:driverapp/core/identity/driver_identity_controller.dart';
 import 'package:driverapp/core/l10n/app_localizations.dart';
 import 'package:driverapp/core/l10n/locale_controller.dart';
+import 'package:driverapp/core/l10n/locale_preferences.dart' show localePrefKey;
 import 'package:driverapp/core/repositories/repositories.dart';
 import 'package:driverapp/core/theme/app_theme.dart';
 import 'package:driverapp/features/shift_start/data/fcm_topics.dart'
@@ -94,21 +95,26 @@ bool hasGujaratiGlyphs(String s) {
 }
 
 void main() {
-  testWidgets('fresh install: no stored choice launches in English '
-      '(grilled dev-phase default holds)', (tester) async {
+  testWidgets('fresh install: no stored choice launches in Gujarati '
+      '(issue #14 default)', (tester) async {
     await pumpDriverApp(tester, store: InMemoryLocaleStore());
-    await pumpUntilFound(tester, find.text(enTitle));
+    await pumpUntilFound(tester, find.text(guTitle));
     // The toggle offers the other language, named in that language.
-    expect(find.text(guToggleName), findsOneWidget);
-    expect(find.text(enToggleName), findsNothing);
+    expect(find.text(enToggleName), findsOneWidget);
+    expect(find.text(guToggleName), findsNothing);
   });
 
-  testWidgets('tapping the toggle flips every visible localized string to '
-      'Gujarati immediately (no restart)', (tester) async {
-    final store = InMemoryLocaleStore();
+  testWidgets('a stored English choice still wins over the gu default, and '
+      'tapping the toggle flips the app to Gujarati instantly', (tester) async {
+    final store = InMemoryLocaleStore()..values[localePrefKey] = 'en';
     await pumpDriverApp(tester, store: store);
-    await pumpUntilFound(tester, find.text(enTitle));
+    await pumpUntilFound(
+      tester,
+      find.text(enTitle),
+      reason: "a stored 'en' beats the Gujarati default (never overridden)",
+    );
 
+    // In English the toggle offers the other language, named natively.
     await tester.tap(find.text(guToggleName));
     await pumpUntilFound(
       tester,
@@ -117,38 +123,38 @@ void main() {
     );
 
     expect(find.text(enTitle), findsNothing);
+    // Back in Gujarati, the toggle offers English (native name).
     expect(
       find.text(enToggleName),
       findsOneWidget,
       reason: 'the toggle now points back at English (native name)',
     );
-    expect(
-      store.stored,
-      'gu',
-      reason: 'the choice persisted through the store seam',
-    );
+    expect(find.text(guToggleName), findsNothing);
+    expect(store.stored, 'gu',
+        reason: 'the choice persisted through the store seam');
   });
 
-  testWidgets('tapping again flips back to English', (tester) async {
+  testWidgets('tapping the toggle flips back and forth live', (tester) async {
+    // Fresh install: the gu default renders first (issue #14).
     final store = InMemoryLocaleStore();
     await pumpDriverApp(tester, store: store);
-    await pumpUntilFound(tester, find.text(enTitle));
-
-    await tester.tap(find.text(guToggleName));
     await pumpUntilFound(tester, find.text(guTitle));
+
     await tester.tap(find.text(enToggleName));
     await pumpUntilFound(tester, find.text(enTitle));
+    await tester.tap(find.text(guToggleName));
+    await pumpUntilFound(tester, find.text(guTitle));
 
-    expect(find.text(guTitle), findsNothing);
-    expect(store.stored, 'en');
+    expect(find.text(enTitle), findsNothing);
+    expect(store.stored, 'gu');
   });
 
   testWidgets('chosen language persists across an app restart', (tester) async {
     final store = InMemoryLocaleStore();
     await pumpDriverApp(tester, store: store);
-    await pumpUntilFound(tester, find.text(enTitle));
-    await tester.tap(find.text(guToggleName));
     await pumpUntilFound(tester, find.text(guTitle));
+    await tester.tap(find.text(enToggleName));
+    await pumpUntilFound(tester, find.text(enTitle));
 
     // Restart: throw the tree away, mount a fresh ProviderScope (fresh
     // container → fresh LocaleController → restore) over the SAME storage.
@@ -156,10 +162,10 @@ void main() {
     await pumpDriverApp(tester, store: store);
     await pumpUntilFound(
       tester,
-      find.text(guTitle),
-      reason: 'the stored choice must restore on the next launch',
+      find.text(enTitle),
+      reason: "the stored 'en' choice must restore on the next launch",
     );
-    expect(find.text(enTitle), findsNothing);
+    expect(find.text(guTitle), findsNothing);
   });
 
   testWidgets('toggle renders on the start-shift page with a ≥56 dp touch '
@@ -193,9 +199,11 @@ void main() {
   testWidgets(
       'a11y: the toggle exposes a localized change-language hint',
       (tester) async {
+    // Fresh install renders the gu default (issue #14), so the hint ships
+    // in Gujarati.
     final semantics = tester.ensureSemantics();
     await pumpDriverApp(tester, store: InMemoryLocaleStore());
-    await pumpUntilFound(tester, find.bySemanticsLabel('Change language'));
+    await pumpUntilFound(tester, find.bySemanticsLabel('ભાષા બદલો'));
     // End-of-test verification requires every handle gone; dispose here
     // (before the framework's checks) not in addTearDown.
     semantics.dispose();

@@ -24,8 +24,9 @@ class LanguageToggleButton extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final chosen = ref.watch(localeControllerProvider);
     final l10n = AppLocalizations.of(context)!;
-    // No stored choice (null) sits on the English dev default.
-    final toGujarati = (chosen?.languageCode ?? 'en') == 'en';
+    // No stored choice (null) sits on the Gujarati default (issue #14), so
+    // the toggle offers the other language, English.
+    final toGujarati = (chosen?.languageCode ?? 'gu') == 'en';
     final next = Locale(toGujarati ? 'gu' : 'en');
     return Semantics(
       label: l10n.languageChangeHint,

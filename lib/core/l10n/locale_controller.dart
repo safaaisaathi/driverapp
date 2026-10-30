@@ -19,18 +19,25 @@ final localeStoreProvider = Provider<LocaleStore>(
   (ref) => const SharedPreferencesLocaleStore(),
 );
 
-/// The driver's chosen language. `null` = no stored choice (system
-/// default — English during development per the grilled decision).
+/// The app's fallback locale (issue #14, 2026-10): a driver with no stored
+/// choice is served Gujarati on the first frame — the shipping default, not
+/// a dev-phase decision anymore (grilled decision superseded; a stored
+/// choice still wins in either direction).
+const defaultAppLocale = Locale('gu');
+
+/// The driver's chosen language. `null` = no stored choice (the app
+/// renders [defaultAppLocale]).
 class LocaleController extends Notifier<Locale?> {
   Future<void>? _restoring;
 
   @override
   Locale? build() {
-    // Fire-and-forget restore: the app renders its fallback (en) while
+    // Fire-and-forget restore: the app renders [defaultAppLocale] while
     // storage answers — the same degrade-don't-crash idiom as bootstrap
     // (ticket 02). main() awaits the SAME future before runApp, so the
     // first frame already carries the stored language (Bug Bag fix
-    // 2026-10-29: no first-frame en flash before a stored gu lands).
+    // 2026-10-29: no first-frame fallback flash before a stored choice
+    // lands).
     unawaited(ensureRestored());
     return null;
   }
