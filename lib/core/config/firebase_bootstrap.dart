@@ -88,6 +88,30 @@ final bootstrapProvider = NotifierProvider<BootstrapController, BootstrapStatus>
   BootstrapController.new,
 );
 
+/// How long a gated first lookup waits for boot wiring before proceeding
+/// (issue #18): a boot that never resolves must not hang the screen.
+const Duration sessionGateCap = Duration(seconds: 8);
+
+/// Gate for the first Firestore read (issue #18).
+///
+/// A returning driver's screen fires its lookup right after the first frame,
+/// while `main()`'s fire-and-forget boot may still be signing in anonymously;
+/// the unauthenticated read failed on EVERY cold launch (device-verified),
+/// then succeeded on manual retry. This future resolves when the anonymous
+/// session exists or the boot has a first verdict (ready OR degraded: the
+/// caller proceeds and surfaces its own failure), capped by [sessionGateCap].
+///
+/// Immediate when boot wiring was never started (unit-test containers), so
+/// existing suites are unaffected; override to script the race.
+final sessionGateProvider = Provider<Future<void>>((ref) {
+  final boot = ref.read(bootstrapProvider.notifier);
+  if (!boot.bootStarted) return Future<void>.value();
+  return Future.any<void>([
+    boot.sessionReady(),
+    boot.done().then((_) {}),
+  ]).timeout(sessionGateCap, onTimeout: () {});
+});
+
 /// Holds the boot state; `main()` starts [run], the app can watch
 /// [bootstrapProvider] or await the controller's [done] future.
 // Not `final`: tests extend this controller to simulate a degraded boot
@@ -95,8 +119,25 @@ final bootstrapProvider = NotifierProvider<BootstrapController, BootstrapStatus>
 class BootstrapController extends Notifier<BootstrapStatus> {
   Completer<BootstrapStatus>? _done;
 
+  /// Completes the first time an anonymous session is held (issue #18):
+  /// screens gate their first Firestore read on [sessionReady] so a
+  /// cold-start read never races the boot's sign-in.
+  Completer<void>? _sessionReady;
+
   @override
   BootstrapStatus build() => const BootstrapStatus.pending();
+
+  /// True once [run] started the boot wiring (the real app's `main()`);
+  /// false in unit-test containers, where [sessionGateProvider] resolves
+  /// immediately instead of waiting for a session that will never come.
+  bool get bootStarted => _running;
+
+  /// Completes when an anonymous session exists; immediately when this
+  /// container is already [BootstrapReady] (a warm boot).
+  Future<void> sessionReady() {
+    if (state is BootstrapReady) return Future<void>.value();
+    return (_sessionReady ??= Completer<void>()).future;
+  }
 
   /// The app can await this to know when boot wiring has first resolved
   /// (ready or degraded). Re-check [bootstrapProvider] afterwards: silent
@@ -116,6 +157,9 @@ class BootstrapController extends Notifier<BootstrapStatus> {
       try {
         await _runOnce(progress, effectiveBackend);
         state = BootstrapStatus.ready(anonymousUid: progress.anonymousUid!);
+        // Release the first-read gate (issue #18): the session now exists.
+        final session = _sessionReady;
+        if (session != null && !session.isCompleted) session.complete();
         break;
       } catch (error, stackTrace) {
         state = BootstrapStatus.degraded(error: error);

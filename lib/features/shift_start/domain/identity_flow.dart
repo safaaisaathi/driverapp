@@ -18,7 +18,8 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/config/firebase_bootstrap.dart' show MessagingGateway;
+import '../../../core/config/firebase_bootstrap.dart'
+    show MessagingGateway, sessionGateProvider;
 import '../../../core/identity/driver_identity_controller.dart';
 import '../../../core/models/models.dart';
 import '../../../core/repositories/repositories.dart';
@@ -149,6 +150,11 @@ class IdentityFlowController extends Notifier<IdentityFlowState> {
       phase: IdentityFlowPhase.lookingUp,
       lastRawCode: raw,
     );
+    // Issue #18: on a cold launch the anonymous session may still be signing
+    // in; the FIRST read must not race it, or it fails unauthenticated on
+    // every launch (the "Couldn't check the code" welcome bug). Immediate in
+    // unit tests and on a warm boot.
+    await ref.read(sessionGateProvider);
     try {
       final driver = await _drivers.fetchDriver(code);
       if (driver == null || !driver.active) {

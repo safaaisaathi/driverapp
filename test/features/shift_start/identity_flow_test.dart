@@ -12,6 +12,8 @@
 ///   the shift session and remembers the confirmed code on-device.
 library;
 
+import 'dart:async';
+
 import 'package:driverapp/core/config/firebase_bootstrap.dart';
 import 'package:driverapp/core/domain/ist_clock.dart';
 import 'package:driverapp/core/identity/driver_identity_controller.dart';
@@ -118,6 +120,7 @@ final class Harness {
     DriversRepository? driversRepo,
     List<Van>? vansSeed,
     TripsRepository? tripsRepo,
+    Future<void>? sessionGate,
   })  : drivers = FakeDriversRepository(driversSeed),
         vans = FakeVansRepository(vansSeed),
         trips = tripsRepo ?? FakeTripsRepository(),
@@ -131,6 +134,10 @@ final class Harness {
         tripsRepositoryProvider.overrideWithValue(trips),
         driverMessagingGatewayProvider.overrideWithValue(messaging),
         driverIdentityStoreProvider.overrideWithValue(identityStore),
+        // The cold-start gate (issue #18) defaults to immediate in tests;
+        // the race test scripts it with a closed completer.
+        if (sessionGate != null)
+          sessionGateProvider.overrideWithValue(sessionGate),
       ],
     );
   }
@@ -168,6 +175,28 @@ void main() {
 
       expect(harness.state.phase, IdentityFlowPhase.invalidCode);
       expect(harness.drivers.lookups, isEmpty);
+    });
+
+    test('the first lookup waits for the boot session gate: a read never '
+        'races the anonymous sign-in (issue #18)', () async {
+      final gate = Completer<void>();
+      final harness = Harness(
+        driversSeed: [sampleDriver()],
+        vansSeed: [sampleVan()],
+        sessionGate: gate.future,
+      );
+
+      final submit = harness.submit('ab-1234');
+      await Future<void>.delayed(Duration.zero);
+      // Gate closed: the flow is looking up, but NO read left the device.
+      expect(harness.state.phase, IdentityFlowPhase.lookingUp);
+      expect(harness.drivers.lookups, isEmpty);
+
+      // The session lands: the lookup proceeds and confirms.
+      gate.complete();
+      await submit;
+      expect(harness.drivers.lookups, ['AB-1234']);
+      expect(harness.state.phase, IdentityFlowPhase.confirmReady);
     });
 
     test('valid code: lookup → confirm card data; the code is remembered '
