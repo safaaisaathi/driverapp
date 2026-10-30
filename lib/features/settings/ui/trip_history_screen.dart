@@ -13,9 +13,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/models/models.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_tokens.dart';
 import '../../../core/widgets/app_icon_button.dart';
-import '../../../core/widgets/binny.dart';
 import '../settings_flow.dart';
 
 /// Status-chip color tokens (0.5`: `statusResolved` green, `statusReceived`
@@ -193,21 +194,29 @@ class _HistoryEmpty extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final c = context.colors;
     return Padding(
-      padding: const EdgeInsets.only(top: 48),
+      padding: const EdgeInsets.only(top: AppSpace.huge),
       child: Column(
         children: [
-          BinnyView(
-            pose: BinnyPose.wave,
-            label: l10n.tripHistoryEmpty,
+          // Neutral icon in a `brandSoft` circle (DESIGN-driver-app.md
+          // §4.16, CL-D15, removed-T8): tokens only, no mascot.
+          Container(
+            width: AppSize.permissionIconCircle,
+            height: AppSize.permissionIconCircle,
+            decoration: BoxDecoration(
+              color: c.brandSoft,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.history, size: AppSize.icon * 2, color: c.brand),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpace.lg),
           Text(
             l10n.tripHistoryEmpty,
             style: Theme.of(context).textTheme.titleMedium,
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpace.sm),
           Text(
             l10n.tripHistoryEmptyBody,
             style: Theme.of(context).textTheme.bodySmall,

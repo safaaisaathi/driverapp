@@ -94,7 +94,7 @@ class AppMotion {
   static const Duration fast = Duration(milliseconds: 120);
   static const Duration base = Duration(milliseconds: 200);
   static const Duration slow = Duration(milliseconds: 320);
-  static const Duration ambient = Duration(milliseconds: 2400); // mascot bob only
+  static const Duration ambient = Duration(milliseconds: 2400); // pulse ring, shimmer
   static const Curve standard = Curves.easeOutCubic;
   static const Curve exit = Curves.easeInCubic;
 }

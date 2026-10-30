@@ -8,17 +8,10 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'package:driverapp/core/l10n/app_localizations.dart';
 import 'package:driverapp/features/tracking/ui/permission_prompt_screen.dart'
-    show
-        PermissionPromptStage,
-        showPermissionPrompt;
+    show PermissionPromptStage, showPermissionPrompt;
 
-import '../domain/permission_flow.dart'
-    show
-        PermissionFlowReport,
-        PermissionApproval,
-        TrackingPermissionStage;
+import '../domain/permission_flow.dart' show PermissionFlowReport;
 import '../domain/permission_gateway.dart';
 
 /// Runs the four permission stages with rationale screens.
@@ -69,6 +62,10 @@ class UIPermissionFlowController {
 
     // Show rationale screen
     final uiStage = _toUIStage(stage);
+    // The status check may have taken a while; the route the context came
+    // from could be gone. Bail out as a denial (the caller already treats
+    // "not now" as a denial, and the app stays usable).
+    if (!_context.mounted) return PermissionApproval.denied;
     final allowed = await showPermissionPrompt(
       context: _context,
       stage: uiStage,

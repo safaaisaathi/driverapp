@@ -8,8 +8,7 @@
 /// regardless: the setup-done flag lands on the identity controller and
 /// the start-shift page (CodeStartScreen) replaces this screen. A denied
 /// device stays fully usable — D2's degraded-mode surfacing covers it.
-/// Binny is removed from this screen (D-105, removed-T8; the splash Binny
-/// is ticket 8).
+/// The mascot is removed from this screen (D-105, removed-T8).
 ///
 /// DESIGN.md §9.2 (inferred): display title, body, primary CTA pill,
 /// language toggle top-end, no mascot. Fade+slide transition from Splash

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/config/firebase_bootstrap.dart';
+import 'core/identity/driver_identity_controller.dart';
 import 'core/l10n/app_localizations.dart';
 import 'core/l10n/locale_controller.dart';
 import 'core/theme/app_theme.dart';
@@ -24,6 +25,12 @@ Future<void> main() async {
   // two. The read is ~ms, so main() simply awaits it before runApp: the
   // first frame carries the stored language, deterministically.
   await container.read(localeControllerProvider.notifier).ensureRestored();
+  // Bug Bag fix (2026-10-30): the identity restore used to race the first
+  // frame (fire-and-forget from the controller's build), so a stored
+  // setup-done flag could flash the wrong destination for a frame or two.
+  // main() now awaits it the same way it awaits the locale restore: the
+  // first frame already knows fresh-vs-returning, deterministically.
+  await container.read(driverIdentityControllerProvider.notifier).ensureRestored();
   runApp(UncontrolledProviderScope(container: container, child: const DriverApp()));
 }
 

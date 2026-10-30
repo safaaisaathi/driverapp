@@ -647,8 +647,8 @@ class _ChangeCodeLink extends StatelessWidget {
   }
 }
 
-/// Not-found state (DM-D03 blocking error, Binny-free 4.16): neutral icon
-/// in a `brandSoft` circle + title + body. Retry sits on the pinned CTA.
+/// Not-found state (DM-D03 blocking error, §4.16): neutral icon in a
+/// `brandSoft` circle + title + body. Retry sits on the pinned CTA.
 class _NotFoundState extends StatelessWidget {
   const _NotFoundState();
 

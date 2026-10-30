@@ -6,7 +6,7 @@
 /// The fresh-device onboarding seam: the begin CTA runs the 4-stage
 /// permission setup through a FAKE gateway, then the setup-done flag is
 /// written through a FAKE DriverIdentityStore and the start-shift page
-/// (CodeStartScreen) is pushed. Binny is gone from this screen (D-105).
+/// (CodeStartScreen) is pushed. The mascot is gone from this screen (D-105).
 ///
 /// Pinned English strings follow the code_start_screen_test.dart pattern;
 /// keys are the stable widget seams.
@@ -15,7 +15,6 @@ library;
 import 'package:driverapp/core/identity/driver_identity_controller.dart';
 import 'package:driverapp/core/l10n/app_localizations.dart';
 import 'package:driverapp/core/theme/app_theme.dart';
-import 'package:driverapp/core/widgets/binny.dart';
 import 'package:driverapp/features/launching/welcome_screen.dart';
 import 'package:driverapp/features/shift_start/ui/code_start_screen.dart';
 import 'package:driverapp/features/tracking/tracking_providers.dart'
@@ -79,16 +78,13 @@ Future<void> pumpUntil(WidgetTester tester, Finder finder,
 // -- tests -------------------------------------------------------------------
 
 void main() {
-  testWidgets('welcome renders WITHOUT Binny: title, body and the begin '
-      'CTA (D-105, removed-T8)', (tester) async {
+  testWidgets('welcome renders the mascot-free layout: toggle, title, body '
+      'and the begin CTA (D-105, removed-T8)', (tester) async {
     await pumpWelcome(tester);
 
-    expect(
-      find.byType(BinnyView),
-      findsNothing,
-      reason: 'the mascot is removed from this screen (the splash Binny is '
-          'ticket 8, so the welcome tree must not host one either)',
-    );
+    // No mascot: the mascot widget and its assets are deleted, so the
+    // layout is toggle top-end + text + one CTA (DESIGN §9.2).
+    expect(find.byKey(const ValueKey('d1-language-toggle')), findsOneWidget);
     expect(find.text(enWelcomeTitle), findsOneWidget);
     expect(find.text(enWelcomeBody), findsOneWidget);
     expect(find.text(enWelcomeCta), findsOneWidget);

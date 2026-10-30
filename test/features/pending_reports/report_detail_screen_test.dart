@@ -124,7 +124,7 @@ void main() {
 
     expect(find.text(enTicketId), findsOneWidget);
     expect(
-      find.text('${enCategoryMissedCollection} · $enWardLabel'),
+      find.text('$enCategoryMissedCollection · $enWardLabel'),
       findsOneWidget,
     );
     expect(find.text(enReportsToday), findsOneWidget);
