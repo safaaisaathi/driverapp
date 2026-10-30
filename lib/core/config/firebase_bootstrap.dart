@@ -4,9 +4,8 @@
 /// 1. Hive (local first-launch flag storage) — see [openBootstrapFlagBox].
 /// 2. `Firebase.initializeApp` with [firebaseOptions] (emulator options by
 ///    default; PRD-2 0.10).
-/// 3. Emulator wiring for Firestore/Auth (Functions follows with the PIN
-///    ticket — see [_wireEmulators]).
-/// 4. Anonymous sign-in so pre-PIN screens can read `vans`/`wards`/`routes`
+/// 3. Emulator wiring for Firestore/Auth ([_wireEmulators]).
+/// 4. Anonymous sign-in so launch/screens can read `vans`/`wards`/`routes`
 ///    (_spec § Implementation Decisions; PRD-2 0.8 rules allow anonymous
 ///    reads of those collections). Failures degrade the app instead of
 ///    crashing it (Ticket 02).
@@ -296,9 +295,9 @@ Duration bootstrapRetryDelay(int attempt) =>
 /// 0.10). Ports 8080 (Firestore) and 9099 (Auth) per Ticket 02; host via
 /// [kFirebaseEmulatorHost].
 ///
-/// Cloud Functions (port 5001) is wired where the `verifyDriverPin`
-/// callable is constructed — `FirebaseCallablePinVerifier`
-/// (features/shift_start/data), F-D1 / Ticket 04.
+/// Cloud Functions (port 5001) is wired in [_wireEmulators]; the old
+/// `verifyDriverPin` callable is DELETED from the app (0.16 code login; the
+/// Function itself stays deployed until the backend sweep).
 void _wireEmulators(FirebaseApp app) {
   FirebaseFirestore.instanceFor(app: app)
       .useFirestoreEmulator(kFirebaseEmulatorHost, kFirestoreEmulatorPort);

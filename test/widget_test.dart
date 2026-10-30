@@ -1,7 +1,7 @@
 import 'package:driverapp/core/config/firebase_bootstrap.dart';
 import 'package:driverapp/core/identity/driver_identity_controller.dart';
 import 'package:driverapp/core/repositories/repositories.dart';
-import 'package:driverapp/features/shift_start/data/verify_driver_pin.dart'
+import 'package:driverapp/features/shift_start/data/fcm_topics.dart'
     show driverMessagingGatewayProvider;
 import 'package:driverapp/features/tracking/tracking_providers.dart'
     show trackingPermissionGatewayProvider;

@@ -33,7 +33,7 @@ import '../../core/repositories/repositories.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/theme_mode_controller.dart';
 import '../live_route/dev/desktop_demo_seed.dart';
-import 'data/verify_driver_pin.dart' show driverMessagingGatewayProvider;
+import 'data/fcm_topics.dart' show driverMessagingGatewayProvider;
 import 'ui/code_start_screen.dart';
 import '../../features/tracking/domain/tracking_engine.dart'
     show
@@ -185,6 +185,8 @@ class _IdAssigningTripsRepository extends DevTripsRepository {
           id: 'dev-trip-${++_counter}',
           vanId: trip.vanId,
           routeId: trip.routeId,
+          driverId: trip.driverId,
+          wardIds: trip.wardIds,
           date: trip.date,
           startedAt: trip.startedAt,
           endedAt: trip.endedAt,
@@ -216,6 +218,10 @@ Driver _driver({
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final seed = DevDesktopSeed();
+  // The identity previews demo the FRESH start (Start creates the trip and
+  // writes the 0.16 driver identity), so the seed van is parked idle - the
+  // demo seed itself stays on shift for the live-route screen.
+  seed.vans.parkAsIdle(devSeedVanId);
   final trips = _IdAssigningTripsRepository();
   final container = ProviderContainer(
     overrides: [

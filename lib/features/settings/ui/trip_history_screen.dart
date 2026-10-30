@@ -17,6 +17,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_tokens.dart';
 import '../../../core/widgets/app_icon_button.dart';
+import '../../../features/live_route/domain/ward_steps.dart'
+    show tripWardScope;
 import '../settings_flow.dart';
 
 /// Status-chip color tokens (0.5`: `statusResolved` green, `statusReceived`
@@ -89,7 +91,11 @@ class _TripRow extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     final routeAsync =
         ref.watch(tripRouteProvider(trip.routeId)).value;
-    final totalWards = routeAsync?.wardIds.length ?? 0;
+    // The ward TOTAL follows the trip's scope (0.16, ticket-7 review
+    // ruling): the history row counts the driver's allotted wards, not the
+    // whole route. Pre-0.16 trips fall back to the route's count.
+    final totalWards =
+        tripWardScope(trip)?.length ?? routeAsync?.wardIds.length ?? 0;
     final done = trip.wardsDone.length;
 
     // Chip state: running when not yet ended; complete when every route

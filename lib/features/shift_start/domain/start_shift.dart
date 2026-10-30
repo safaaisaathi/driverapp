@@ -1,18 +1,32 @@
 /// Start Shift's write core (ticket 4 extraction, PRD-2 §0.13 behaviour
-/// rules 3 + §0.16): the trip-creation and van-marking behaviour shared by
-/// the old D1 flow controller and the new driver-identity flow.
+/// rules 3 + §0.16): the trip-creation and van-marking behaviour used by
+/// the driver-identity start-shift flow.
 ///
-/// Extracted verbatim from `ShiftStartFlowController` (expand, do not
-/// break: the old controller delegates here and the F-D1 tests keep
-/// passing). One [StartShift] instance per start attempt; stateless.
+/// `execute` takes the confirmed `Driver` and writes `trip.driverId` +
+/// `trip.wardIds` on a fresh start; `vans.currentTripId` + `status:
+/// on_shift` + routeId-from-van handling are unchanged. One [StartShift]
+/// instance per start attempt; stateless.
 library;
 
 import '../../../core/config/firebase_bootstrap.dart' show MessagingGateway;
 import '../../../core/domain/ist_clock.dart';
 import '../../../core/models/models.dart';
 import '../../../core/repositories/repositories.dart';
-import '../data/verify_driver_pin.dart' show fcmTopicVanOf;
+import '../data/fcm_topics.dart' show fcmTopicVanOf;
 import 'shift_session.dart';
+
+/// The start attempt cannot proceed: the van's open shift belongs to
+/// another driver, or the van's open-trip marker is inconsistent (a stale
+/// `currentTripId`). The identity flow catches it and surfaces its
+/// retryable `startFailed` state - never a crash, never a takeover.
+class ShiftStartConflict implements Exception {
+  const ShiftStartConflict(this.message);
+
+  final String message;
+
+  @override
+  String toString() => 'ShiftStartConflict: $message';
+}
 
 class StartShift {
   StartShift({
@@ -34,29 +48,38 @@ class StartShift {
   bool isResumable(Van van) =>
       van.currentTripId != null && van.status == VanStatus.onShift;
 
-  /// Turns a van doc into a running shift and returns the session for
-  /// [ShiftController.activate].
+  /// Turns a van + the confirmed driver into a running shift and returns the
+  /// session for [ShiftController.activate].
   ///
   /// Fresh: creates the 0.2 `trips` doc (vanId, routeId from the van,
-  /// date = today IST, startedAt), sets `vans.status = on_shift` and
-  /// `vans.currentTripId`, subscribes to topic `van_{vanId}`.
+  /// driverId + wardIds from the driver per 0.16, date = today IST,
+  /// startedAt), sets `vans.status = on_shift` and `vans.currentTripId`,
+  /// subscribes to topic `van_{vanId}`.
   /// Resume: reattaches the existing trip doc — a second `createTrip` is
-  /// never issued. Write failures surface to the caller's failure state.
-  Future<ShiftSession> execute(Van van, DateTime now) async {
+  /// never issued, and the trip is reattached ONLY when the confirmed
+  /// driver owns the open shift (vans can be shared between drivers, PRD-2
+  /// §0.16 resume ruling: a different driver's start fails, it never takes
+  /// over another driver's wards). Write failures surface to the caller's
+  /// failure state.
+  Future<ShiftSession> execute(Van van, Driver driver, DateTime now) async {
     final ShiftSession session;
     if (isResumable(van)) {
       // Grilled decision: RESUME, never duplicate.
-      session = await _resumeSession(van, now);
+      session = await _resumeSession(van, driver, now);
     } else {
-      session = await _createTripAndMarkVan(van, now);
+      session = await _createTripAndMarkVan(van, driver, now);
     }
     await _subscribeVanTopic(van.id);
     return session;
   }
 
-  /// Fresh start (0.13 behaviour rules 3): trip doc + van marker writes,
-  /// in that order, each through its repository.
-  Future<ShiftSession> _createTripAndMarkVan(Van van, DateTime now) async {
+  /// Fresh start (0.13 behaviour rules 3 + 0.16 driver identity): trip doc +
+  /// van marker writes, in that order, each through its repository.
+  Future<ShiftSession> _createTripAndMarkVan(
+    Van van,
+    Driver driver,
+    DateTime now,
+  ) async {
     // `date` = the collection-day calendar date resolved in IST
     // (grilled ruling, spec Implementation Decisions).
     final date = utcStartOfIstDay(now);
@@ -67,6 +90,8 @@ class StartShift {
       id: '',
       vanId: van.id,
       routeId: van.routeId,
+      driverId: driver.id,
+      wardIds: driver.wardIds,
       date: date,
       startedAt: startedAt,
       endedAt: null,
@@ -88,14 +113,34 @@ class StartShift {
   }
 
   /// Resume branch: the existing trip's identity comes back untouched
-  /// (read, not watch — the resume reattach is a one-time decision).
-  Future<ShiftSession> _resumeSession(Van van, DateTime now) async {
+  /// (read, not watch — the resume reattach is a one-time decision). The
+  /// marker must agree with the van, and the open trip must belong to the
+  /// confirmed driver; anything else is a [ShiftStartConflict] (stale
+  /// marker, or another driver's shift on this shared van), never a
+  /// takeover and never invented state.
+  Future<ShiftSession> _resumeSession(
+    Van van,
+    Driver driver,
+    DateTime now,
+  ) async {
     final tripId = van.currentTripId!;
     final todayTrip = await _trips.readTrip(tripId);
     if (todayTrip != null && todayTrip.vanId != van.id) {
       // Defensive: the referenced trip belongs to another van — treat the
-      // marker as stale and fail the reattach surface, never invent state.
-      throw StateError('currentTripId "$tripId" does not match this van');
+      // marker as stale and fail the reattach surface.
+      throw ShiftStartConflict('trip "$tripId" does not match this van');
+    }
+    if (todayTrip != null &&
+        todayTrip.driverId.isNotEmpty &&
+        todayTrip.driverId != driver.id) {
+      // Another driver owns the van's open shift (vans are shared between
+      // driver accounts): block. Taking over would show the other driver's
+      // wards and write marks into their trip doc. The trip is NEVER
+      // rewritten here; the admin console clears the marker instead.
+      throw ShiftStartConflict(
+        'trip "$tripId" belongs to driver "${todayTrip.driverId}", '
+        'not "${driver.id}"',
+      );
     }
     return ShiftSession(
       vanId: van.id,

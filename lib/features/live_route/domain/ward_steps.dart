@@ -1,6 +1,9 @@
 /// Ordered ward steps for the Live Route screen (PRD-2 F-D3 step 1: D2 shows
-/// `routes.wardIds` in order with names, the next ward highlighted).
+/// the wards in visiting order with names, the next ward highlighted).
 ///
+/// The scope (SET) comes from the open trip's `wardIds` when the trip is a
+/// 0.16 trip (it carries a `driverId`), otherwise `routes.wardIds`; the
+/// visiting ORDER is always the route's (F-D3.1, ticket-7 review ruling).
 /// Pure list logic only — no map widgets, no Firebase, no Riverpod. The
 /// Riverpod layer turns repository data into this shape; the screen only
 /// renders it.
@@ -8,6 +11,23 @@ library;
 
 import 'package:driverapp/core/domain/ward_order.dart';
 import 'package:driverapp/core/models/models.dart';
+
+/// The open trip's ward SCOPE (0.16): the driver's allotted wards, as
+/// copied into `trips.wardIds` at shift start.
+///
+/// - null → no scope: there is no trip, or the trip predates the contract
+///   (no `driverId`) — D2 falls back to the whole route.
+/// - a list → the trip's scope is authoritative, INCLUDING an empty list:
+///   a 0.16 driver with no allotted ward sees NOTHING (never the whole
+///   route).
+///
+/// One rule, two call sites: the reducer (the visiting order) and the mark
+/// flow (the write path).
+List<String>? tripWardScope(Trip? trip) {
+  if (trip == null) return null; // No trip -> the route is the scope.
+  if (trip.driverId.isEmpty) return null; // Pre-0.16 trip -> route scope.
+  return trip.wardIds; // 0.16 trip -> authoritative (empty stays empty).
+}
 
 /// One row of the route's visit order: the ward, its position in
 /// `routes.wardIds` (first occurrence wins — ruling 5), whether it is done
@@ -17,7 +37,9 @@ import 'package:driverapp/core/models/models.dart';
 class WardStep {
   final Ward ward;
 
-  /// Position in `routes.wardIds` (0-based, first occurrence — ruling 5).
+  /// Position in the ROUTE's visiting order (the order always comes from
+  /// `routes.wardIds`, F-D3.1; the trip list is only the scope). 0-based,
+  /// first occurrence — ruling 5.
   final int orderIndex;
 
   final bool isDone;
@@ -55,16 +77,17 @@ class WardStep {
       'WardStep(${ward.id}@$orderIndex done=$isDone next=$isNext flagged=$isFlagged)';
 }
 
-/// Builds the route's [WardStep]s in `routes.wardIds` order.
+/// Builds the route's [WardStep]s in visiting order — the open trip's
+/// `wardIds` when it has them (non-empty, 0.16), else `routes.wardIds`.
 ///
 /// - Done set comes from `trips.wardsDone` of today's open trip; ids done in
 ///   the trip but not on the route are ignored (they cannot be rendered).
-/// - Unknown ward ids (id on the route, no `wards` doc resolved) are absent
+/// - Unknown ward ids (id in the order, no `wards` doc resolved) are absent
 ///   from the result — the repository's own docs say missing ids are simply
 ///   dropped by the load.
-/// - Duplicate ward ids on the route: every occurrence renders in its own
-///   place, but `isNext`/flags evaluate by the [ward_order.dart] rules, where
-///   the first occurrence wins.
+/// - Duplicate ward ids: every occurrence renders in its own place, but
+///   `isNext`/flags evaluate by the [ward_order.dart] rules, where the first
+///   occurrence wins.
 List<WardStep> deriveWardSteps({
   required List<String> orderedWardIds,
   required Map<String, Ward> wardsById,

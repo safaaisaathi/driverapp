@@ -18,6 +18,8 @@ import 'package:driverapp/core/theme/app_text.dart';
 import 'package:driverapp/core/theme/app_tokens.dart';
 import 'package:driverapp/core/widgets/app_icon_button.dart';
 import 'package:driverapp/core/widgets/contour_card.dart';
+import 'package:driverapp/features/live_route/domain/ward_steps.dart'
+    show tripWardScope;
 import 'package:driverapp/features/live_route/live_route_providers.dart';
 import 'package:driverapp/features/shift_start/domain/shift_session.dart';
 
@@ -95,7 +97,11 @@ class _SummaryBody extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     final c = context.colors;
     final trip = ref.watch(openTripProvider(vanId)).value;
-    final total = ref.watch(routeModelProvider(vanId)).value?.wardIds.length ??
+    // The ward TOTAL follows the trip's scope (0.16, ticket-7 review
+    // ruling): a driver allotted 1 of the route's 3 wards shifts "1 of 1",
+    // never "1 of 3". Pre-0.16 trips fall back to the route's count.
+    final total = tripWardScope(trip)?.length ??
+        ref.watch(routeModelProvider(vanId)).value?.wardIds.length ??
         trip?.wardsDone.length ??
         0;
     final done = trip?.wardsDone.length ?? 0;

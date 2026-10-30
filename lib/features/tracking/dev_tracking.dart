@@ -1,9 +1,8 @@
-/// DEBUG ENTRYPOINT — tracking demo WITHOUT ticket 05's D1 dependency
-/// (ticket 05 deliverable: "removed/flagged at integration").
+/// DEBUG ENTRYPOINT — tracking demo on the seeded emulator data.
 ///
-/// NOT referenced by `main.dart`; the integration ticket wires this in (or
-/// deletes it) once D1's PIN + Start Shift flow exists. To run the demo
-/// locally, temporarily point `main.dart` at [runDevTrackingApp].
+/// NOT referenced by `main.dart`; the dev entries are reachable through
+/// `flutter run -t` targets. To run the demo locally, temporarily point
+/// `main.dart` at [runDevTrackingApp].
 ///
 /// The seeded van id below is a @visibleForTesting constant, clearly
 /// dev-only. The demo creates its OWN trip in the seeded emulator data via
@@ -108,6 +107,10 @@ class _DevTrackingScreenState extends ConsumerState<DevTrackingScreen> {
             id: '',
             vanId: devTrackingVanId,
             routeId: van?.routeId ?? 'route-01',
+            // The dev-only trip has no driver behind it and predates the
+            // 0.16 contract, so D2 falls back to `routes.wardIds`.
+            driverId: '',
+            wardIds: const <String>[],
             date: DateTime.now(),
             startedAt: DateTime.now(),
             endedAt: null,

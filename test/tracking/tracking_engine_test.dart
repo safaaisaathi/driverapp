@@ -100,6 +100,8 @@ void main() {
         id: 'trip-1',
         vanId: 'van-01',
         routeId: 'route-01',
+        driverId: '',
+        wardIds: const <String>[],
         date: DateTime.utc(2026, 10, 24),
         startedAt: DateTime.utc(2026, 10, 24, 8),
         endedAt: null,

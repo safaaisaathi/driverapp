@@ -198,9 +198,17 @@ LiveRouteState combineLiveRouteState({
     return const LiveRouteEmpty(LiveRouteEmptyReason.routeMissing);
   }
 
+  // 0.16: D2 scopes the map + ward marking to the open trip's allotted
+  // wards — the trip's list is a SET (the scope), never an order. The
+  // VISITING ORDER is always the route's (F-D3.1), so the route still owns
+  // the sequence. A pre-0.16 trip (no driverId) has no scope: the whole
+  // route applies.
+  final scope = tripWardScope(trip.value);
+
   final resolvedWards = _resolveWardsInOrder(
     orderedWardIds: routeModel.wardIds,
     loadedWards: wards.value ?? const <Ward>[],
+    scope: scope,
   );
   if (resolvedWards.isEmpty) {
     return const LiveRouteEmpty(LiveRouteEmptyReason.noWards);
@@ -232,11 +240,19 @@ LiveRouteState combineLiveRouteState({
 List<Ward> _resolveWardsInOrder({
   required List<String> orderedWardIds,
   required List<Ward> loadedWards,
+  required List<String>? scope,
 }) {
   final byId = {for (final ward in loadedWards) ward.id: ward};
+  // `null` scope = the whole route applies (no trip, or a pre-0.16 trip);
+  // a list scopes the route (an EMPTY allotment stays empty - blocking-fix
+  // ruling, an empty set must never widen back to the route).
+  final scopeSet = scope?.toSet();
   final seen = <String>{};
   return [
     for (final id in orderedWardIds)
-      if (byId[id] != null && seen.add(id)) byId[id]!
+      if (byId[id] != null &&
+          seen.add(id) &&
+          (scopeSet == null || scopeSet.contains(id)))
+        byId[id]!
   ];
 }

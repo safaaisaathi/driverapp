@@ -9,7 +9,7 @@ import 'package:driverapp/core/l10n/app_localizations.dart';
 import 'package:driverapp/core/l10n/locale_controller.dart';
 import 'package:driverapp/core/repositories/repositories.dart';
 import 'package:driverapp/core/theme/app_theme.dart';
-import 'package:driverapp/features/shift_start/data/verify_driver_pin.dart'
+import 'package:driverapp/features/shift_start/data/fcm_topics.dart'
     show driverMessagingGatewayProvider;
 import 'package:driverapp/features/tracking/tracking_providers.dart'
     show trackingPermissionGatewayProvider;

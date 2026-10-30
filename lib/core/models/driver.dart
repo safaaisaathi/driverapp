@@ -65,14 +65,19 @@ class Driver {
   });
 
   factory Driver.fromMap(Map<String, Object?> map) {
-    final wardIdsRaw = map['wardIds'] as List<Object?>;
+    // Tolerant read: a driver doc without `wardIds` parses as empty instead
+    // of throwing — a malformed doc is an admin data error, never a crash
+    // in the lookup (same shape as the Trip model's tolerant reads).
+    final wardIdsRaw = map['wardIds'] as List<Object?>?;
     return Driver(
       id: map['id'] as String,
       name: map['name'] as String,
       phone: map['phone'] as String,
       vanId: map['vanId'] as String,
       routeId: map['routeId'] as String,
-      wardIds: wardIdsRaw.map((element) => element as String).toList(),
+      wardIds:
+          wardIdsRaw?.map((element) => element as String).toList() ??
+              const <String>[],
       active: map['active'] as bool,
     );
   }

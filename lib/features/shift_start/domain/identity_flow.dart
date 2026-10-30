@@ -22,7 +22,7 @@ import '../../../core/config/firebase_bootstrap.dart' show MessagingGateway;
 import '../../../core/identity/driver_identity_controller.dart';
 import '../../../core/models/models.dart';
 import '../../../core/repositories/repositories.dart';
-import '../data/verify_driver_pin.dart' show driverMessagingGatewayProvider;
+import '../data/fcm_topics.dart' show driverMessagingGatewayProvider;
 import 'shift_session.dart';
 import 'start_shift.dart';
 
@@ -198,7 +198,7 @@ class IdentityFlowController extends Notifier<IdentityFlowState> {
         state = state.copyWith(phase: IdentityFlowPhase.startFailed);
         return;
       }
-      final session = await _startShift.execute(van, DateTime.now());
+      final session = await _startShift.execute(van, driver, DateTime.now());
       ref.read(shiftControllerProvider.notifier).activate(session);
       state = state.copyWith(
         phase: IdentityFlowPhase.onShift,

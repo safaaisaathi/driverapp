@@ -48,8 +48,7 @@ const int kFirestoreEmulatorPort = 8080;
 /// Auth emulator port (Ticket 02).
 const int kAuthEmulatorPort = 9099;
 
-/// Functions emulator port (Ticket 02; wired when `cloud_functions` is
-/// added by the PIN/verifyDriverPin ticket — see firebase_bootstrap.dart).
+/// Functions emulator port (Ticket 02; wired in firebase_bootstrap.dart).
 const int kFunctionsEmulatorPort = 5001;
 
 /// THE single options source. Everything else calls this.

@@ -17,7 +17,7 @@ import 'package:driverapp/core/domain/ist_clock.dart';
 import 'package:driverapp/core/identity/driver_identity_controller.dart';
 import 'package:driverapp/core/models/models.dart';
 import 'package:driverapp/core/repositories/repositories.dart';
-import 'package:driverapp/features/shift_start/data/verify_driver_pin.dart'
+import 'package:driverapp/features/shift_start/data/fcm_topics.dart'
     show driverMessagingGatewayProvider;
 import 'package:driverapp/features/shift_start/domain/identity_flow.dart';
 import 'package:driverapp/features/shift_start/domain/shift_session.dart';
@@ -266,6 +266,10 @@ void main() {
       final trip = trips.values.single;
       expect(trip.vanId, 'van-01');
       expect(trip.routeId, 'route-van');
+      // 0.16 trip contract: the confirmed code + the driver's allotted wards
+      // land on the trip doc (the van came from `drivers.vanId`).
+      expect(trip.driverId, 'AB-1234');
+      expect(trip.wardIds, const ['ward-01', 'ward-02']);
       expect(
         isSameDayIST(trip.date, before),
         isTrue,
@@ -317,6 +321,44 @@ void main() {
 
       expect(harness.state.phase, IdentityFlowPhase.initial);
       expect((harness.trips as FakeTripsRepository).trips, isEmpty);
+    });
+
+    test('a shared van: another driver\'s open trip is NEVER taken over — '
+        'the start fails with the retryable inline error', () async {
+      final trips = FakeTripsRepository([
+        Trip.fromMap(<String, Object?>{
+          'id': 'trip-1',
+          'vanId': 'van-01',
+          'routeId': 'route-van',
+          'driverId': 'AB-1001',
+          'wardIds': <String>['ward-01'],
+          'date': DateTime.now(),
+          'startedAt': DateTime.now(),
+          'endedAt': null,
+          'wardsDone': [],
+          'alertedWardIds': [],
+          'gpsTrail': [],
+          'mockLocationDetected': false,
+        }),
+      ]);
+      final harness = Harness(
+        driversSeed: [sampleDriver()],
+        vansSeed: [
+          sampleVan(status: 'on_shift', currentTripId: 'trip-1'),
+        ],
+        tripsRepo: trips,
+      );
+      await harness.submit('AB-1234');
+
+      await harness.start();
+
+      // The blocked resume lands on the retryable startFailed state — the
+      // same inline error a write failure shows, never a crash.
+      expect(harness.state.phase, IdentityFlowPhase.startFailed);
+      expect(harness.state.driver?.id, 'AB-1234');
+      // No take-over: the other driver's trip doc is untouched.
+      expect(trips.trips['trip-1']!.driverId, 'AB-1001');
+      expect(trips.trips, hasLength(1));
     });
 
     test('resetToEntry (ticket 5 change-code): drops the confirm context '
