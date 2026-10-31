@@ -314,6 +314,10 @@ Pill-like: radius 20, height 56 (multi-line min 96), fill `surface`, 1.5 `border
 
 Single `XX-0000` field replacing the 4-box PIN pad. Height 64, radius 20, fill `surface`, 1.5 `borderStrong` outline, label above. Numeric keypad, auto-formats hyphen after 2 chars. On validation error: outline `error` 1.5 + InlineError below [from-wireframe:p2,p3 pattern, adapted].
 
+**Amended 2026-10-30 (driver demo feedback): OTP boxes.** The flat field becomes one box per character: 2 letter cells + the dash as PLAIN TEXT (never a box) + 4 digit cells. Cell size `AppSize.codeBox` (56), cell radius `AppRadius.control` (20), 1.5 `borderStrong` outline, 2.5 `brand` on the active cell, `error` on a bad shape, fill `surface`, per-box text `text.headline`. The row is `FittedBox(scaleDown)` so six 56 dp cells never overflow a 360 dp screen. The editable seam stays a hidden `TextField` (the formatter/keyboard-flip contract is unchanged) painted behind the boxes; the visible row tap focuses it, and an extra short line (`8 dp`) separates the cells.
+
+**Amended 2026-10-31 (identity review): edit cycle + returning surface.** After a search the boxes drop focus and the result action owns the pinned CTA; tapping the boxes re-enters editing and the search CTA returns. A returning device never renders the boxes: the welcome-back card is the only surface, every failure shows inside that card (title + body, the shared error tint) with the pinned CTA = Retry, and `Different driver?` is the only way to the entry form. The entry form reached that way carries a top-left back button (56 dp driver icon size, page margin) and system back returns to the welcome card; a device that never came through the link has no arrow.
+
 ### 4.6 PillNav (driver)
 
 See 3.3. Items: Route, Notices, Reports. Badge: 20 dp circle `accentStrong` fill + white 14 sp number, top-right of item, for unread counts only.
