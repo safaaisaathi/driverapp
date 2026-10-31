@@ -118,7 +118,9 @@ final NotifierProvider<ShiftTrackingAutoStartStatusController,
   ShiftTrackingAutoStartStatusController.new,
 );
 
-final class ShiftTrackingAutoStartStatusController
+/// Not `final`: widget tests extend it to force a banner state without
+/// Geolocator (issue #23's 360 dp layout test).
+class ShiftTrackingAutoStartStatusController
     extends Notifier<ShiftTrackingAutoStart?> {
   @override
   ShiftTrackingAutoStart? build() => null;
