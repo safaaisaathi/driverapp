@@ -57,6 +57,11 @@ class HiveTrailBuffer implements TrailBuffer {
   @override
   Future<void> add(GpsPoint point) async {
     final list = _read()..add(point.toMap());
+    // The declared cap is real (issue #13): a dead zone longer than the cap
+    // drops the OLDEST points instead of letting memory and the next write
+    // grow without bound.
+    final overflow = list.length - maxTrailBufferPoints;
+    if (overflow > 0) list.removeRange(0, overflow);
     await _write(list);
   }
 

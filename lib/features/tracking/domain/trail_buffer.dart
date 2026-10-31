@@ -10,8 +10,7 @@ import 'package:driverapp/core/models/models.dart';
 /// Order discipline (contract: trail points in order): [takeOldest] returns
 /// the oldest points first; [putBackOldest] puts a failed batch back at the
 /// FRONT so catch-up data keeps its order relative to later points.
-abstract class TrailBuffer {
-  /// How many points are currently buffered and unflushed.
+abstract class TrailBuffer {  /// How many points are currently buffered and unflushed.
   int get pendingCount;
 
   /// Appends one accepted Write Policy point at the back.
@@ -28,3 +27,22 @@ abstract class TrailBuffer {
 /// Creates the buffer for one trip (the Hive implementation opens the box
 /// `trail-<tripId>`).
 typedef TrailBufferFactory = Future<TrailBuffer> Function(String tripId);
+
+/// Hard cap for the local Trail buffer per trip: beyond this the OLDEST
+/// points are dropped (keeps a long dead-zone from growing memory without
+/// bound; not a contract constant).
+const int maxTrailBufferPoints = 5000;
+
+/// Largest batch one trail write may carry, measured on the device
+/// (issue #13, M215F on the field network):
+///
+/// - 100 points (~5 KB) -> 1.7 s
+/// - 1000 points (~53 KB) -> 8.0 s
+/// - 2500 points (~133 KB) -> missed a 25 s deadline (landed ~40 s later)
+/// - 5000 points (~265 KB) -> stalled the write stream past a minute
+///
+/// The flush cadence is 30 s, so a batch has to fit well inside it: 1000
+/// points leaves ~22 s of margin on the measured network and drains a full
+/// buffer in five ticks. The old code flushed EVERYTHING each tick
+/// ([takeOldest] with no limit), which is exactly the write that stalled.
+const int maxTrailBatchPoints = 1000;
