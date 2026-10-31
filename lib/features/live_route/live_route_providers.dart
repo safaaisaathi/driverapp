@@ -25,6 +25,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:driverapp/core/models/models.dart';
 import 'package:driverapp/core/repositories/repository_providers.dart';
+import 'package:driverapp/features/tracking/offline/offline_providers.dart';
 
 import 'domain/live_route_state.dart';
 
@@ -93,23 +94,24 @@ final routeWardsProvider =
 /// Offline seam (0.13: dead zones are normal; the screen keeps rendering
 /// cached data with an offline badge instead of failing).
 ///
-/// The default is "online": Firestore persistence (F-D7) already keeps data
-/// fresh from cache, and detectable connectivity needs a platform channel
-/// (e.g. connectivity_plus — NOT allowed here, pubspec changes are only for
-/// the map package). The F-D7 offline-sync ticket owns the real detector and
-/// swaps this provider's default over; feature tests override it to drive
-/// the offline state hermetically.
+/// The F-D7 offline ticket (ticket 12) shipped the real detector
+/// (connectivity_plus, [connectivitySourceProvider]) but never flipped this
+/// default, so the badge was permanently hidden. Interface presence is
+/// enough here: a dead zone shows the badge while Firestore persistence
+/// keeps the cached data rendering. The source emits `true` = reachable, so
+/// the offline value is its inverse. Feature tests override this provider
+/// (the pump harnesses do it for every test) to drive the state
+/// hermetically.
 final StreamProvider<bool> offlineStatusProvider =
     StreamProvider.autoDispose<bool>((ref) {
-  // TODO(F-D7 offline ticket): replace with a real connectivity source.
-  return const Stream<bool>.empty();
+  return ref.watch(connectivitySourceProvider).status.map((online) => !online);
 });
 
 /// Whether the device is currently offline, from [offlineStatusProvider] —
-/// an empty stream (no detector) means online.
+/// an errored/not-yet-emitted stream means online.
 final Provider<bool> isOfflineProvider = Provider.autoDispose<bool>((ref) {
   final status = ref.watch(offlineStatusProvider);
-  // An errored/empty offline stream means "no detector wired" → online.
+  // An errored/pending offline stream means "no reading yet" → online.
   return status.hasValue ? status.value! : false;
 });
 

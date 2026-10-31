@@ -195,6 +195,9 @@ void main() {
     List<dynamic> overrides, {
     List<dynamic> extra = const [],
     double devicePixelRatio = 2.6,
+    // The real offline default reads connectivity_plus (platform channel);
+    // every test pins it here so no test reaches the plugin.
+    bool offline = false,
   }) {
     tester.view.physicalSize = const Size(1080, 2340);
     tester.view.devicePixelRatio = devicePixelRatio;
@@ -203,6 +206,7 @@ void main() {
       ProviderScope(
         overrides: [
           tileUrlTemplateProvider.overrideWithValue(null),
+          offlineStatusProvider.overrideWith((ref) => Stream.value(offline)),
           ...overrides,
           ...extra,
         ],
@@ -514,7 +518,7 @@ void main() {
           FakeRoutesRepository([route()]),
         ),
       ],
-      extra: [offlineStatusProvider.overrideWith((ref) => Stream.value(true))],
+      offline: true,
     );
     await settle(tester);
 

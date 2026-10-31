@@ -106,6 +106,7 @@ A read-only audit of the launch → identity flow. Triage of what is real, what 
 - [ ] F-06 welcome card shows Name/Code/Wards, not Van/Route — NEEDS RULING (DESIGN-driver-app §9.27 wants Van + Route; the card follows the §0.16 return-surface ruling today).
 - [x] F-07 "Different driver?" vs the design's "Change code" — CLOSED: the identity-review ruling (2026-10-31) chose "Different driver?"; the design file is the stale side.
 - [ ] F-08 shared-van conflict shows the generic "Check the connection" copy — NEEDS RULING (copy is a product call; the flow collapses `ShiftStartConflict` into `startFailed` today).
+- [x] `offlineStatusProvider` returned an empty stream (audit §6, P2) — FIXED: the D2 offline badge was permanently hidden because the provider's default never flipped to the connectivity_plus detector the offline ticket shipped. It now maps `connectivitySourceProvider.status` (interface presence) to offline; the D2 pump harnesses pin it per test so no test reaches the platform channel.
 - [x] vanId custom-claim rule check (audit §6) — CLOSED BY DESIGN: the §0.16 security stance says the 0.8 rules carry no custom-claim checks; the production wall is rules tightening + App Check.
 - [x] Doc drift (F-14/F-15/F-16) — the runbook's "session restore → D2 relaunch" line is pre-identity and now false (corrected above); the dev-entrypoint list now includes `dev_flow_preview.dart` + `dev_identity_start.dart`.
 
