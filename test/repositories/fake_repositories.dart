@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:driverapp/core/domain/ist_clock.dart';
 import 'package:driverapp/core/models/models.dart';
 import 'package:driverapp/core/repositories/repositories.dart';
 
@@ -187,19 +188,17 @@ class FakeTripsRepository implements TripsRepository {
   }
 
   Trip? _latestFor(String vanId, DateTime date) {
-    // The Firestore live query matches vanId + `date` in [day, day+1) — a just
-    // ended trip still surfaces, so End Shift keeps it watchable.
+    // The Firestore live query matches vanId + `date` in the IST day window
+    // (issue #15) — a just ended trip still surfaces, so End Shift keeps it
+    // watchable.
     final matches = trips.values
         .where(
-          (trip) => trip.vanId == vanId && _sameDay(trip.date, date),
+          (trip) => trip.vanId == vanId && isSameDayIST(trip.date, date),
         )
         .toList()
       ..sort((a, b) => a.startedAt.compareTo(b.startedAt));
     return matches.isEmpty ? null : matches.last;
   }
-
-  bool _sameDay(DateTime a, DateTime b) =>
-      a.year == b.year && a.month == b.month && a.day == b.day;
 
   @override
   Stream<List<Trip>> watchRecentTrips({
@@ -210,9 +209,8 @@ class FakeTripsRepository implements TripsRepository {
     late StreamController<List<Trip>> controller;
     late StreamSubscription<void> changesSub;
     List<Trip> latest() {
-      final cutoff =
-          DateTime(asOfDate.year, asOfDate.month, asOfDate.day)
-              .add(const Duration(days: 1));
+      // Same IST-day frame as the Firestore query (issue #15).
+      final cutoff = istDayWindow(asOfDate).endExclusive;
       final matches = trips.values
           .where(
             (trip) =>

@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../domain/ist_clock.dart';
 import '../../models/models.dart';
 import '../trips_repository.dart';
 
@@ -64,14 +65,14 @@ final class FirestoreTripsRepository implements TripsRepository {
     required String vanId,
     required DateTime date,
   }) {
-    final dayStart = Timestamp.fromDate(DateTime(date.year, date.month, date.day));
-    final dayEnd = Timestamp.fromDate(
-      DateTime(date.year, date.month, date.day).add(const Duration(days: 1)),
-    );
+    // IST-day frame (issue #15): the writer stores `trips.date` as the IST
+    // midnight instant, so the window must be built in the same frame. Using
+    // the device's local calendar fields put a non-IST phone on the wrong day.
+    final window = istDayWindow(date);
     final query = _trips
         .where('vanId', isEqualTo: vanId)
-        .where('date', isGreaterThanOrEqualTo: dayStart)
-        .where('date', isLessThan: dayEnd);
+        .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(window.start))
+        .where('date', isLessThan: Timestamp.fromDate(window.endExclusive));
     return query.snapshots().map((snapshot) {
       if (snapshot.docs.isEmpty) return null;
       final doc = snapshot.docs.first;
@@ -87,14 +88,12 @@ final class FirestoreTripsRepository implements TripsRepository {
     int limit = 30,
   }) {
     // History includes TODAY (WF-22's "Today" row): the open trip shows
-    // as "running", a just-ended trip as completed/partly-done.
-    final after = Timestamp.fromDate(
-      DateTime(asOfDate.year, asOfDate.month, asOfDate.day)
-          .add(const Duration(days: 1)),
-    );
+    // as "running", a just-ended trip as completed/partly-done. Bounded in
+    // the IST-day frame, like the write side (issue #15).
+    final after = istDayWindow(asOfDate).endExclusive;
     final query = _trips
         .where('vanId', isEqualTo: vanId)
-        .where('date', isLessThan: after)
+        .where('date', isLessThan: Timestamp.fromDate(after))
         .orderBy('date', descending: true)
         .limit(limit);
     return query.snapshots().map(
