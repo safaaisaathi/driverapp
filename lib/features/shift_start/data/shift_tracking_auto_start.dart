@@ -24,6 +24,7 @@ import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 
+import '../../tracking/offline/offline_providers.dart';
 import '../../tracking/tracking_providers.dart';
 import '../domain/shift_session.dart';
 
@@ -63,6 +64,13 @@ final class TrackingAutoStarter implements ShiftTrackingAutoStarter {
     required String notificationTitle,
     required String notificationBody,
   }) async {
+    // F-D7: the offline sync service drains the ACTIVE trip's Trail buffer on
+    // every reconnect, but nothing in the real flow ever called `attachTrip`,
+    // so a shift's catch-up trail never synced (PRD F-D7 + §4 AC#4). Attach
+    // before the permission flow: the trip exists the moment the session
+    // does, even if the driver denies a permission now.
+    _ref.read(offlineSyncServiceProvider).attachTrip(session.tripId);
+
     final report = await PermissionFlowController(
       _ref.read(trackingPermissionGatewayProvider),
     ).requestAll();

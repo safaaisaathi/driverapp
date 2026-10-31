@@ -37,6 +37,10 @@ service cloud.firestore {
     match /complaints/{complaintId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null;
+      // D4 (F-D6, PRD-2 §3 "Pending Reports"): "Will Revisit" sets
+      // status = assigned, "Done" sets status = resolved + resolvedAt.
+      // Without `allow update` every D4 button failed in production.
+      allow update: if request.auth != null;
     }
   }
 }

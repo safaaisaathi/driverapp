@@ -386,7 +386,8 @@ void main() {
       expect(all.last.lat, 2499);
     });
 
-    test('stop() performs the FINAL flush (End Shift semantics)', () async {      final engine = buildEngine();
+    test('stop() performs the FINAL flush (End Shift semantics)', () async {
+      final engine = buildEngine();
       await engine.start(
         tripId: 'trip-1',
         vanId: 'van-01',
@@ -422,6 +423,26 @@ void main() {
 
       expect(trips.trips['trip-1']!.gpsTrail.length, lengthAtStop);
       expect(engine.state.status, TrackingRunStatus.idle);
+    });
+
+    test('stop() stops the foreground service — End Shift must not leave the '
+        'persistent notification behind (P0 audit fix)', () async {
+      final engine = buildEngine();
+      await engine.start(
+        tripId: 'trip-1',
+        vanId: 'van-01',
+        notificationTitle: 'T',
+        notificationBody: '',
+      );
+      expect(service.startCount, 1);
+      expect(service.stopCount, 0);
+
+      await engine.stop();
+
+      expect(service.stopCount, 1);
+      // Idempotent: a second stop does not stop the service again.
+      await engine.stop();
+      expect(service.stopCount, 1);
     });
   });
 
@@ -596,6 +617,7 @@ class _FakeBattery implements BatterySource {
 class _FakeService implements ForegroundServiceHandle {
   bool _failNext = false;
   int startCount = 0;
+  int stopCount = 0;
 
   void failNext() => _failNext = true;
 
@@ -612,7 +634,10 @@ class _FakeService implements ForegroundServiceHandle {
   }
 
   @override
-  Future<bool> stop() async => true;
+  Future<bool> stop() async {
+    stopCount++;
+    return true;
+  }
 }
 
 class _FakeTrailBuffer implements TrailBuffer {

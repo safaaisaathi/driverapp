@@ -384,6 +384,17 @@ class TrackingEngine {
     await _vanDocSub?.cancel();
     _vanDocSub = null;
 
+    // The foreground service owns the persistent "Tracking active"
+    // notification: without this call it outlives End Shift (PRD-2 §3 +
+    // F-D5 step 4 "stop the service"), leaving a stale notification until
+    // the process dies. Best effort: a platform failure must not block the
+    // trail flush below.
+    try {
+      await _service.stop();
+    } catch (error) {
+      debugPrint('tracking: foreground service stop failed: $error');
+    }
+
     final tripId = _tripId!;
     _tripId = null;
     _vanId = null;
