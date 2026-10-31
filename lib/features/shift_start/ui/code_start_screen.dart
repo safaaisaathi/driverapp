@@ -164,6 +164,14 @@ class _CodeStartHostState extends ConsumerState<_CodeStartHost> {
   /// welcome card and the auto-lookup never come back after it.
   bool _changeMode = false;
 
+  /// True only when the driver reached the entry form through the welcome
+  /// card's "Different driver?" link: the one case with a welcome card to go
+  /// back to, so it alone owns the back arrow and the system-back
+  /// interception (issue #20). A fresh device whose own first confirm made
+  /// it "returning" has nothing to return to — the device caught what the
+  /// widget tests missed, because their store never set setup-done.
+  bool _changeRequested = false;
+
   @override
   void initState() {
     super.initState();
@@ -269,8 +277,11 @@ class _CodeStartHostState extends ConsumerState<_CodeStartHost> {
   /// dropping the current confirm context in the flow. One-way; the
   /// remembered code stays until a new confirm overwrites it.
   void _enterChangeMode() {
-    if (_changeMode) return;
-    setState(() => _changeMode = true);
+    if (_changeRequested) return;
+    setState(() {
+      _changeMode = true;
+      _changeRequested = true;
+    });
     ref.read(identityFlowProvider.notifier).resetToEntry();
   }
 
@@ -281,7 +292,10 @@ class _CodeStartHostState extends ConsumerState<_CodeStartHost> {
   /// so the card re-lands exactly like on launch.
   void _exitChangeMode() {
     if (_busy) return; // Never mid-lookup or mid-start.
-    setState(() => _changeMode = false);
+    setState(() {
+      _changeMode = false;
+      _changeRequested = false;
+    });
     ref.read(identityFlowProvider.notifier).resetToEntry();
     _attemptedRememberedCode = null;
   }
@@ -327,7 +341,7 @@ class _CodeStartHostState extends ConsumerState<_CodeStartHost> {
               ),
               child: Row(
                 children: [
-                  if (_changeMode && identity.isReturning)
+                  if (_changeRequested)
                     SizedBox(
                       width: AppSize.iconButtonDriver,
                       height: AppSize.iconButtonDriver,
@@ -408,11 +422,11 @@ class _CodeStartHostState extends ConsumerState<_CodeStartHost> {
     );
 
     // System back inside the change-code form returns to the welcome card
-    // instead of leaving the app. Only a RETURNING driver has that card to
-    // return to; a fresh device keeps the default pop (issue #20).
-    final changeBack = _changeMode && identity.isReturning;
+    // instead of leaving the app. Only a driver who came through the
+    // "Different driver?" link has that card to return to; a fresh device
+    // keeps the default pop (issue #20).
     return PopScope(
-      canPop: !changeBack,
+      canPop: !_changeRequested,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _exitChangeMode();
       },

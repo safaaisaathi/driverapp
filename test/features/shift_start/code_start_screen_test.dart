@@ -866,17 +866,24 @@ void main() {
 
   testWidgets('a fresh device never shows the back arrow: there is no '
       'welcome card to return to (issue #20)', (tester) async {
+    // Setup already done (the device-true first-run state: onboarding
+    // completes setup, so the driver's OWN confirm makes this phone
+    // "returning" mid-session). The arrow must still not appear — it belongs
+    // to the "Different driver?" link only.
+    final identityStore = InMemoryDriverIdentityStore()..writeSetupDone(true);
     await pumpScreen(
       tester,
       driversRepo: FakeDriversRepository([sampleDriver()]),
       vans: FakeVansRepository([sampleVan()]),
       trips: FakeTripsRepository(),
+      identityStore: identityStore,
     );
 
     await submitCode(tester, 'AB-1234');
     await pumpUntil(tester, find.byKey(const ValueKey('d1-confirm-card')));
     // The confirm card is up; the change-code arrow is not (the driver is
     // new to this device, so back would go nowhere).
+    expect(identityStore.storedDriverCode, 'AB-1234');
     expect(find.byKey(const ValueKey('d1-change-back')), findsNothing);
 
     // Tapping the boxes to edit keeps it hidden too.
