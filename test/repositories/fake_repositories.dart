@@ -190,13 +190,19 @@ class FakeTripsRepository implements TripsRepository {
   Trip? _latestFor(String vanId, DateTime date) {
     // The Firestore live query matches vanId + `date` in the IST day window
     // (issue #15) — a just ended trip still surfaces, so End Shift keeps it
-    // watchable.
+    // watchable. Same tie-break as the real query (issue #25): an open trip
+    // beats a closed same-day sibling, otherwise the most recent start.
     final matches = trips.values
         .where(
           (trip) => trip.vanId == vanId && isSameDayIST(trip.date, date),
         )
         .toList()
-      ..sort((a, b) => a.startedAt.compareTo(b.startedAt));
+      ..sort((a, b) {
+        final aOpen = a.endedAt == null;
+        final bOpen = b.endedAt == null;
+        if (aOpen != bOpen) return aOpen ? 1 : -1;
+        return a.startedAt.compareTo(b.startedAt);
+      });
     return matches.isEmpty ? null : matches.last;
   }
 

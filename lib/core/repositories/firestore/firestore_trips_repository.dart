@@ -75,9 +75,21 @@ final class FirestoreTripsRepository implements TripsRepository {
         .where('date', isLessThan: Timestamp.fromDate(window.endExclusive));
     return query.snapshots().map((snapshot) {
       if (snapshot.docs.isEmpty) return null;
-      final doc = snapshot.docs.first;
-      final data = <String, Object?>{...doc.data(), 'id': doc.id};
-      return Trip.fromMap(data);
+      final trips = snapshot.docs
+          .map((doc) => Trip.fromMap({...doc.data(), 'id': doc.id}))
+          .toList();
+      // Contract: "the open (or just-closed) trip". Two trips can share an
+      // IST day (a shift ended, then a new one started), and docs come back
+      // in document-id order — taking `.first` once picked the closed
+      // sibling and showed its stale done ticks (issue #25). Open wins; among
+      // closed trips the most recent start wins.
+      trips.sort((a, b) {
+        final aOpen = a.endedAt == null;
+        final bOpen = b.endedAt == null;
+        if (aOpen != bOpen) return aOpen ? -1 : 1;
+        return b.startedAt.compareTo(a.startedAt);
+      });
+      return trips.first;
     });
   }
 

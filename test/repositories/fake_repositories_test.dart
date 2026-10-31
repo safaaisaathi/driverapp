@@ -177,6 +177,64 @@ void main() {
       await subscription.cancel();
     });
 
+    test('an open trip beats a closed same-day sibling (issue #25)', () async {
+      // Both docs share the IST day; the CLOSED one started later, so a
+      // plain startedAt sort would surface it and leak its done ticks.
+      final day = DateTime(2026, 11, 1);
+      final open = Trip.fromMap({
+        ...tripDocMapOpen(id: 'trip-open'),
+        'date': ts(utcStartOfIstDay(day)),
+        'startedAt': ts(DateTime.utc(2026, 11, 1, 4, 0)),
+        'endedAt': null,
+      });
+      final closed = Trip.fromMap({
+        ...tripDocMapOpen(id: 'trip-closed'),
+        'date': ts(utcStartOfIstDay(day)),
+        'startedAt': ts(DateTime.utc(2026, 11, 1, 9, 0)),
+        'endedAt': ts(DateTime.utc(2026, 11, 1, 10, 0)),
+      });
+      final seeded = FakeTripsRepository([closed, open]);
+
+      final events = <Trip?>[];
+      final subscription = seeded
+          .watchTripByVanIdAndDate(vanId: 'van-01', date: day)
+          .listen(events.add);
+      await pumpEventQueue();
+      expect(
+        events.single?.id,
+        'trip-open',
+        reason: 'the open trip is today\'s trip, not its closed sibling',
+      );
+      await subscription.cancel();
+    });
+
+    test('closed-only day surfaces the most recently started trip (issue #25)',
+        () async {
+      final day = DateTime(2026, 11, 1);
+      Trip closedAt(String id, int hour) => Trip.fromMap({
+            ...tripDocMapOpen(id: id),
+            'date': ts(utcStartOfIstDay(day)),
+            'startedAt': ts(DateTime.utc(2026, 11, 1, hour)),
+            'endedAt': ts(DateTime.utc(2026, 11, 1, hour + 1)),
+          });
+      final seeded = FakeTripsRepository([
+        closedAt('trip-morning', 4),
+        closedAt('trip-late', 9),
+      ]);
+
+      final events = <Trip?>[];
+      final subscription = seeded
+          .watchTripByVanIdAndDate(vanId: 'van-01', date: day)
+          .listen(events.add);
+      await pumpEventQueue();
+      expect(
+        events.single?.id,
+        'trip-late',
+        reason: 'End Shift keeps the just-closed trip watchable',
+      );
+      await subscription.cancel();
+    });
+
     test('appendWardDone appends in order and keeps flagged semantics', () async {
       final created = await repo.createTrip(trip);
       await repo.appendWardDone(
