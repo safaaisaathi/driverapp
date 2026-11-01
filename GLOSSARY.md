@@ -20,6 +20,10 @@ _Avoid_: schedule, path
 The driver's working session, from Start Shift to End Shift.
 _Avoid_: session, duty
 
+**Depot dwell (auto-end)**:
+The rule that ends a shift by itself when the van stays inside 500 m of its depot for 3 hours non-stop. The depot is the admin-set `vans.depot = {lat, lng}` tag; leaving the radius or moving 100 m restarts the 3-hour clock.
+_Avoid_: parking timeout, idle shift
+
 **Trip**:
 The log record of one shift: the van's trail, the wards done, and alert history.
 _Avoid_: journey, ride

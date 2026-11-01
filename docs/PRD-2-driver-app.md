@@ -17,7 +17,7 @@
 
 ### 0.2 Collections
 - `wards`: id, name, nameGu, code, type, center{lat,lng}, radiusM, routeId, inspectorId, escalationTo (staffId)
-- `vans`: id, plateNo, routeId, status, lastLocation{lat,lng,updatedAt,speedKmph}, currentTripId, batteryPct
+- `vans`: id, plateNo, routeId, status, lastLocation{lat,lng,updatedAt,speedKmph}, currentTripId, batteryPct, depot{lat,lng}
 - `vanSecrets`: id (same as vanId), driverPinHash (never readable by apps, only by Cloud Functions)
 - `routes`: id, name, wardIds[] (in visiting order), scheduledStartTime ("HH:mm")
 - `trips`: id, vanId, routeId, date, startedAt, endedAt, wardsDone[{wardId,doneAt,flagged}], alertedWardIds[], gpsTrail[{lat,lng,t}], mockLocationDetected
@@ -36,7 +36,7 @@
 - `staff.role`: inspector, chief_officer, tdo, ddo
 
 ### 0.4 Constants (one config file per project, same names)
-GPS_INTERVAL_SEC=10, GPS_INTERVAL_LOW_BATTERY_SEC=30, LOW_BATTERY_PCT=20, OFFLINE_THRESHOLD_MIN=10, STALE_LOCATION_SEC=60, ARRIVAL_ALERT_RADIUS_M=500, DUPLICATE_RADIUS_M=50, MAX_COMPLAINTS_PER_DEVICE_PER_DAY=5, MISSED_REPORT_THRESHOLD=3, ESCALATION_L1_HOURS=24, ESCALATION_L2_HOURS=48, AVG_VAN_SPEED_KMPH=15, MIN_MOVE_M=15, HEARTBEAT_SEC=30
+GPS_INTERVAL_SEC=10, GPS_INTERVAL_LOW_BATTERY_SEC=30, LOW_BATTERY_PCT=20, OFFLINE_THRESHOLD_MIN=10, STALE_LOCATION_SEC=60, ARRIVAL_ALERT_RADIUS_M=500, DUPLICATE_RADIUS_M=50, MAX_COMPLAINTS_PER_DEVICE_PER_DAY=5, MISSED_REPORT_THRESHOLD=3, ESCALATION_L1_HOURS=24, ESCALATION_L2_HOURS=48, AVG_VAN_SPEED_KMPH=15, MIN_MOVE_M=15, HEARTBEAT_SEC=30, DEPOT_RADIUS_M=500, DEPOT_DWELL_LIMIT_HOURS=3, DEPOT_DWELL_RESET_M=100
 
 ### 0.5 Design tokens (same names in Flutter theme and CSS variables)
 - `color.primary` #1E8E5A, `color.onPrimary` #FFFFFF, `color.background` #F6F8F7, `color.surface` #FFFFFF, `color.textPrimary` #1B1F1D, `color.textMuted` #5F6B66
@@ -193,6 +193,8 @@ Decision source: grill session 2026-10-30 + spec (GitHub issue #1, safaaisaathi/
 - **Security stance.** The code is a badge number, NOT a secret: no OTP, no PIN. The app keeps its anonymous auth session (the PIN callable's custom-token sign-in is not load-bearing; 0.8 rules carry no custom-claim checks). The production wall is rules tightening + App Check per the production plan (GLOSSARY 2026-10-29).
 - **Rules.** `match /drivers/{code} { allow read: if request.auth != null; }` and nothing else.
 - **Screens.** `D1 Shift Start` becomes the driver-code entry + confirm card; splash/welcome per above; the Start Duty screen is deleted.
+
+- **Depot auto-end (ruling #29, 2026-11-01).** `vans.depot = {lat, lng}` is an admin-set tag (console now, PRD-3 panel later; drivers never write it). While a shift is live the app checks the van position on the normal GPS cadence: if the van stays inside `DEPOT_RADIUS_M` (500 m) of its depot continuously for `DEPOT_DWELL_LIMIT_HOURS` (3 h), the shift ends automatically with the exact D5 write set (`trips.endedAt`, `vans.status = idle`, `vans.currentTripId = null`, tracking stopped, session cleared) and D2 returns to D1 with a "Shift ended at depot" notice. The dwell clock restarts when the van leaves the radius or moves more than `DEPOT_DWELL_RESET_M` (100 m) from its dwell anchor; it fires at most once per shift. A van without a depot tag never auto-ends. A failed auto-end write keeps the trip open and retries after 5 minutes; the app-killed case is the backend stale-shift sweep's job (later ticket).
 
 ---
 

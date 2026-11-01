@@ -17,6 +17,12 @@
 /// 5. Flow F (silent van) driver-app side: when a write lands while the
 ///    backend has marked the van `offline`, the engine sets
 ///    `vans.status = on_shift` again (0.13 Flow F).
+/// 6. Depot auto-end (ruling #29): while a fix exists, the engine feeds the
+///    van position to [DepotDwellTracker]. Three continuous hours inside
+///    500 m of the admin-set `vans.depot` runs the SAME end-shift write set
+///    as D5 (shared core), stops the run, and reports the ended trip id to
+///    the app layer. A failed write keeps the shift open and retries after
+///    [depotAutoEndRetryDelay].
 ///
 /// Platform channels (location stream, battery, foreground service, trail
 /// box) are injectable seams: small interfaces in this folder, real
@@ -28,6 +34,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart'
     show debugPrint, visibleForTesting;
 import 'package:driverapp/core/config/constants.dart';
+import 'package:driverapp/core/domain/end_shift_writes.dart';
 import 'package:driverapp/core/domain/geo_point.dart';
 import 'package:driverapp/core/domain/write_policy.dart';
 import 'package:driverapp/core/models/models.dart';
@@ -35,6 +42,7 @@ import 'package:driverapp/core/repositories/repositories.dart';
 
 import '../offline/offline_write_queue.dart';
 import 'battery_source.dart';
+import 'depot_dwell.dart';
 import 'foreground_service.dart';
 import 'position_fix.dart';
 import 'position_source.dart';
@@ -42,6 +50,10 @@ import 'trail_buffer.dart';
 
 /// Seconds between trail flushes (PRD-2 0.13 Flow A step 4).
 const int trailFlushIntervalSec = 30;
+
+/// After a failed depot auto-end write (offline, rules), the next attempt
+/// waits this long; the dwell latch stays over the limit meanwhile.
+const Duration depotAutoEndRetryDelay = Duration(minutes: 5);
 
 /// Run status observable through [TrackingEngine.changes].
 enum TrackingRunStatus {
@@ -145,6 +157,10 @@ class TrackingEngine {
     /// F-D7: when wired, a failed location write queues the LATEST candidate
     /// instead of being dropped (OfflineSyncService drains it on reconnect).
     OfflineWriteQueue? offlineWriteQueue,
+    /// Ruling #29: called with the ended trip id after the depot rule
+    /// auto-ends a shift, so the app layer can clear its shift session and
+    /// show the notice.
+    void Function(String tripId)? onShiftAutoEnded,
   })  : _vans = vansRepository,
         _trips = tripsRepository,
         _position = positionSource,
@@ -154,7 +170,8 @@ class TrackingEngine {
         _clock = clock ?? DateTime.now,
         _initialCheckInterval = checkIntervalSec ?? gpsIntervalSec,
         _flushIntervalSec = flushIntervalSec ?? trailFlushIntervalSec,
-        _offlineWriteQueue = offlineWriteQueue; // ignore: prefer_initializing_formals
+        _offlineWriteQueue = offlineWriteQueue, // ignore: prefer_initializing_formals
+        _onShiftAutoEnded = onShiftAutoEnded; // ignore: prefer_initializing_formals
 
   final VansRepository _vans;
   final TripsRepository _trips;
@@ -172,6 +189,9 @@ class TrackingEngine {
 
   /// F-D7 drain seam; null in tests that don't exercise the offline path.
   final OfflineWriteQueue? _offlineWriteQueue;
+
+  /// Ruling #29: app-layer hook that clears the shift session.
+  final void Function(String tripId)? _onShiftAutoEnded;
 
   TrackingEngineState _state = TrackingEngineState.idle;
 
@@ -206,6 +226,16 @@ class TrackingEngine {
   /// is (kill/restart safe, never unset by the app). Latched here after the
   /// first mocked fix; a failed write re-arms the write for the next mock.
   bool _mockLocationLatched = false;
+
+  /// Ruling #29: depot dwell state for the current run, `null` until the van
+  /// doc carries a depot.
+  DepotDwellTracker? _depotDwell;
+
+  bool _autoEnding = false;
+
+  /// Set after a failed auto-end write so an offline phone retries later
+  /// instead of hammering Firestore every tick.
+  DateTime? _autoEndRetryAfter;
 
   /// Starts tracking for a trip the caller (D1 Start Shift) has just created
   /// after switching the van on_shift.
@@ -258,6 +288,12 @@ class TrackingEngine {
     _intervalSec = _initialCheckInterval;
     _stopping = false;
 
+    // Ruling #29: a fresh run starts with no dwell clock; the van doc (read
+    // right below) brings the depot.
+    _depotDwell = null;
+    _autoEnding = false;
+    _autoEndRetryAfter = null;
+
     // F-D9 latch is trip-scoped: a fresh run starts unlatched; the ground
     // truth (`trips.mockLocationDetected`) is never unset by the app.
     _mockLocationLatched = false;
@@ -267,8 +303,9 @@ class TrackingEngine {
     _trailBuffer = buffer;
 
     // Keep the van doc, so a backend `offline` marking that lands mid-shift
-    // can flip back to on_shift at the next successful write (Flow F).
-    _vanDocSub = _vans.watchVan(vanId).listen((van) => _latestVan = van);
+    // can flip back to on_shift at the next successful write (Flow F). The
+    // same stream carries the admin-set depot for the auto-end rule (#29).
+    _vanDocSub = _vans.watchVan(vanId).listen(_onVanDoc);
 
     // distanceFilter = minMoveM (PRD-2 F-D2 step 3). Fixes only update the
     // latest candidate; writes happen on the policy cadence below
@@ -338,6 +375,19 @@ class TrackingEngine {
   // ---------------------------------------------------------------------------
   // internals
   // ---------------------------------------------------------------------------
+
+  /// Keeps the van value fresh (Flow F revive) and builds the depot dwell
+  /// tracker as soon as the admin-set `vans.depot` arrives (ruling #29). A
+  /// mid-shift depot move restarts the clock on the new centre.
+  void _onVanDoc(Van? van) {
+    _latestVan = van;
+    final depot = van?.depot;
+    if (depot == null) return;
+    final tracker = _depotDwell;
+    if (tracker == null || tracker.depot != depot) {
+      _depotDwell = DepotDwellTracker(depot: depot);
+    }
+  }
 
   /// Position intake (F-D2 step 3): every fix updates the write-policy
   /// candidate. F-D9 rides on the same point: a mocked fix latches
@@ -415,6 +465,8 @@ class TrackingEngine {
     _latestVan = null;
     _intervalSec = _initialCheckInterval;
     _stopping = false;
+    _depotDwell = null;
+    _autoEndRetryAfter = null;
 
     _applyState(TrackingEngineState(
       status: TrackingRunStatus.idle,
@@ -435,6 +487,14 @@ class TrackingEngine {
       final vanId = _vanId!;
       final battery = await _safeBatteryPct();
       final now = _clock();
+
+      // Ruling #29: depot dwell is evaluated on every cadence, independent of
+      // the write policy (a parked van may legitimately skip writes).
+      final dwell = _depotDwell;
+      if (dwell != null && dwell.update((lat: fix.lat, lng: fix.lng), now)) {
+        unawaited(_autoEndShift(now));
+        return; // the auto-end owns the run from here
+      }
 
       final decision = decideWrite(
         candidate: (lat: fix.lat, lng: fix.lng),
@@ -501,6 +561,41 @@ class TrackingEngine {
       }
     } catch (error) {
       debugPrint('tracking: cadence check failed (will retry): $error');
+    }
+  }
+
+  /// Ruling #29: the van has been parked at the depot for 3 hours. Write the
+  /// SAME end-shift set as D5 (shared core), stop the engine, then tell the
+  /// app layer to clear its session. A failed write keeps the trip open and
+  /// retries after [depotAutoEndRetryDelay] (an offline phone must not lose
+  /// the shift, and must not spin on Firestore either).
+  Future<void> _autoEndShift(DateTime now) async {
+    final tripId = _tripId;
+    final vanId = _vanId;
+    if (tripId == null || vanId == null || _autoEnding) return;
+    final retryAfter = _autoEndRetryAfter;
+    if (retryAfter != null && now.isBefore(retryAfter)) return;
+
+    _autoEnding = true;
+    try {
+      await writeEndShift(
+        vans: _vans,
+        trips: _trips,
+        vanId: vanId,
+        tripId: tripId,
+        endedAt: now,
+        stopTracking: stop,
+      );
+      debugPrint('tracking: depot auto-end wrote the end-shift set ($tripId)');
+      _onShiftAutoEnded?.call(tripId);
+    } catch (error) {
+      _autoEndRetryAfter = now.add(depotAutoEndRetryDelay);
+      debugPrint(
+        'tracking: depot auto-end failed, retry in '
+        '${depotAutoEndRetryDelay.inMinutes} min: $error',
+      );
+    } finally {
+      _autoEnding = false;
     }
   }
 

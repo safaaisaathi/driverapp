@@ -26,6 +26,8 @@ import 'package:driverapp/core/widgets/app_icon_button.dart';
 import 'package:driverapp/core/widgets/glass_bar.dart';
 import 'package:driverapp/core/widgets/pill_nav.dart';
 import 'package:driverapp/features/tracking/mock_location_banner.dart';
+import 'package:driverapp/features/tracking/tracking_providers.dart'
+    show depotAutoEndProvider;
 import 'package:driverapp/features/notices/domain/notices_flow.dart';
 import 'package:driverapp/features/notices/ui/notices_screen.dart';
 import 'package:driverapp/features/pending_reports/ui/pending_reports_screen.dart';
@@ -68,6 +70,25 @@ class _LiveRouteScreenState extends ConsumerState<LiveRouteScreen> {
   void dispose() {
     _sheet.dispose();
     super.dispose();
+  }
+
+  /// Ruling #29: the shift ended on the depot dwell rule. The trip and van
+  /// are already written; only the message and the exit are left.
+  void _announceAutoEnd() {
+    // The engine's stream callback can land inside a build frame; navigate
+    // and show the snackbar on the next frame.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final l10n = AppLocalizations.of(context)!;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          key: const ValueKey('liveRoute.autoEnded'),
+          content: Text('${l10n.autoEndNoticeTitle} ${l10n.autoEndNoticeBody}'),
+          duration: const Duration(seconds: 6),
+        ),
+      );
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    });
   }
 
   /// Snap fractions derived from THIS screen's metrics (never device
@@ -115,6 +136,13 @@ class _LiveRouteScreenState extends ConsumerState<LiveRouteScreen> {
     final mq = MediaQuery.of(context);
     final safeTop = mq.padding.top;
     final snaps = _sheetSnaps(mq);
+
+    // Ruling #29: the depot rule already wrote the end-shift set and cleared
+    // the session; leave D2 and tell the driver why.
+    ref.listen(depotAutoEndProvider, (_, next) {
+      if (next.value == null) return;
+      _announceAutoEnd();
+    });
 
     // Built ONCE per screen build — the AnimatedBuilder below only moves
     // them (identical child instances skip rebuilds during drag frames).

@@ -17,6 +17,7 @@ library;
 
 import 'dart:async';
 
+import 'package:driverapp/core/domain/geo_point.dart';
 import 'package:driverapp/core/models/models.dart';
 import 'package:driverapp/features/tracking/domain/battery_source.dart';
 import 'package:driverapp/features/tracking/domain/foreground_service.dart';
@@ -60,6 +61,7 @@ void main() {
     String id, {
     VanStatus status = VanStatus.idle,
     String? tripId,
+    GeoPoint? depot,
   }) =>
       Van(
         id: id,
@@ -69,6 +71,7 @@ void main() {
         lastLocation: null,
         currentTripId: tripId,
         batteryPct: null,
+        depot: depot,
       );
 
   VanFix fixAt(double lat, {double lng = 77.0}) =>
@@ -83,7 +86,12 @@ void main() {
   /// backlog and inspect what each flush took (issue #13).
   _FakeTrailBuffer? lastBuffer;
 
-  TrackingEngine buildEngine({int check = 1, int? flush}) => TrackingEngine(
+  TrackingEngine buildEngine({
+    int check = 1,
+    int? flush,
+    void Function(String tripId)? onAutoEnd,
+  }) =>
+      TrackingEngine(
         vansRepository: vans,
         tripsRepository: trips,
         positionSource: positions,
@@ -94,6 +102,7 @@ void main() {
         clock: () => clock,
         checkIntervalSec: check,
         flushIntervalSec: flush,
+        onShiftAutoEnded: onAutoEnd,
       );
 
   setUp(() {
@@ -583,6 +592,129 @@ void main() {
       expect(trips.trips['trip-1']!.gpsTrail.length, 1);
     });
   });
+
+  group('depot auto-end (ruling #29)', () {
+    test('3 h parked inside 500 m → end-shift set, stop, one notice',
+        () async {
+      vans = FakeVansRepository([
+        van(
+          'van-01',
+          status: VanStatus.onShift,
+          tripId: 'trip-1',
+          depot: (lat: 22.6780, lng: 77.0),
+        ),
+      ]);
+      final notices = <String>[];
+      final engine = buildEngine(onAutoEnd: notices.add);
+
+      await engine.start(
+        tripId: 'trip-1',
+        vanId: 'van-01',
+        notificationTitle: 'T',
+        notificationBody: '',
+      );
+
+      positions.emit(fixAt(22.6780)); // ~0 m from the depot
+      await oneTick(); // dwell clock starts at 08:00
+
+      clock = clock.add(const Duration(hours: 3));
+      await oneTick();
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+
+      final ended = trips.trips['trip-1']!;
+      expect(ended.endedAt!.toUtc(), clock);
+      expect(vans.vans['van-01']!.status, VanStatus.idle);
+      expect(vans.vans['van-01']!.currentTripId, isNull);
+      expect(service.stopCount, 1);
+      expect(engine.state.status, TrackingRunStatus.idle);
+      expect(notices, ['trip-1']);
+    });
+
+    test('no depot tag → a parked van never auto-ends', () async {
+      vans = FakeVansRepository([
+        van('van-01', status: VanStatus.onShift, tripId: 'trip-1'),
+      ]);
+      final engine = buildEngine();
+
+      await engine.start(
+        tripId: 'trip-1',
+        vanId: 'van-01',
+        notificationTitle: 'T',
+        notificationBody: '',
+      );
+      positions.emit(fixAt(22.6780));
+      await oneTick();
+
+      clock = clock.add(const Duration(hours: 6));
+      await oneTick();
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+
+      expect(trips.trips['trip-1']!.endedAt, isNull);
+      expect(engine.state.status, TrackingRunStatus.running);
+
+      await engine.stop();
+    });
+
+    test('a failed end write keeps the shift running and silent', () async {
+      vans = FakeVansRepository([
+        van(
+          'van-01',
+          status: VanStatus.onShift,
+          tripId: 'trip-1',
+          depot: (lat: 22.6780, lng: 77.0),
+        ),
+      ]);
+      trips = _FailingEndTripsRepository([
+        Trip(
+          id: 'trip-1',
+          vanId: 'van-01',
+          routeId: 'route-01',
+          driverId: '',
+          wardIds: const <String>[],
+          date: DateTime.utc(2026, 10, 24),
+          startedAt: DateTime.utc(2026, 10, 24, 8),
+          endedAt: null,
+          wardsDone: const <WardDone>[],
+          alertedWardIds: const <String>[],
+          gpsTrail: const <GpsPoint>[],
+          mockLocationDetected: false,
+        ),
+      ]);
+      final notices = <String>[];
+      final engine = buildEngine(onAutoEnd: notices.add);
+
+      await engine.start(
+        tripId: 'trip-1',
+        vanId: 'van-01',
+        notificationTitle: 'T',
+        notificationBody: '',
+      );
+      positions.emit(fixAt(22.6780));
+      await oneTick();
+
+      clock = clock.add(const Duration(hours: 3));
+      await oneTick();
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+
+      expect(trips.trips['trip-1']!.endedAt, isNull);
+      expect(vans.vans['van-01']!.status, VanStatus.onShift);
+      expect(engine.state.status, TrackingRunStatus.running);
+      expect(notices, isEmpty);
+
+      await engine.stop();
+    });
+  });
+}
+
+/// Trips fake whose End Shift write always fails (offline / rules), so the
+/// auto-end must keep the shift open instead of half-ending it.
+class _FailingEndTripsRepository extends _RecordingTripsRepository {
+  _FailingEndTripsRepository(super.seed);
+
+  @override
+  Future<void> setEndedAt(String tripId, DateTime endedAt) async {
+    throw StateError('offline');
+  }
 }
 
 // ---------------------------------------------------------------------------

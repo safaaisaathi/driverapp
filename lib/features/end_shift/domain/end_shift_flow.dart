@@ -13,7 +13,7 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:driverapp/core/models/models.dart';
+import 'package:driverapp/core/domain/end_shift_writes.dart';
 import 'package:driverapp/core/repositories/repository_providers.dart';
 import 'package:driverapp/features/shift_start/domain/shift_session.dart';
 import 'package:driverapp/features/tracking/tracking_providers.dart';
@@ -39,21 +39,13 @@ class EndShiftController extends Notifier<EndShiftPhase> {
       return;
     }
     try {
-      await ref
-          .read(tripsRepositoryProvider)
-          .setEndedAt(session.tripId, DateTime.now());
-      await ref
-          .read(vansRepositoryProvider)
-          .updateStatus(session.vanId, VanStatus.idle);
-      await ref
-          .read(vansRepositoryProvider)
-          .updateCurrentTripId(session.vanId, null);
-      // The engine may already be down (desktop); stop is safe to call.
-      try {
-        await ref.read(trackingEngineProvider).stop();
-      } catch (_) {
-        // Service stop failure must not leave the trip open.
-      }
+      await writeEndShift(
+        vans: ref.read(vansRepositoryProvider),
+        trips: ref.read(tripsRepositoryProvider),
+        vanId: session.vanId,
+        tripId: session.tripId,
+        stopTracking: () => ref.read(trackingEngineProvider).stop(),
+      );
       ref.read(shiftControllerProvider.notifier).end();
       state = EndShiftPhase.ended;
     } catch (_) {
