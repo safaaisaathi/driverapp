@@ -224,8 +224,8 @@ void main() {
           ),
         ),
       );
-      // Bounded pumps (never pumpAndSettle): the seeded empty state hosts
-      // BinnyView, whose bob runs forever by design.
+      // Bounded pumps (never pumpAndSettle): the seeded empty state runs
+      // the bounded shimmer of the skeleton widgets.
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
     }
@@ -296,6 +296,9 @@ void main() {
         ),
       );
       expect(find.text(enNoTripsYet), findsOneWidget);
+      // Mascot-free empty state (CL-D15, removed-T8): the neutral icon
+      // renders inside its brandSoft circle.
+      expect(find.byIcon(Icons.history), findsOneWidget);
     });
 
     testWidgets('settings row navigates to the history screen', (t) async {
@@ -315,7 +318,7 @@ void main() {
         ),
       );
       await t.tap(find.byKey(const Key('settings.tripHistoryRow')));
-      // Bounded pumps again — the destination may host BinnyView.
+      // Bounded pumps again - the history screen keeps its bounded pumps.
       await t.pump();
       await t.pump(const Duration(milliseconds: 400));
       expect(find.byKey(const Key('tripHistory.title')), findsOneWidget);

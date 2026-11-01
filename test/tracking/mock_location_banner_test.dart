@@ -19,6 +19,8 @@ Trip tripOf(DateTime today, bool detected) => Trip(
       id: 'trip-1',
       vanId: 'van-01',
       routeId: 'route-01',
+      driverId: '',
+      wardIds: const <String>[],
       date: today,
       startedAt: DateTime(today.year, today.month, today.day, 8),
       endedAt: null,

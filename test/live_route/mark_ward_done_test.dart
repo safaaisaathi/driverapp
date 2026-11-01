@@ -17,6 +17,7 @@ import 'package:driverapp/core/theme/app_theme.dart';
 import 'package:driverapp/core/widgets/pill_nav.dart';
 import 'package:driverapp/features/live_route/live_route_providers.dart';
 import 'package:driverapp/features/live_route/live_route_screen.dart';
+import 'package:driverapp/features/live_route/mark_ward_done_flow.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -74,6 +75,40 @@ void main() {
         'id': 'trip-1',
         'vanId': 'van-01',
         'routeId': 'route-01',
+        'date': now,
+        'startedAt': now,
+        'endedAt': null,
+        'wardsDone': [],
+        'alertedWardIds': [],
+        'gpsTrail': [],
+        'mockLocationDetected': false,
+      });
+
+  /// Today's open trip whose 0.16 scope is the FIRST route ward only — the
+  /// driver was allotted `wa` alone while the route still lists three.
+  Trip scopedTrip() => Trip.fromMap({
+        'id': 'trip-1',
+        'vanId': 'van-01',
+        'routeId': 'route-01',
+        'driverId': 'AB-1234',
+        'wardIds': ['wa'],
+        'date': now,
+        'startedAt': now,
+        'endedAt': null,
+        'wardsDone': [],
+        'alertedWardIds': [],
+        'gpsTrail': [],
+        'mockLocationDetected': false,
+      });
+
+  /// Today's open trip of a 0.16 driver with NO allotted ward — the empty
+  /// allotment is authoritative (it never widens back to the route).
+  Trip emptyAllotmentTrip() => Trip.fromMap({
+        'id': 'trip-1',
+        'vanId': 'van-01',
+        'routeId': 'route-01',
+        'driverId': 'AB-1234',
+        'wardIds': [],
         'date': now,
         'startedAt': now,
         'endedAt': null,
@@ -429,6 +464,83 @@ void main() {
     expect(find.byKey(const Key('liveRoute.doneTick.wc')), findsOneWidget);
     expect(find.byKey(const Key('liveRoute.markError')), findsNothing);
     expect(find.byKey(const Key('liveRoute.markNoTripHint')), findsNothing);
+  });
+
+  group('0.16 trip wardIds scope (D2 scopes map + marking to the trip)', () {
+    testWidgets('a route ward outside the trip scope never renders (no map '
+        'marker, no list row, no mark control)', (tester) async {
+      final trips = FakeTripsRepository([scopedTrip()]);
+      await pumpScreen(tester, standardOverrides(trips, vanLat: 22.7005));
+      await settle(tester);
+      await pullSheetFull(tester);
+
+      // The trip's allotted ward is there...
+      expect(find.byKey(const Key('liveRoute.wardRow.wa')), findsOneWidget);
+      expect(find.byKey(const Key('liveRoute.wardMarker.wa')), findsOneWidget);
+      // ...and the route's other wards are NOT (the map and the list both
+      // follow the trip's scope, not `routes.wardIds`).
+      expect(find.byKey(const Key('liveRoute.wardRow.wb')), findsNothing);
+      expect(find.byKey(const Key('liveRoute.wardRow.wc')), findsNothing);
+      expect(find.byKey(const Key('liveRoute.wardMarker.wb')), findsNothing);
+      expect(find.byKey(const Key('liveRoute.wardMarker.wc')), findsNothing);
+      expect(find.byKey(const Key('liveRoute.markWard.wb')), findsNothing);
+      expect(find.byKey(const Key('liveRoute.markWard.wc')), findsNothing);
+    });
+
+    testWidgets('the next-ward button marks the trip-scope ward, not a '
+        'route ward outside it', (tester) async {
+      final trips = FakeTripsRepository([scopedTrip()]);
+      await pumpScreen(tester, standardOverrides(trips, vanLat: 22.7005));
+      await settle(tester);
+      await pullSheetFull(tester);
+
+      await tester.tap(find.byKey(const Key('liveRoute.markNextWard')));
+      await settle(tester);
+
+      final raw = trips.trips['trip-1']!.toMap()['wardsDone'] as List<Object?>;
+      expect(raw, hasLength(1));
+      expect((raw.single as Map<Object?, Object?>)['wardId'], 'wa');
+    });
+
+    testWidgets('a ward outside the trip scope is never written, even when '
+        'the flow is asked directly', (tester) async {
+      final trips = FakeTripsRepository([scopedTrip()]);
+      await pumpScreen(tester, standardOverrides(trips, vanLat: 22.7005));
+      await settle(tester);
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(LiveRouteScreen)),
+      );
+      await container
+          .read(markWardDoneFlowProvider.notifier)
+          .mark('van-01', 'wb');
+      await settle(tester);
+
+      expect(trips.trips['trip-1']!.wardsDone, isEmpty,
+          reason: 'the write path is scoped to the trip too');
+      expect(find.byKey(const Key('liveRoute.markError')), findsOneWidget);
+    });
+
+    testWidgets('a 0.16 trip with NO allotted ward marks nothing (an empty '
+        'allotment is authoritative, never the whole route)', (tester) async {
+      final trips = FakeTripsRepository([emptyAllotmentTrip()]);
+      await pumpScreen(tester, standardOverrides(trips, vanLat: 22.7005));
+      await settle(tester);
+
+      // The screen shows the empty state — no ward renders at all.
+      expect(find.byKey(const Key('liveRoute.empty')), findsOneWidget);
+      expect(find.byKey(const Key('liveRoute.wardRow.wa')), findsNothing);
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(LiveRouteScreen)),
+      );
+      await container
+          .read(markWardDoneFlowProvider.notifier)
+          .mark('van-01', 'wa');
+      await settle(tester);
+
+      expect(trips.trips['trip-1']!.wardsDone, isEmpty);
+    });
   });
 }
 

@@ -13,9 +13,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/models/models.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_tokens.dart';
 import '../../../core/widgets/app_icon_button.dart';
-import '../../../core/widgets/binny.dart';
+import '../../../features/live_route/domain/ward_steps.dart'
+    show tripWardScope;
 import '../settings_flow.dart';
 
 /// Status-chip color tokens (0.5`: `statusResolved` green, `statusReceived`
@@ -88,7 +91,11 @@ class _TripRow extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     final routeAsync =
         ref.watch(tripRouteProvider(trip.routeId)).value;
-    final totalWards = routeAsync?.wardIds.length ?? 0;
+    // The ward TOTAL follows the trip's scope (0.16, ticket-7 review
+    // ruling): the history row counts the driver's allotted wards, not the
+    // whole route. Pre-0.16 trips fall back to the route's count.
+    final totalWards =
+        tripWardScope(trip)?.length ?? routeAsync?.wardIds.length ?? 0;
     final done = trip.wardsDone.length;
 
     // Chip state: running when not yet ended; complete when every route
@@ -193,21 +200,29 @@ class _HistoryEmpty extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final c = context.colors;
     return Padding(
-      padding: const EdgeInsets.only(top: 48),
+      padding: const EdgeInsets.only(top: AppSpace.huge),
       child: Column(
         children: [
-          BinnyView(
-            pose: BinnyPose.wave,
-            label: l10n.tripHistoryEmpty,
+          // Neutral icon in a `brandSoft` circle (DESIGN-driver-app.md
+          // §4.16, CL-D15, removed-T8): tokens only, no mascot.
+          Container(
+            width: AppSize.permissionIconCircle,
+            height: AppSize.permissionIconCircle,
+            decoration: BoxDecoration(
+              color: c.brandSoft,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.history, size: AppSize.icon * 2, color: c.brand),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpace.lg),
           Text(
             l10n.tripHistoryEmpty,
             style: Theme.of(context).textTheme.titleMedium,
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpace.sm),
           Text(
             l10n.tripHistoryEmptyBody,
             style: Theme.of(context).textTheme.bodySmall,

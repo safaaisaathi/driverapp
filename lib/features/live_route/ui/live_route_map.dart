@@ -369,8 +369,8 @@ class _LiveRouteMapState extends ConsumerState<LiveRouteMap> {
   }
 }
 
-/// The soft pulse ring of a moving van (§4.10): 2400 ms ambient cycle, the
-/// SAME duration as the mascot bob; disabled under reduced motion.
+/// The soft pulse ring of a moving van (§4.10): 2400 ms ambient cycle;
+/// disabled under reduced motion.
 class _VanPulseRing extends StatefulWidget {
   final Color color;
 

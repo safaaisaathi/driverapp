@@ -4,9 +4,8 @@
 /// 1. Hive (local first-launch flag storage) — see [openBootstrapFlagBox].
 /// 2. `Firebase.initializeApp` with [firebaseOptions] (emulator options by
 ///    default; PRD-2 0.10).
-/// 3. Emulator wiring for Firestore/Auth (Functions follows with the PIN
-///    ticket — see [_wireEmulators]).
-/// 4. Anonymous sign-in so pre-PIN screens can read `vans`/`wards`/`routes`
+/// 3. Emulator wiring for Firestore/Auth ([_wireEmulators]).
+/// 4. Anonymous sign-in so launch/screens can read `vans`/`wards`/`routes`
 ///    (_spec § Implementation Decisions; PRD-2 0.8 rules allow anonymous
 ///    reads of those collections). Failures degrade the app instead of
 ///    crashing it (Ticket 02).
@@ -89,6 +88,30 @@ final bootstrapProvider = NotifierProvider<BootstrapController, BootstrapStatus>
   BootstrapController.new,
 );
 
+/// How long a gated first lookup waits for boot wiring before proceeding
+/// (issue #18): a boot that never resolves must not hang the screen.
+const Duration sessionGateCap = Duration(seconds: 8);
+
+/// Gate for the first Firestore read (issue #18).
+///
+/// A returning driver's screen fires its lookup right after the first frame,
+/// while `main()`'s fire-and-forget boot may still be signing in anonymously;
+/// the unauthenticated read failed on EVERY cold launch (device-verified),
+/// then succeeded on manual retry. This future resolves when the anonymous
+/// session exists or the boot has a first verdict (ready OR degraded: the
+/// caller proceeds and surfaces its own failure), capped by [sessionGateCap].
+///
+/// Immediate when boot wiring was never started (unit-test containers), so
+/// existing suites are unaffected; override to script the race.
+final sessionGateProvider = Provider<Future<void>>((ref) {
+  final boot = ref.read(bootstrapProvider.notifier);
+  if (!boot.bootStarted) return Future<void>.value();
+  // ONLY a real session releases the gate (issue #21): the boot's first
+  // verdict may be `degraded`, which means no app and no token, and
+  // releasing on that verdict would fire the unauthenticated read again.
+  return boot.sessionReady().timeout(sessionGateCap, onTimeout: () {});
+});
+
 /// Holds the boot state; `main()` starts [run], the app can watch
 /// [bootstrapProvider] or await the controller's [done] future.
 // Not `final`: tests extend this controller to simulate a degraded boot
@@ -96,8 +119,25 @@ final bootstrapProvider = NotifierProvider<BootstrapController, BootstrapStatus>
 class BootstrapController extends Notifier<BootstrapStatus> {
   Completer<BootstrapStatus>? _done;
 
+  /// Completes the first time an anonymous session is held (issue #18):
+  /// screens gate their first Firestore read on [sessionReady] so a
+  /// cold-start read never races the boot's sign-in.
+  Completer<void>? _sessionReady;
+
   @override
   BootstrapStatus build() => const BootstrapStatus.pending();
+
+  /// True once [run] started the boot wiring (the real app's `main()`);
+  /// false in unit-test containers, where [sessionGateProvider] resolves
+  /// immediately instead of waiting for a session that will never come.
+  bool get bootStarted => _running;
+
+  /// Completes when an anonymous session exists; immediately when this
+  /// container is already [BootstrapReady] (a warm boot).
+  Future<void> sessionReady() {
+    if (state is BootstrapReady) return Future<void>.value();
+    return (_sessionReady ??= Completer<void>()).future;
+  }
 
   /// The app can await this to know when boot wiring has first resolved
   /// (ready or degraded). Re-check [bootstrapProvider] afterwards: silent
@@ -176,6 +216,11 @@ class BootstrapController extends Notifier<BootstrapStatus> {
     }
     // 4. Anonymous session at launch.
     progress.anonymousUid ??= await signInAnonymously(progress.app!);
+    // Release the first-read gate (issues #18/#21) the moment the session
+    // exists: Firestore needs the token, not FCM, so the driver never waits
+    // on the messaging round trip.
+    final session = _sessionReady;
+    if (session != null && !session.isCompleted) session.complete();
     // 5. FCM: init + one-time topic `all` subscription.
     if (!progress.messagingReady) {
       await messagingGateway.init();
@@ -270,16 +315,27 @@ Future<void> runBootstrap(ProviderContainer container) async {
   // `firebaseFirestoreProvider`, and with no Firebase app that read throws
   // `[core/no-app]` every launch (observed defect on device: the service
   // never started because it was read before `.run()` initialized app).
-  // `.run()` never throws; it only degrades internally, so starting the
-  // drain after it (ready OR degraded) is always well-defined.
-  await container.read(bootstrapProvider.notifier).run();
-  // The sync drain starts with boot and is idempotent; a host without
-  // platform channels (tests, CLI) just logs and boots on (ticket 02 rule).
-  try {
-    container.read(offlineSyncServiceProvider).start();
-  } catch (error) {
-    debugPrint('bootstrap: offline sync service not started: $error');
-  }
+  // `.run()` never throws; it only degrades internally.
+  //
+  // The drain starts the moment the boot is (or becomes) READY. Awaiting
+  // `run()` here would block forever on a degraded boot (its retry loop is
+  // endless), so the drain never started at all in that case; the listener
+  // also covers a degraded boot that recovers on a later retry (issue #21).
+  // The drain start is idempotent; a host without platform channels
+  // (tests, CLI) just logs and boots on (ticket 02 rule).
+  unawaited(container.read(bootstrapProvider.notifier).run());
+  container.listen<BootstrapStatus>(
+    bootstrapProvider,
+    (previous, next) {
+      if (next is! BootstrapReady) return;
+      try {
+        container.read(offlineSyncServiceProvider).start();
+      } catch (error) {
+        debugPrint('bootstrap: offline sync service not started: $error');
+      }
+    },
+    fireImmediately: true,
+  );
 }
 
 /// Silent-retry backoff, `attempt` is 1-based. Cheap calls first so a
@@ -296,9 +352,9 @@ Duration bootstrapRetryDelay(int attempt) =>
 /// 0.10). Ports 8080 (Firestore) and 9099 (Auth) per Ticket 02; host via
 /// [kFirebaseEmulatorHost].
 ///
-/// Cloud Functions (port 5001) is wired where the `verifyDriverPin`
-/// callable is constructed — `FirebaseCallablePinVerifier`
-/// (features/shift_start/data), F-D1 / Ticket 04.
+/// Cloud Functions (port 5001) is wired in [_wireEmulators]; the old
+/// `verifyDriverPin` callable is DELETED from the app (0.16 code login; the
+/// Function itself stays deployed until the backend sweep).
 void _wireEmulators(FirebaseApp app) {
   FirebaseFirestore.instanceFor(app: app)
       .useFirestoreEmulator(kFirebaseEmulatorHost, kFirestoreEmulatorPort);

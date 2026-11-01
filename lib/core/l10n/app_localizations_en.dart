@@ -28,16 +28,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get retry => 'Retry';
 
   @override
-  String get shiftStartTitle => 'Shift start';
-
-  @override
   String get vanLabel => 'Van';
-
-  @override
-  String get pinLabel => 'PIN';
-
-  @override
-  String get routeSetByAdmin => '(set by admin)';
 
   @override
   String get splashTagline => 'Clean city, one route at a time.';
@@ -52,61 +43,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get welcomeCta => 'Get started';
 
   @override
-  String get dutyTitle => 'Today\'s duty';
-
-  @override
-  String get dutySubtitle => 'Connect with your van and start the route.';
-
-  @override
-  String get startDuty => 'Start duty';
-
-  @override
-  String get gettingReady => 'Getting the route ready…';
-
-  @override
-  String get pickVanPrompt => 'Pick your van';
-
-  @override
-  String get vansEmpty => 'No vans found';
-
-  @override
-  String get vanListError => 'Couldn\'t load vans';
-
-  @override
-  String get routeLabel => 'Route';
-
-  @override
-  String get routeUnknown => 'Route not set';
-
-  @override
-  String get enterPinPrompt => 'Enter the 4-digit PIN';
-
-  @override
-  String get verifyPin => 'Verify PIN';
-
-  @override
-  String get readyToStartInfo => 'Van confirmed. Ready to start.';
-
-  @override
   String get startShift => 'Start Shift';
-
-  @override
-  String get resumeShift => 'Resume shift';
-
-  @override
-  String get wrongPin => 'Wrong PIN. Try again.';
-
-  @override
-  String get pinLockedOut =>
-      'Too many attempts. Please wait a few minutes and try again.';
 
   @override
   String get shiftStartFailed =>
       'Couldn\'t start the shift. Check the connection and try again.';
-
-  @override
-  String get verificationUnavailable =>
-      'Couldn\'t reach the office server. Check the connection and try again.';
 
   @override
   String get shiftStarted => 'Shift started';
@@ -116,6 +57,54 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get trackingPending => 'Van tracking will start automatically.';
+
+  @override
+  String get identityStartTitle => 'Start shift';
+
+  @override
+  String get identityCodeLabel => 'Code';
+
+  @override
+  String get identityCodeHint => 'XX-0000';
+
+  @override
+  String get identityCodeError => 'Wrong code. Try again.';
+
+  @override
+  String get identityCodeContinue => 'Continue';
+
+  @override
+  String get identityFieldName => 'Name';
+
+  @override
+  String get identityFieldWards => 'Wards';
+
+  @override
+  String get identityFieldPhone => 'Phone';
+
+  @override
+  String identityWardsAllotted(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count wards allotted',
+      one: '1 ward allotted',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get identityNotFoundTitle => 'Driver not found';
+
+  @override
+  String get identityNotFoundBody =>
+      'Check the code with the office and try again.';
+
+  @override
+  String get identityLookupFailedTitle => 'Couldn\'t check the code';
+
+  @override
+  String get identityLookupFailedBody => 'Check your connection and try again.';
 
   @override
   String get trackingPermissionWhileInUseClaim =>
@@ -528,4 +517,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get callForHelpCall => 'Call office';
+
+  @override
+  String get identityWelcomeBackTitle => 'Welcome back';
+
+  @override
+  String get identityWelcomeBackBody => 'This phone remembers you.';
+
+  @override
+  String get identityStartMyShift => 'Start my Shift';
+
+  @override
+  String get identityChangeCode => 'Different driver?';
 }

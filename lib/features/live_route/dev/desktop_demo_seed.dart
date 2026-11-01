@@ -1,4 +1,5 @@
-/// DESKTOP-PREVIEW SEED for the live-route demo (`dev_live_route.dart`).
+/// DESKTOP-PREVIEW SEED for the dev entrypoints (`dev_identity_start.dart`
+/// and `dev_flow_preview.dart`).
 ///
 /// The desktop host has no Firebase plugins, so the Firestore-backed
 /// repositories degrade every D2 flow to its error state and the preview
@@ -9,7 +10,7 @@
 ///
 /// Deleted at ticket 14 together with the dev entrypoints (GLOSSARY bag).
 /// On the Android-device path the real spine stays in charge — these
-/// doubles are only ever wired inside `dev_live_route.dart`'s container.
+/// doubles are only ever wired inside the dev entrypoints' containers.
 ///
 /// Seeded world (stable for demo checks):
 /// - `vans/van-01` on `routes/route-01` (3 wards around Ahmedabad), on
@@ -68,6 +69,25 @@ class DevVansRepository implements VansRepository {
   final Map<String, _MutableStream<Van?>> _vans = {};
 
   void seedVan(Van van) => _vans[van.id] = _MutableStream<Van?>(van);
+
+  /// Dev-only: parks the van idle and drops its open-trip marker, so an
+  /// identity preview takes the FRESH start path (Start creates a trip and
+  /// writes the 0.16 driver identity). The live-route demo stays seeded
+  /// on shift; this is only called from the identity previews.
+  void parkAsIdle(String vanId) {
+    final van = _store(vanId).value!;
+    _store(vanId).set(
+      Van(
+        id: van.id,
+        plateNo: van.plateNo,
+        routeId: van.routeId,
+        status: VanStatus.idle,
+        lastLocation: van.lastLocation,
+        currentTripId: null,
+        batteryPct: van.batteryPct,
+      ),
+    );
+  }
 
   _MutableStream<Van?> _store(String vanId) => _vans[vanId]!;
 
@@ -180,6 +200,8 @@ class DevTripsRepository implements TripsRepository {
     id: trip.id,
     vanId: trip.vanId,
     routeId: trip.routeId,
+    driverId: trip.driverId,
+    wardIds: trip.wardIds,
     date: trip.date,
     startedAt: trip.startedAt,
     endedAt: trip.endedAt,
@@ -215,6 +237,8 @@ class DevTripsRepository implements TripsRepository {
         id: trip.id,
         vanId: trip.vanId,
         routeId: trip.routeId,
+        driverId: trip.driverId,
+        wardIds: trip.wardIds,
         date: trip.date,
         startedAt: trip.startedAt,
         endedAt: endedAt,
@@ -360,6 +384,10 @@ Trip buildDevTrip(DateTime now) {
     id: devSeedTripId,
     vanId: devSeedVanId,
     routeId: devSeedRouteId,
+    // The plain live-route seed has no driver behind it and predates the
+    // 0.16 contract, so D2 falls back to `routes.wardIds` for the order.
+    driverId: '',
+    wardIds: const [],
     date: today,
     startedAt: started,
     endedAt: null,

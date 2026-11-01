@@ -28,16 +28,7 @@ class AppLocalizationsGu extends AppLocalizations {
   String get retry => 'ફરી પ્રયાસ કરો';
 
   @override
-  String get shiftStartTitle => 'શિફ્ટ શરૂ કરો';
-
-  @override
   String get vanLabel => 'વેન';
-
-  @override
-  String get pinLabel => 'પિન';
-
-  @override
-  String get routeSetByAdmin => '(એડમિન દ્વારા સેટ)';
 
   @override
   String get splashTagline => 'સ્વચ્છ શહેર, એક એક રૂટ.';
@@ -52,60 +43,11 @@ class AppLocalizationsGu extends AppLocalizations {
   String get welcomeCta => 'ચાલો શરૂ કરીએ';
 
   @override
-  String get dutyTitle => 'આજની ડ્યુટી';
-
-  @override
-  String get dutySubtitle => 'તમારી વેન સાથે જોડાઈને રૂટ શરૂ કરો.';
-
-  @override
-  String get startDuty => 'ડ્યુટી શરૂ કરો';
-
-  @override
-  String get gettingReady => 'રૂટ તૈયાર થઈ રહ્યો છે…';
-
-  @override
-  String get pickVanPrompt => 'તમારી વેન પસંદ કરો';
-
-  @override
-  String get vansEmpty => 'કોઈ વેન મળી નથી';
-
-  @override
-  String get vanListError => 'વેન લોડ થઈ શકી નથી';
-
-  @override
-  String get routeLabel => 'રૂટ';
-
-  @override
-  String get routeUnknown => 'રૂટ સેટ નથી';
-
-  @override
-  String get enterPinPrompt => '૪ અંકનો પિન દાખલ કરો';
-
-  @override
-  String get verifyPin => 'પિન ચકાસો';
-
-  @override
-  String get readyToStartInfo => 'વેન પુષ્ટ થઈ ગઈ. શરૂ કરવા તૈયાર.';
-
-  @override
   String get startShift => 'શિફ્ટ શરૂ કરો';
-
-  @override
-  String get resumeShift => 'શિફ્ટ ફરી શરૂ કરો';
-
-  @override
-  String get wrongPin => 'પિન ખોટી છે. ફરી પ્રયાસ કરો.';
-
-  @override
-  String get pinLockedOut => 'ઘણા વધુ પ્રયાસો. કૃપા કરીને થોડી મિનિટો રાહ જુઓ.';
 
   @override
   String get shiftStartFailed =>
       'શિફ્ટ શરૂ થઈ શકી નથી. કનેક્શન તપાસીને ફરી પ્રયાસ કરો.';
-
-  @override
-  String get verificationUnavailable =>
-      'ઓફિસ સર્વર સુધી પહોંચી શક્યા નથી. કનેક્શન તપાસીને ફરી પ્રયાસ કરો.';
 
   @override
   String get shiftStarted => 'શિફ્ટ શરૂ થઈ ગઈ';
@@ -115,6 +57,53 @@ class AppLocalizationsGu extends AppLocalizations {
 
   @override
   String get trackingPending => 'વેન ટ્રેકિંગ આપોઆપ શરૂ થશે.';
+
+  @override
+  String get identityStartTitle => 'શિફ્ટ શરૂ કરો';
+
+  @override
+  String get identityCodeLabel => 'કોડ';
+
+  @override
+  String get identityCodeHint => 'XX-0000';
+
+  @override
+  String get identityCodeError => 'કોડ ખોટો છે. ફરી પ્રયાસ કરો.';
+
+  @override
+  String get identityCodeContinue => 'આગળ વધો';
+
+  @override
+  String get identityFieldName => 'નામ';
+
+  @override
+  String get identityFieldWards => 'વોર્ડ્સ';
+
+  @override
+  String get identityFieldPhone => 'ફોન';
+
+  @override
+  String identityWardsAllotted(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count વોર્ડ સોંપાયા છે',
+      one: '1 વોર્ડ સોંપાયો છે',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get identityNotFoundTitle => 'ડ્રાઇવર મળ્યો નથી';
+
+  @override
+  String get identityNotFoundBody => 'કોડ કચેરી સાથે ચકાસીને ફરી પ્રયાસ કરો.';
+
+  @override
+  String get identityLookupFailedTitle => 'કોડ ચકાસી શકાયો નથી';
+
+  @override
+  String get identityLookupFailedBody => 'કનેક્શન તપાસીને ફરી પ્રયાસ કરો.';
 
   @override
   String get trackingPermissionWhileInUseClaim =>
@@ -528,4 +517,16 @@ class AppLocalizationsGu extends AppLocalizations {
 
   @override
   String get callForHelpCall => 'ઓફિસને કોલ કરો';
+
+  @override
+  String get identityWelcomeBackTitle => 'ફરી સ્વાગત છે';
+
+  @override
+  String get identityWelcomeBackBody => 'આ ફોન તમને ઓળખે છે.';
+
+  @override
+  String get identityStartMyShift => 'મારી શિફ્ટ શરૂ કરો';
+
+  @override
+  String get identityChangeCode => 'બીજા ડ્રાઇવર?';
 }

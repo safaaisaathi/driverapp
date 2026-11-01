@@ -28,6 +28,10 @@ class AppSize {
   static const double icon = 24, iconSmall = 20;
   static const double vanMarker = 44, pinWidth = 40, pinHeight = 52, markerHit = 48;
   static const double thumb = 72; // complaint thumbnail
+
+  // Driver-only additions (DESIGN-driver-app.md §2.3)
+  static const double permissionIconCircle = 96; // [est] neutral-icon circle
+  static const double codeBox = 56; // code-entry cell, XX-0000 box (§2.3)
 }
 
 /// Elevation tokens (BoxShadow only, never Material elevation tint)
@@ -91,7 +95,7 @@ class AppMotion {
   static const Duration fast = Duration(milliseconds: 120);
   static const Duration base = Duration(milliseconds: 200);
   static const Duration slow = Duration(milliseconds: 320);
-  static const Duration ambient = Duration(milliseconds: 2400); // mascot bob only
+  static const Duration ambient = Duration(milliseconds: 2400); // pulse ring, shimmer
   static const Curve standard = Curves.easeOutCubic;
   static const Curve exit = Curves.easeInCubic;
 }

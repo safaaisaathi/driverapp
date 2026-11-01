@@ -60,6 +60,8 @@ void main() {
     id: id,
     vanId: 'van-01',
     routeId: 'route-01',
+    driverId: '',
+    wardIds: const <String>[],
     date: DateTime.utc(2026, 10, 24),
     startedAt: baseTime,
     endedAt: null,

@@ -2,8 +2,9 @@
 /// empty (route missing / no wards) — spec user story 24: the app is boring
 /// and predictable on every screen.
 ///
-/// DESIGN.md §4.16, §7: Skeleton for loading, Binny wait for empty,
-/// full-screen error with retry. All via tokens (CL-01 to CL-05).
+/// DESIGN-driver-app.md §4.16, §7: Skeleton for loading, neutral icon in a
+/// `brandSoft` circle for empty (mascot-free, CL-D15), full-screen error
+/// with retry. All via tokens (CL-01 to CL-05).
 library;
 
 import 'package:flutter/material.dart';
@@ -12,7 +13,6 @@ import 'package:driverapp/core/l10n/app_localizations.dart';
 import 'package:driverapp/core/theme/app_colors.dart';
 import 'package:driverapp/core/theme/app_text.dart';
 import 'package:driverapp/core/theme/app_tokens.dart';
-import 'package:driverapp/core/widgets/binny.dart';
 import 'package:driverapp/core/widgets/skeleton.dart';
 
 import '../domain/live_route_state.dart';
@@ -22,7 +22,6 @@ class LiveRouteLoadingView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     return Center(
       key: const Key('liveRoute.loading'),
       child: Column(
@@ -88,7 +87,7 @@ class SkeletonContourCard extends StatelessWidget {
       width: width,
       height: height,
       decoration: BoxDecoration(
-        color: c.brandMid.withOpacity(0.3),
+        color: c.brandMid.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(AppRadius.pill),
       ),
       child: Center(
@@ -107,7 +106,7 @@ class SkeletonBigActionButton extends StatelessWidget {
     return Container(
       height: AppSize.bigAction,
       decoration: BoxDecoration(
-        color: c.primary.withOpacity(0.1),
+        color: c.primary.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(AppRadius.pill),
       ),
       child: Center(
@@ -207,8 +206,21 @@ class LiveRouteEmptyView extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           spacing: AppSpace.lg,
           children: [
-            // Binny wait pose for empty state (DESIGN.md D-06)
-            const BinnyView(pose: BinnyPose.wait, size: 160),
+            // Neutral icon in a `brandSoft` circle for empty state
+            // (DESIGN-driver-app.md §4.16, CL-D15, removed-T8).
+            Container(
+              width: AppSize.permissionIconCircle,
+              height: AppSize.permissionIconCircle,
+              decoration: BoxDecoration(
+                color: c.brandSoft,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.directions_outlined,
+                size: AppSize.icon * 2,
+                color: c.brand,
+              ),
+            ),
             Text(
               message,
               textAlign: TextAlign.center,

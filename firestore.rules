@@ -23,6 +23,11 @@ service cloud.firestore {
     match /notices/{noticeId} {
       allow read: if request.auth != null;
     }
+    // 0.16: driver identity, keyed by the driver code (AB-1234). Read by
+    // the start-shift flow; writes are admin-only (console / PRD-3 panel).
+    match /drivers/{code} {
+      allow read: if request.auth != null;
+    }
     match /trips/{tripId} {
       allow read: if request.auth != null;
       // Trips are created by the start-shift flow and updated while a

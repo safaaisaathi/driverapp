@@ -134,29 +134,11 @@ abstract class AppLocalizations {
   /// **'Retry'**
   String get retry;
 
-  /// No description provided for @shiftStartTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Shift start'**
-  String get shiftStartTitle;
-
   /// No description provided for @vanLabel.
   ///
   /// In en, this message translates to:
   /// **'Van'**
   String get vanLabel;
-
-  /// No description provided for @pinLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'PIN'**
-  String get pinLabel;
-
-  /// No description provided for @routeSetByAdmin.
-  ///
-  /// In en, this message translates to:
-  /// **'(set by admin)'**
-  String get routeSetByAdmin;
 
   /// No description provided for @splashTagline.
   ///
@@ -182,113 +164,17 @@ abstract class AppLocalizations {
   /// **'Get started'**
   String get welcomeCta;
 
-  /// No description provided for @dutyTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Today\'s duty'**
-  String get dutyTitle;
-
-  /// No description provided for @dutySubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Connect with your van and start the route.'**
-  String get dutySubtitle;
-
-  /// No description provided for @startDuty.
-  ///
-  /// In en, this message translates to:
-  /// **'Start duty'**
-  String get startDuty;
-
-  /// No description provided for @gettingReady.
-  ///
-  /// In en, this message translates to:
-  /// **'Getting the route ready…'**
-  String get gettingReady;
-
-  /// No description provided for @pickVanPrompt.
-  ///
-  /// In en, this message translates to:
-  /// **'Pick your van'**
-  String get pickVanPrompt;
-
-  /// No description provided for @vansEmpty.
-  ///
-  /// In en, this message translates to:
-  /// **'No vans found'**
-  String get vansEmpty;
-
-  /// No description provided for @vanListError.
-  ///
-  /// In en, this message translates to:
-  /// **'Couldn\'t load vans'**
-  String get vanListError;
-
-  /// No description provided for @routeLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Route'**
-  String get routeLabel;
-
-  /// No description provided for @routeUnknown.
-  ///
-  /// In en, this message translates to:
-  /// **'Route not set'**
-  String get routeUnknown;
-
-  /// No description provided for @enterPinPrompt.
-  ///
-  /// In en, this message translates to:
-  /// **'Enter the 4-digit PIN'**
-  String get enterPinPrompt;
-
-  /// No description provided for @verifyPin.
-  ///
-  /// In en, this message translates to:
-  /// **'Verify PIN'**
-  String get verifyPin;
-
-  /// No description provided for @readyToStartInfo.
-  ///
-  /// In en, this message translates to:
-  /// **'Van confirmed. Ready to start.'**
-  String get readyToStartInfo;
-
   /// No description provided for @startShift.
   ///
   /// In en, this message translates to:
   /// **'Start Shift'**
   String get startShift;
 
-  /// No description provided for @resumeShift.
-  ///
-  /// In en, this message translates to:
-  /// **'Resume shift'**
-  String get resumeShift;
-
-  /// No description provided for @wrongPin.
-  ///
-  /// In en, this message translates to:
-  /// **'Wrong PIN. Try again.'**
-  String get wrongPin;
-
-  /// No description provided for @pinLockedOut.
-  ///
-  /// In en, this message translates to:
-  /// **'Too many attempts. Please wait a few minutes and try again.'**
-  String get pinLockedOut;
-
   /// No description provided for @shiftStartFailed.
   ///
   /// In en, this message translates to:
   /// **'Couldn\'t start the shift. Check the connection and try again.'**
   String get shiftStartFailed;
-
-  /// No description provided for @verificationUnavailable.
-  ///
-  /// In en, this message translates to:
-  /// **'Couldn\'t reach the office server. Check the connection and try again.'**
-  String get verificationUnavailable;
 
   /// No description provided for @shiftStarted.
   ///
@@ -307,6 +193,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Van tracking will start automatically.'**
   String get trackingPending;
+
+  /// No description provided for @identityStartTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Start shift'**
+  String get identityStartTitle;
+
+  /// No description provided for @identityCodeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Code'**
+  String get identityCodeLabel;
+
+  /// No description provided for @identityCodeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'XX-0000'**
+  String get identityCodeHint;
+
+  /// No description provided for @identityCodeError.
+  ///
+  /// In en, this message translates to:
+  /// **'Wrong code. Try again.'**
+  String get identityCodeError;
+
+  /// No description provided for @identityCodeContinue.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get identityCodeContinue;
+
+  /// No description provided for @identityFieldName.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get identityFieldName;
+
+  /// No description provided for @identityFieldWards.
+  ///
+  /// In en, this message translates to:
+  /// **'Wards'**
+  String get identityFieldWards;
+
+  /// No description provided for @identityFieldPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone'**
+  String get identityFieldPhone;
+
+  /// No description provided for @identityWardsAllotted.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 ward allotted} other{{count} wards allotted}}'**
+  String identityWardsAllotted(int count);
+
+  /// No description provided for @identityNotFoundTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Driver not found'**
+  String get identityNotFoundTitle;
+
+  /// No description provided for @identityNotFoundBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Check the code with the office and try again.'**
+  String get identityNotFoundBody;
+
+  /// No description provided for @identityLookupFailedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t check the code'**
+  String get identityLookupFailedTitle;
+
+  /// No description provided for @identityLookupFailedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Check your connection and try again.'**
+  String get identityLookupFailedBody;
 
   /// No description provided for @trackingPermissionWhileInUseClaim.
   ///
@@ -997,6 +961,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Call office'**
   String get callForHelpCall;
+
+  /// No description provided for @identityWelcomeBackTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Welcome back'**
+  String get identityWelcomeBackTitle;
+
+  /// No description provided for @identityWelcomeBackBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This phone remembers you.'**
+  String get identityWelcomeBackBody;
+
+  /// No description provided for @identityStartMyShift.
+  ///
+  /// In en, this message translates to:
+  /// **'Start my Shift'**
+  String get identityStartMyShift;
+
+  /// No description provided for @identityChangeCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Different driver?'**
+  String get identityChangeCode;
 }
 
 class _AppLocalizationsDelegate

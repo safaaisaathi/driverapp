@@ -91,6 +91,74 @@ void main() {
       expect(Trip.fromMap(fromIso.toMap()), fromIso);
     });
 
+    test('trips (0.16: driverId + wardIds round-trip)', () {
+      final model = Trip.fromMap(<String, Object?>{
+        ...tripDocMap(),
+        'driverId': 'AB-1234',
+        'wardIds': <String>['ward-01', 'ward-02'],
+      });
+      final roundTrip = Trip.fromMap(model.toMap());
+      expect(roundTrip, model);
+      expect(model.driverId, 'AB-1234');
+      expect(model.wardIds, const ['ward-01', 'ward-02']);
+      // toMap always writes both fields (0.16 contract additions).
+      expect(model.toMap()['driverId'], 'AB-1234');
+      expect(model.toMap()['wardIds'], const ['ward-01', 'ward-02']);
+    });
+
+    test('trips tolerant read: old 0.2 doc without driverId/wardIds', () {
+      // Old trip docs predate the 0.16 contract and never fail to parse.
+      final model = Trip.fromMap(tripDocMap());
+      expect(model.driverId, '');
+      expect(model.wardIds, isEmpty);
+      // toMap still writes both fields so a re-save never drops them.
+      final roundTrip = Trip.fromMap(model.toMap());
+      expect(roundTrip.driverId, '');
+      expect(roundTrip.wardIds, isEmpty);
+      expect(model.toMap()['driverId'], '');
+      expect(model.toMap()['wardIds'], isEmpty);
+    });
+
+    test('trips equality: driverId and wardIds count', () {
+      final base = Trip.fromMap(<String, Object?>{
+        ...tripDocMap(),
+        'driverId': 'AB-1234',
+        'wardIds': <String>['ward-01', 'ward-02'],
+      });
+      final otherDriver = Trip.fromMap(<String, Object?>{
+        ...tripDocMap(),
+        'driverId': 'CD-5678',
+        'wardIds': <String>['ward-01', 'ward-02'],
+      });
+      final otherWards = Trip.fromMap(<String, Object?>{
+        ...tripDocMap(),
+        'driverId': 'AB-1234',
+        'wardIds': <String>['ward-01'],
+      });
+      expect(base, isNot(otherDriver));
+      expect(base, isNot(otherWards));
+      expect(base.hashCode, isNot(otherDriver.hashCode));
+    });
+
+    test('drivers (0.16: the driver doc round-trips)', () {
+      final model = Driver.fromMap(driverDocMap());
+      final roundTrip = Driver.fromMap(model.toMap());
+      expect(roundTrip, model);
+      expect(model.id, 'AB-1234');
+      expect(model.wardIds, const ['ward-01', 'ward-02']);
+    });
+
+    test('drivers tolerant read: a doc without wardIds parses as empty', () {
+      // A malformed driver doc must never crash the lookup (a missing
+      // field is an admin data error, not a fatal TypeError).
+      final data = Map<String, Object?>.from(driverDocMap())..remove('wardIds');
+      final model = Driver.fromMap(data);
+      expect(model.wardIds, isEmpty);
+      // toMap still writes the field so a re-save never drops it.
+      expect(model.toMap()['wardIds'], isEmpty);
+      expect(Driver.fromMap(model.toMap()), model);
+    });
+
     test('notices', () {
       final model = Notice.fromMap(noticeDocMap());
       final roundTrip = Notice.fromMap(model.toMap());

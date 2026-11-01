@@ -6,37 +6,36 @@
   "error": "Something went wrong",
   "offline": "You're offline",
   "retry": "Retry",
-
-  "shiftStartTitle": "Shift start",
   "vanLabel": "Van",
-  "pinLabel": "PIN",
-  "routeSetByAdmin": "(set by admin)",
   "splashTagline": "Clean city, one route at a time.",
   "welcomeTitle": "Welcome",
   "welcomeBody": "Safaai Saathi is ready for today's shift.",
   "welcomeCta": "Get started",
-  "dutyTitle": "Today's duty",
-  "dutySubtitle": "Connect with your van and start the route.",
-  "startDuty": "Start duty",
-  "gettingReady": "Getting the route ready…",
-  "pickVanPrompt": "Pick your van",
-  "vansEmpty": "No vans found",
-  "vanListError": "Couldn't load vans",
-  "routeLabel": "Route",
-  "routeUnknown": "Route not set",
-  "enterPinPrompt": "Enter the 4-digit PIN",
-  "verifyPin": "Verify PIN",
-  "readyToStartInfo": "Van confirmed. Ready to start.",
   "startShift": "Start Shift",
-  "resumeShift": "Resume shift",
-  "wrongPin": "Wrong PIN. Try again.",
-  "pinLockedOut": "Too many attempts. Please wait a few minutes and try again.",
   "shiftStartFailed": "Couldn't start the shift. Check the connection and try again.",
-  "verificationUnavailable": "Couldn't reach the office server. Check the connection and try again.",
   "shiftStarted": "Shift started",
   "basicRouteTitle": "Your route",
   "trackingPending": "Van tracking will start automatically.",
-
+  "identityStartTitle": "Start shift",
+  "identityCodeLabel": "Code",
+  "identityCodeHint": "XX-0000",
+  "identityCodeError": "Wrong code. Try again.",
+  "identityCodeContinue": "Continue",
+  "identityFieldName": "Name",
+  "identityFieldWards": "Wards",
+  "identityFieldPhone": "Phone",
+  "identityWardsAllotted": "{count, plural, =1{1 ward allotted} other{{count} wards allotted}}",
+  "@identityWardsAllotted": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "identityNotFoundTitle": "Driver not found",
+  "identityNotFoundBody": "Check the code with the office and try again.",
+  "identityLookupFailedTitle": "Couldn't check the code",
+  "identityLookupFailedBody": "Check your connection and try again.",
   "trackingPermissionWhileInUseClaim": "Tracking needs location access so your van can be seen on the live map.",
   "trackingPermissionBackgroundClaim": "Allow 'All the time' so tracking keeps working after the screen turns off.",
   "trackingPermissionNotificationsClaim": "Allow notifications so the 'Tracking active' message stays visible.",
@@ -46,25 +45,20 @@
   "trackingNotificationTitle": "Tracking active",
   "trackingNotificationBody": "Your van's location is shared while on shift.",
   "trackingOpenLocationSettings": "Open location settings",
-
   "permissionAllow": "Allow",
   "permissionNotNow": "Not now",
   "trackingPermissionLocationTitle": "Location access",
   "trackingPermissionBackgroundTitle": "Background location",
   "trackingPermissionNotificationsTitle": "Notifications",
   "trackingPermissionBatteryTitle": "Battery exception",
-
   "mockLocationWarning": "Your phone is faking its location. Tracking continues, and the office will see this notice.",
-
   "pendingReportsTitle": "Pending reports",
   "pendingReportsEmpty": "Nothing pending",
   "willRevisit": "Will Revisit",
   "markDone": "Done",
-
   "languageChangeHint": "Change language",
   "languageNameEn": "English",
   "languageNameGu": "ગુજરાતી",
-
   "liveRouteTitle": "Live Route",
   "routeLoading": "Loading route…",
   "recenterMap": "Recenter map",
@@ -72,35 +66,47 @@
   "noticesUnreadSemantic": "{count, plural, =1{Notices, 1 unread} other{Notices, {count} unread}}",
   "@noticesUnreadSemantic": {
     "placeholders": {
-      "count": { "type": "int" }
+      "count": {
+        "type": "int"
+      }
     }
   },
   "endOfTripCardPlaceholder": "End-of-trip summary appears here",
   "routeProgress": "{done} of {total} wards done",
   "@routeProgress": {
     "placeholders": {
-      "done": { "type": "int" },
-      "total": { "type": "int" }
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
     }
   },
   "routeProgressTitle": "Route Progress",
   "ofTotalWardsDone": "{total, plural, =1{ward done} other{wards done}}",
   "@ofTotalWardsDone": {
     "placeholders": {
-      "total": { "type": "int" }
+      "total": {
+        "type": "int"
+      }
     }
   },
   "nextWardLabel": "Next ward",
   "markWardDoneLabel": "Mark Ward Done: {wardName}",
   "@markWardDoneLabel": {
     "placeholders": {
-      "wardName": { "type": "String" }
+      "wardName": {
+        "type": "String"
+      }
     }
   },
   "markWardDoneSemantic": "Mark {wardName} as done",
   "@markWardDoneSemantic": {
     "placeholders": {
-      "wardName": { "type": "String" }
+      "wardName": {
+        "type": "String"
+      }
     }
   },
   "noOpenShiftTrip": "No open shift trip",
@@ -108,7 +114,9 @@
   "doneAtTime": "Done at {time}",
   "@doneAtTime": {
     "placeholders": {
-      "time": { "type": "String" }
+      "time": {
+        "type": "String"
+      }
     }
   },
   "noWardsOnRoute": "No wards on this route",
@@ -117,7 +125,9 @@
   "vanLastSeen": "{minutes, plural, =0{Location updated moments ago} =1{Location updated 1 min ago} other{Location updated {minutes} min ago}}",
   "@vanLastSeen": {
     "placeholders": {
-      "minutes": { "type": "int" }
+      "minutes": {
+        "type": "int"
+      }
     }
   },
   "offlineShowingCached": "Showing saved map data",
@@ -125,25 +135,20 @@
   "vanMarkerSemantic": "Your van",
   "routeEmptyMessage": "This route has no wards",
   "routeMissingMessage": "Route not found",
-
   "markWardDone": "Mark Ward Done",
   "markWardDoneFailed": "Couldn't record. Try again.",
   "markWardDoneNoTrip": "No open shift trip",
-
   "noticesTitle": "Notices",
   "noticesEmpty": "No notices",
   "noNoticesBody": "There are no notices for your route right now.",
-
   "navRoute": "Route",
   "navNotices": "Notices",
   "navReports": "Reports",
-
   "endShiftPrimary": "End Shift",
   "endShiftHint": "All wards done — end your shift",
   "endShiftDuration": "{mins, plural, =1{1 min on route} other{{mins} min on route}}",
   "shiftEnded": "Shift ended",
   "endShiftFailed": "Couldn't end the shift. Try again.",
-
   "settingsTitle": "Settings",
   "settingsLanguage": "Language",
   "settingsTheme": "Theme",
@@ -197,5 +202,9 @@
   "onBreakResume": "Resume shift",
   "callForHelpTitle": "Call for help",
   "callForHelpBody": "Call the office for help on today's route.",
-  "callForHelpCall": "Call office"
+  "callForHelpCall": "Call office",
+  "identityWelcomeBackTitle": "Welcome back",
+  "identityWelcomeBackBody": "This phone remembers you.",
+  "identityStartMyShift": "Start my Shift",
+  "identityChangeCode": "Different driver?"
 }

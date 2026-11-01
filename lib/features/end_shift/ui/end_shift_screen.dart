@@ -1,8 +1,9 @@
-/// D5 End Shift (ticket 08) — the M3 Flow shell (docs/DESIGN.md §3.2 /
+/// D5 End Shift (ticket 08) — the M3 Flow shell (docs/DESIGN-driver-app.md §3.2 /
 /// §770 / §9.10): round close button top-left, the shift summary in the
 /// signature ContourCard (CL-12: shift summary), ONE primary "End Shift"
 /// pill pinned bottom inside a CTA bar, and — after the confirm — the
-/// success state with Binny `sleep` + "Shift ended" (CL-15).
+/// success state with a neutral icon in a `brandSoft` circle + "Shift ended"
+/// (CL-D15, removed-T8).
 ///
 /// The screen writes ONLY through the flow controller
 /// (`end_shift_flow.dart`); no direct repository calls from the UI.
@@ -16,8 +17,9 @@ import 'package:driverapp/core/theme/app_colors.dart';
 import 'package:driverapp/core/theme/app_text.dart';
 import 'package:driverapp/core/theme/app_tokens.dart';
 import 'package:driverapp/core/widgets/app_icon_button.dart';
-import 'package:driverapp/core/widgets/binny.dart';
 import 'package:driverapp/core/widgets/contour_card.dart';
+import 'package:driverapp/features/live_route/domain/ward_steps.dart'
+    show tripWardScope;
 import 'package:driverapp/features/live_route/live_route_providers.dart';
 import 'package:driverapp/features/shift_start/domain/shift_session.dart';
 
@@ -95,7 +97,11 @@ class _SummaryBody extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     final c = context.colors;
     final trip = ref.watch(openTripProvider(vanId)).value;
-    final total = ref.watch(routeModelProvider(vanId)).value?.wardIds.length ??
+    // The ward TOTAL follows the trip's scope (0.16, ticket-7 review
+    // ruling): a driver allotted 1 of the route's 3 wards shifts "1 of 1",
+    // never "1 of 3". Pre-0.16 trips fall back to the route's count.
+    final total = tripWardScope(trip)?.length ??
+        ref.watch(routeModelProvider(vanId)).value?.wardIds.length ??
         trip?.wardsDone.length ??
         0;
     final done = trip?.wardsDone.length ?? 0;
@@ -173,7 +179,8 @@ class _SummaryBody extends ConsumerWidget {
   }
 }
 
-/// Post-confirm success state (Binny sleep — CL-15).
+/// Post-confirm success state (neutral icon in a `brandSoft` circle — CL-D15,
+/// removed-T8).
 class _EndedState extends StatelessWidget {
   final String message;
 
@@ -181,13 +188,20 @@ class _EndedState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         spacing: AppSpace.lg,
         children: [
-          ExcludeSemantics(
-            child: BinnyView(pose: BinnyPose.sleep),
+          Container(
+            width: AppSize.permissionIconCircle,
+            height: AppSize.permissionIconCircle,
+            decoration: BoxDecoration(
+              color: c.brandSoft,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.check_circle_outlined, size: AppSize.icon * 2, color: c.brand),
           ),
           Text(message, style: context.text.headline),
         ],

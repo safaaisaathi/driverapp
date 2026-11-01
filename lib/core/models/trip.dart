@@ -88,15 +88,28 @@ class GpsPoint {
   String toString() => 'GpsPoint(${toMap()})';
 }
 
-/// The `trips` collection (0.2): id, vanId, routeId, date, startedAt, endedAt,
-/// wardsDone[{wardId,doneAt,flagged}], alertedWardIds[], gpsTrail[{lat,lng,t}],
-/// mockLocationDetected.
+/// The `trips` collection (0.2, plus 0.16 additions): id, vanId, routeId,
+/// driverId, wardIds, date, startedAt, endedAt, wardsDone[{wardId,doneAt,flagged}],
+/// alertedWardIds[], gpsTrail[{lat,lng,t}], mockLocationDetected.
+///
+/// `driverId` and `wardIds` are tolerant-read: a missing field parses as
+/// `''` / `const <String>[]` so old 0.2 trip docs never fail, and toMap
+/// always writes both.
 class Trip {
   final String id;
 
   final String vanId;
 
   final String routeId;
+
+  /// The confirmed driver code that started this shift (0.16 = the code
+  /// from `drivers/{CODE}`). Empty for trips started by the old D1 flow.
+  final String driverId;
+
+  /// The driver's allotted wards (0.16); D2 scopes map + ward marking to
+  /// these when non-empty. Empty/missing means the trip predates the
+  /// contract and D2 falls back to `routes.wardIds`.
+  final List<String> wardIds;
 
   /// The collection-day calendar date (0.13 "Today": resolved in Asia/Kolkata;
   /// only the driver app writes trips, so this holds the shift's date).
@@ -118,6 +131,8 @@ class Trip {
     required this.id,
     required this.vanId,
     required this.routeId,
+    required this.driverId,
+    required this.wardIds,
     required this.date,
     required this.startedAt,
     required this.endedAt,
@@ -135,6 +150,10 @@ class Trip {
       id: map['id'] as String,
       vanId: map['vanId'] as String,
       routeId: map['routeId'] as String,
+      driverId: (map['driverId'] ?? '') as String,
+      wardIds:
+          (map['wardIds'] as List<Object?>?)?.map((element) => element as String).toList() ??
+              const <String>[],
       date: docTimeToDateTimeRequired(map['date'], 'trips.date'),
       startedAt: docTimeToDateTimeRequired(map['startedAt'], 'trips.startedAt'),
       endedAt: docTimeToDateTime(map['endedAt']),
@@ -167,6 +186,8 @@ class Trip {
         'id': id,
         'vanId': vanId,
         'routeId': routeId,
+        'driverId': driverId,
+        'wardIds': wardIds,
         'date': dateTimeToDocTime(date),
         'startedAt': dateTimeToDocTime(startedAt),
         'endedAt': endedAt == null ? null : dateTimeToDocTime(endedAt),
@@ -183,6 +204,8 @@ class Trip {
       other.id == id &&
       other.vanId == vanId &&
       other.routeId == routeId &&
+      other.driverId == driverId &&
+      _listEquals(other.wardIds, wardIds) &&
       other.date == date &&
       other.startedAt == startedAt &&
       other.endedAt == endedAt &&
@@ -197,6 +220,8 @@ class Trip {
         id,
         vanId,
         routeId,
+        driverId,
+        Object.hashAll(wardIds),
         date,
         startedAt,
         endedAt,

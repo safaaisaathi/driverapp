@@ -59,7 +59,7 @@ void main() {
     });
 
     test('fresh install: no stored pref → no stored choice (null state; '
-        'the dev-phase fallback keeps the app on en)', () async {
+        'the MaterialApp sits on the gu default — issue #14)', () async {
       // First read = the app mounting its watch (DriverApp); kicks restore.
       container.read(localeControllerProvider);
       await awaitRestored(container);
@@ -74,7 +74,7 @@ void main() {
       expect(container.read(localeControllerProvider), const Locale('gu'));
     });
 
-    test('corrupt stored value → degrades to no choice (en fallback)',
+    test('corrupt stored value → degrades to no choice (gu default)',
         () async {
       store.values[localePrefKey] = 'hi';
       container.read(localeControllerProvider);

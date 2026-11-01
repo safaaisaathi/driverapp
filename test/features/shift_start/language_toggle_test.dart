@@ -1,26 +1,32 @@
-/// F-D10 language toggle on D1 (ticket 13) — widget tests at seam 1 /
-/// MaterialApp locale wiring: the DriverApp tree runs against fakes, so
-/// no test reaches a platform channel.
+/// F-D10 language toggle (ticket 13) on the start-shift page — widget tests
+/// at seam 1 / MaterialApp locale wiring: the DriverApp tree runs against
+/// fakes, so no test reaches a platform channel.
 library;
 
 import 'package:driverapp/core/config/firebase_bootstrap.dart';
+import 'package:driverapp/core/identity/driver_identity_controller.dart';
 import 'package:driverapp/core/l10n/app_localizations.dart';
 import 'package:driverapp/core/l10n/locale_controller.dart';
+import 'package:driverapp/core/l10n/locale_preferences.dart' show localePrefKey;
 import 'package:driverapp/core/repositories/repositories.dart';
 import 'package:driverapp/core/theme/app_theme.dart';
-import 'package:driverapp/features/shift_start/data/verify_driver_pin.dart';
+import 'package:driverapp/features/shift_start/data/fcm_topics.dart'
+    show driverMessagingGatewayProvider;
+import 'package:driverapp/features/tracking/tracking_providers.dart'
+    show trackingPermissionGatewayProvider;
 import 'package:driverapp/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../core/identity/driver_identity_fakes.dart';
 import '../../core/l10n/locale_fakes.dart';
+import '../../features/launching/permission_gateway_fakes.dart';
 import '../../repositories/fake_repositories.dart';
-import 'shift_start_screen_test.dart' show pinVerifier;
 
-const String enVansEmpty = 'No vans found';
-const String guVansEmpty = 'કોઈ વેન મળી નથી';
+const String enTitle = 'Start shift';
+const String guTitle = 'શિફ્ટ શરૂ કરો';
 
 /// The toggle shows the language it switches TO, written in that
 /// language (native names, identical in every arb file by design).
@@ -29,14 +35,9 @@ const String enToggleName = 'English';
 
 const Key toggleKey = ValueKey('d1-language-toggle');
 
-class _NoopAuthGateway implements DriverAuthGateway {
-  @override
-  Future<String> signInWithCustomToken(String token) async => 'uid';
-}
-
 /// Pumps the real DriverApp wiring (main.dart's MaterialApp) against the
-/// fake repository seam plus an in-memory locale store, then walks the
-/// launching flow (splash → welcome → start duty) onto D1.
+/// fake seams plus an in-memory locale store, then walks the launching
+/// flow (splash → welcome → one-time setup) onto the start-shift page.
 Future<void> pumpDriverApp(
   WidgetTester tester, {
   required InMemoryLocaleStore store,
@@ -46,24 +47,28 @@ Future<void> pumpDriverApp(
       vansRepositoryProvider.overrideWithValue(FakeVansRepository()),
       tripsRepositoryProvider.overrideWithValue(FakeTripsRepository()),
       routesRepositoryProvider.overrideWithValue(FakeRoutesRepository()),
-      pinVerifierProvider.overrideWithValue(pinVerifier()),
-      driverAuthGatewayProvider.overrideWithValue(_NoopAuthGateway()),
+      driversRepositoryProvider.overrideWithValue(FakeDriversRepository()),
+      driverIdentityStoreProvider.overrideWithValue(
+        InMemoryDriverIdentityStore(),
+      ),
       driverMessagingGatewayProvider
           .overrideWithValue(const NoopMessagingGateway()),
+      // The setup flow auto-grants every stage, so the begin CTA completes
+      // without a rationale screen in the walk.
+      trackingPermissionGatewayProvider
+          .overrideWithValue(const GrantAllPermissionGateway()),
       localeStoreProvider.overrideWithValue(store),
     ],
     child: const DriverApp(),
   ));
-  // Splash holds 1.6 s (local timer), then Welcome replaces it; a test
-  // drives through the static launching screens to reach D1.
+  // Splash holds 1.6 s (local timer), then Welcome replaces it; the begin
+  // CTA runs the setup (grant-all fake) and lands on the start-shift page.
   await tester.pump(const Duration(milliseconds: 1700));
   await tester.pump(const Duration(milliseconds: 400)); // welcome push settles
   await tester.tap(find.byKey(const ValueKey('welcome-begin-button')));
-  await tester.pump(); // navigation frame
-  await tester.pump(const Duration(milliseconds: 400)); // duty push settles
-  await tester.tap(find.byKey(const ValueKey('duty-start-button')));
-  // The M3 fade-forwards exit needs continuous small-step pumping to
-  // retire the replaced route; one long pump leaves it mid-bookkeeping.
+  // The setup hand-over + fade-forwards exit need continuous small-step
+  // pumping to retire the replaced route; one long pump leaves it
+  // mid-bookkeeping.
   await tester.pumpAndSettle();
 }
 
@@ -90,61 +95,66 @@ bool hasGujaratiGlyphs(String s) {
 }
 
 void main() {
-  testWidgets('fresh install: no stored choice launches in English '
-      '(grilled dev-phase default holds)', (tester) async {
+  testWidgets('fresh install: no stored choice launches in Gujarati '
+      '(issue #14 default)', (tester) async {
     await pumpDriverApp(tester, store: InMemoryLocaleStore());
-    await pumpUntilFound(tester, find.text(enVansEmpty));
+    await pumpUntilFound(tester, find.text(guTitle));
     // The toggle offers the other language, named in that language.
-    expect(find.text(guToggleName), findsOneWidget);
-    expect(find.text(enToggleName), findsNothing);
+    expect(find.text(enToggleName), findsOneWidget);
+    expect(find.text(guToggleName), findsNothing);
   });
 
-  testWidgets('tapping the toggle flips every visible localized string to '
-      'Gujarati immediately (no restart)', (tester) async {
-    final store = InMemoryLocaleStore();
+  testWidgets('a stored English choice still wins over the gu default, and '
+      'tapping the toggle flips the app to Gujarati instantly', (tester) async {
+    final store = InMemoryLocaleStore()..values[localePrefKey] = 'en';
     await pumpDriverApp(tester, store: store);
-    await pumpUntilFound(tester, find.text(enVansEmpty));
+    await pumpUntilFound(
+      tester,
+      find.text(enTitle),
+      reason: "a stored 'en' beats the Gujarati default (never overridden)",
+    );
 
+    // In English the toggle offers the other language, named natively.
     await tester.tap(find.text(guToggleName));
     await pumpUntilFound(
       tester,
-      find.text(guVansEmpty),
-      reason: 'D1 strings must re-localize inside the running app',
+      find.text(guTitle),
+      reason: 'start-shift strings must re-localize inside the running app',
     );
 
-    expect(find.text(enVansEmpty), findsNothing);
+    expect(find.text(enTitle), findsNothing);
+    // Back in Gujarati, the toggle offers English (native name).
     expect(
       find.text(enToggleName),
       findsOneWidget,
       reason: 'the toggle now points back at English (native name)',
     );
-    expect(
-      store.stored,
-      'gu',
-      reason: 'the choice persisted through the store seam',
-    );
+    expect(find.text(guToggleName), findsNothing);
+    expect(store.stored, 'gu',
+        reason: 'the choice persisted through the store seam');
   });
 
-  testWidgets('tapping again flips back to English', (tester) async {
+  testWidgets('tapping the toggle flips back and forth live', (tester) async {
+    // Fresh install: the gu default renders first (issue #14).
     final store = InMemoryLocaleStore();
     await pumpDriverApp(tester, store: store);
-    await pumpUntilFound(tester, find.text(enVansEmpty));
+    await pumpUntilFound(tester, find.text(guTitle));
 
-    await tester.tap(find.text(guToggleName));
-    await pumpUntilFound(tester, find.text(guVansEmpty));
     await tester.tap(find.text(enToggleName));
-    await pumpUntilFound(tester, find.text(enVansEmpty));
+    await pumpUntilFound(tester, find.text(enTitle));
+    await tester.tap(find.text(guToggleName));
+    await pumpUntilFound(tester, find.text(guTitle));
 
-    expect(find.text(guVansEmpty), findsNothing);
-    expect(store.stored, 'en');
+    expect(find.text(enTitle), findsNothing);
+    expect(store.stored, 'gu');
   });
 
   testWidgets('chosen language persists across an app restart', (tester) async {
     final store = InMemoryLocaleStore();
     await pumpDriverApp(tester, store: store);
-    await pumpUntilFound(tester, find.text(enVansEmpty));
-    await tester.tap(find.text(guToggleName));
-    await pumpUntilFound(tester, find.text(guVansEmpty));
+    await pumpUntilFound(tester, find.text(guTitle));
+    await tester.tap(find.text(enToggleName));
+    await pumpUntilFound(tester, find.text(enTitle));
 
     // Restart: throw the tree away, mount a fresh ProviderScope (fresh
     // container → fresh LocaleController → restore) over the SAME storage.
@@ -152,13 +162,14 @@ void main() {
     await pumpDriverApp(tester, store: store);
     await pumpUntilFound(
       tester,
-      find.text(guVansEmpty),
-      reason: 'the stored choice must restore on the next launch',
+      find.text(enTitle),
+      reason: "the stored 'en' choice must restore on the next launch",
     );
-    expect(find.text(enVansEmpty), findsNothing);
+    expect(find.text(guTitle), findsNothing);
   });
 
-  testWidgets('toggle renders on D1 with a ≥56 dp touch target', (tester) async {
+  testWidgets('toggle renders on the start-shift page with a ≥56 dp touch '
+      'target', (tester) async {
     await pumpDriverApp(tester, store: InMemoryLocaleStore());
     await pumpUntilFound(tester, find.byKey(toggleKey));
 
@@ -188,9 +199,11 @@ void main() {
   testWidgets(
       'a11y: the toggle exposes a localized change-language hint',
       (tester) async {
+    // Fresh install renders the gu default (issue #14), so the hint ships
+    // in Gujarati.
     final semantics = tester.ensureSemantics();
     await pumpDriverApp(tester, store: InMemoryLocaleStore());
-    await pumpUntilFound(tester, find.bySemanticsLabel('Change language'));
+    await pumpUntilFound(tester, find.bySemanticsLabel('ભાષા બદલો'));
     // End-of-test verification requires every handle gone; dispose here
     // (before the framework's checks) not in addTearDown.
     semantics.dispose();
@@ -204,8 +217,8 @@ void main() {
     for (final label in [
       gu.languageChangeHint,
       gu.languageNameGu,
-      gu.vansEmpty,
-      gu.pickVanPrompt,
+      gu.identityStartTitle,
+      gu.identityCodeContinue,
     ]) {
       expect(hasGujaratiGlyphs(label), isTrue,
           reason: '"$label" must carry Gujarati script');

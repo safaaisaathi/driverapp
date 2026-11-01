@@ -196,6 +196,66 @@ void main() {
     });
   });
 
+  group('trip wardIds scoping (0.16): D2 scopes map + marking to the trip', () {
+    /// A 0.16 trip carries the confirmed driver code; a pre-0.16 trip has
+    /// none and falls back to the whole route.
+    Trip tripWithWards(
+      List<String> wardIds, {
+      String driverId = 'AB-1234',
+    }) =>
+        Trip.fromMap(<String, Object?>{
+          'id': 'trip-1',
+          'vanId': 'van-01',
+          'routeId': 'route-01',
+          'date': now,
+          'startedAt': now,
+          'endedAt': null,
+          'wardsDone': [],
+          'alertedWardIds': [],
+          'gpsTrail': [],
+          'mockLocationDetected': false,
+          'driverId': driverId,
+          'wardIds': wardIds,
+        });
+
+    test('a 0.16 trip scopes the SET to its wards but keeps the ROUTE\'s '
+        'visiting order (F-D3.1: the route owns the order)', () {
+      final data = asData(combine(
+        trip: AsyncValue.data(tripWithWards(const ['wc', 'wa'])),
+        offline: false,
+      ));
+      // Route order (wa, wb, wc) filtered to the trip's set {wa, wc} — the
+      // trip's own order never changes the visiting order.
+      expect(data.wardSteps.map((s) => s.ward.id), ['wa', 'wc']);
+      expect(data.nextWard?.ward.id, 'wa');
+      expect(data.doneCount, 0);
+    });
+
+    test('a pre-0.16 trip (no driverId) falls back to the whole route', () {
+      final data = asData(combine(
+        trip: AsyncValue.data(
+          tripWithWards(const <String>[], driverId: ''),
+        ),
+        offline: false,
+      ));
+      expect(data.wardSteps.map((s) => s.ward.id), ['wa', 'wb', 'wc']);
+      expect(data.nextWard?.ward.id, 'wa');
+    });
+
+    test('a 0.16 trip with NO allotted ward scopes to NOTHING (the empty '
+        'allotment is authoritative, never the whole route)', () {
+      // Blocking defect: an empty `wardIds` on a 0.16 trip must NOT widen
+      // the scope back to the route.
+      expect(
+        combine(
+          trip: AsyncValue.data(tripWithWards(const <String>[])),
+          offline: false,
+        ),
+        const LiveRouteEmpty(LiveRouteEmptyReason.noWards),
+      );
+    });
+  });
+
   group('offline flag', () {
     test('offline=true travels into the data state (banner source)', () {
       expect(asData(combine(offline: true)).isOffline, isTrue);

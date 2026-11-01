@@ -140,6 +140,18 @@ class MarkWardDoneController extends Notifier<MarkWardDoneFlow> {
       return;
     }
 
+    // 0.16: D2 scopes the ward MARKING to the trip's allotted wards, the
+    // same scope the map and the list render from. A trip without them
+    // (predates the contract) keeps the route's ward set, so the guard only
+    // bites when the trip carries its own list.
+    final allotted = tripWardScope(trip);
+    if (allotted != null && !allotted.contains(wardId)) {
+      // Ghost tap: a ward outside the trip's wards never renders, so this
+      // can only be a stale tap — nothing is written.
+      _dropInFlight(wardId, failed: true);
+      return;
+    }
+
     final ward = (ref.read(routeWardsProvider(vanId)).value ?? const <Ward>[])
         .where((candidate) => candidate.id == wardId)
         .firstOrNull;

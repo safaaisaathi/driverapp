@@ -76,6 +76,10 @@ _Avoid_: login state, user data
 
 Deferred work parking lot. Sweep at wave boundaries; every item moves out only when shipped, or ships as `shortcut:` code. Owner: me (agent), Backend Owner, or user.
 
+### Driver-identity wave (in progress, overnight 2026-10-30)
+
+Login architecture change: driver enters a unique code `XX-0000` (admin allots van + wards in `drivers/{CODE}`), confirm card, straight to shift. Spec = GitHub issue #1; tickets = sub-issues #2-#10 with native blocking edges. Branch `feature/driver-identity`, PR to `main` at the end (user approves; never self-merge). Contract frozen in PRD-2 §0.16 BEFORE code. Visual spec: `docs/DESIGN-driver-app.md` (wireframe-derived, DESIGN.md structure, rulings D-101..D-108). Tracking: old D1 (van picker + PIN) dies; splash auto-routes on a device-local `setupDone` flag; Binny mascot removed everywhere ([removed-T8] in the design file; empty states need the neutral-icon replacement). Tickets so far: 1 contract+rules+seeds ✅ (#2), 2 Driver model + DriversRepository ✅ (#3, named per codebase convention, not "DriverDirectory"), 3 identity persistence ✅ (#4), 4 start-shift page ✅ (#5), 5 welcome-back card ✅ (#6), 6 fresh-device path ✅ (#7; Start Duty screen deleted, dev preview on the new chain), 7 trip contract driverId+wardIds + D2 ward scoping ✅ (#8, Tier 2 fixes in flight: empty-wardIds scope leak, resume reconcile, route-order filter), 8 splash auto-route + mascot removal ✅ (#9, cap 1.6 s), 10 smart code keyboard ✅ (#11, keyboard flips letters→digits, dash auto-inserts after the 2nd letter, 44 tests green). Old `verifyDriverPin` Function stays deployed until the Backend Owner sweep (app stops calling it).
+
 ### Performance Bag
 - [ ] `maxTrailBufferPoints` (5000) cap is a guess — measure real batch write latency on device (ticket 14). *(me → 14)*
 - [ ] `gpsTrail` arrayUnion grows one doc unbounded long-shift — contract change, shard/rotation. *(Backend Owner)*
@@ -90,7 +94,7 @@ Deferred work parking lot. Sweep at wave boundaries; every item moves out only w
 
 ### Improvement Bag
 - [ ] Productionize build config per the "Production-grade config & security plan" (2026-10-29): Android flavors `dev`/`prod` + per-flavor gitignored `google-services.json` + apply the Gradle plugin + plain `initializeApp()`; App Check + Play Integrity on staging/prod; key restrictions (SHA-256 bind); CI secrets (JSONs + keystore) + AAB pipeline; kill `DEMO_SEED_BYPASS`. AFTER ticket 14 (restructures the Android build). *(me, after ticket 14)*
-- [ ] Locale flip `en` → `gu` before demo (grilled decision; arb files ready). *(me)*
+- [x] Locale flip `en` → `gu` before demo — DONE (issue #14, B1): the SHIPPING default is now Gujarati (`defaultAppLocale = Locale('gu')` in `core/l10n/locale_controller.dart`; MaterialApp fallback + toggle fallback read it). A stored choice wins in either direction; deviation pinned in `test/core/l10n/default_locale_test.dart`. 407/407 green.
 - [ ] `whereIn` >30-ward chunking (ruling 12) — build when demo routes exceed 30 wards. *(me)*
 - [ ] Delete dev entrypoints at integration: `dev_tracking.dart`, `dev_pending_reports.dart`, `dev_live_route.dart`, `dev_notices.dart`, `dev_min.dart`. *(me → 14)*
 - [ ] Index seeds for Backend Owner: notices OR-branch sort, pending-reports `(wardId, createdAt)`, trip `(vanId, date)` (rulings 10/11/16). *(Backend Owner)*
