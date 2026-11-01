@@ -48,9 +48,9 @@ app.*.map.json
 .widget_preview/
 
 # Firebase: production values supplied privately (PRD-2 §0.10), never committed
+# firebase.json IS committed: it holds the rules path + emulator ports (no secrets).
 lib/firebase_options.dart
 android/app/google-services.json
-firebase.json
 .env
 devtools_options.yaml
 android/build/
