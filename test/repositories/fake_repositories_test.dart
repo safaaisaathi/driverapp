@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
+import 'package:driverapp/core/domain/ist_clock.dart';
 import 'package:driverapp/core/models/models.dart';
 import 'package:driverapp/core/repositories/repositories.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -124,6 +125,112 @@ void main() {
       expect(
         events.last!.wardsDone.map((entry) => entry.wardId),
         contains('ward-02'),
+      );
+      await subscription.cancel();
+    });
+
+    test('watchTripByVanIdAndDate matches the IST day, not the phone zone '
+        '(issue #15)', () async {
+      // `trips.date` is the IST-midnight instant: 2026-11-01 IST starts at
+      // 18:30 UTC on Oct 31. A query made late on that IST day (17:30 UTC on
+      // Nov 1) is the SAME IST day, but a different LOCAL day on any zone at
+      // or west of UTC, which is exactly where the local-field day match
+      // dropped today's trip.
+      final istDay = DateTime.utc(2026, 10, 31, 18, 30);
+      final lateInThatIstDay = DateTime.utc(2026, 11, 1, 17, 30);
+      expect(istDayWindow(lateInThatIstDay).start, istDay);
+      final seeded = FakeTripsRepository([
+        Trip.fromMap({...tripDocMapOpen(), 'date': ts(istDay)}),
+      ]);
+
+      final events = <Trip?>[];
+      final subscription = seeded
+          .watchTripByVanIdAndDate(vanId: 'van-01', date: lateInThatIstDay)
+          .listen(events.add);
+      await pumpEventQueue();
+      expect(events.single?.id, 'trip-01');
+      await subscription.cancel();
+    });
+
+    test('watchRecentTrips ends at the next IST midnight, never including '
+        'the next day (issue #15)', () async {
+      final novFirst = DateTime.utc(2026, 10, 31, 18, 30); // 00:00 IST Nov 1
+      final novSecond = DateTime.utc(2026, 11, 1, 18, 30); // 00:00 IST Nov 2
+      final seeded = FakeTripsRepository([
+        Trip.fromMap({...tripDocMapOpen(id: 'trip-01'), 'date': ts(novFirst)}),
+        Trip.fromMap({...tripDocMapOpen(id: 'trip-02'), 'date': ts(novSecond)}),
+      ]);
+
+      final events = <List<Trip>>[];
+      final subscription = seeded
+          .watchRecentTrips(
+            vanId: 'van-01',
+            asOfDate: DateTime.utc(2026, 11, 1, 17, 30),
+          )
+          .listen(events.add);
+      await pumpEventQueue();
+      expect(
+        events.single.map((trip) => trip.id),
+        ['trip-01'],
+        reason: 'the next IST day is outside the history window',
+      );
+      await subscription.cancel();
+    });
+
+    test('an open trip beats a closed same-day sibling (issue #25)', () async {
+      // Both docs share the IST day; the CLOSED one started later, so a
+      // plain startedAt sort would surface it and leak its done ticks.
+      final day = DateTime(2026, 11, 1);
+      final open = Trip.fromMap({
+        ...tripDocMapOpen(id: 'trip-open'),
+        'date': ts(utcStartOfIstDay(day)),
+        'startedAt': ts(DateTime.utc(2026, 11, 1, 4, 0)),
+        'endedAt': null,
+      });
+      final closed = Trip.fromMap({
+        ...tripDocMapOpen(id: 'trip-closed'),
+        'date': ts(utcStartOfIstDay(day)),
+        'startedAt': ts(DateTime.utc(2026, 11, 1, 9, 0)),
+        'endedAt': ts(DateTime.utc(2026, 11, 1, 10, 0)),
+      });
+      final seeded = FakeTripsRepository([closed, open]);
+
+      final events = <Trip?>[];
+      final subscription = seeded
+          .watchTripByVanIdAndDate(vanId: 'van-01', date: day)
+          .listen(events.add);
+      await pumpEventQueue();
+      expect(
+        events.single?.id,
+        'trip-open',
+        reason: 'the open trip is today\'s trip, not its closed sibling',
+      );
+      await subscription.cancel();
+    });
+
+    test('closed-only day surfaces the most recently started trip (issue #25)',
+        () async {
+      final day = DateTime(2026, 11, 1);
+      Trip closedAt(String id, int hour) => Trip.fromMap({
+            ...tripDocMapOpen(id: id),
+            'date': ts(utcStartOfIstDay(day)),
+            'startedAt': ts(DateTime.utc(2026, 11, 1, hour)),
+            'endedAt': ts(DateTime.utc(2026, 11, 1, hour + 1)),
+          });
+      final seeded = FakeTripsRepository([
+        closedAt('trip-morning', 4),
+        closedAt('trip-late', 9),
+      ]);
+
+      final events = <Trip?>[];
+      final subscription = seeded
+          .watchTripByVanIdAndDate(vanId: 'van-01', date: day)
+          .listen(events.add);
+      await pumpEventQueue();
+      expect(
+        events.single?.id,
+        'trip-late',
+        reason: 'End Shift keeps the just-closed trip watchable',
       );
       await subscription.cancel();
     });

@@ -421,39 +421,60 @@ class _TrackingStateBanner extends ConsumerWidget {
       borderRadius: const BorderRadius.all(Radius.circular(AppSpace.unit * 2)),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Row(
+        // Two rows (issue #23): the message takes the full width, and the
+        // actions wrap underneath. A single Row overflowed by 20 px at 360 dp
+        // once the long "Open location settings" label shared the line with
+        // the text and Retry (device-verified on the M215F).
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.location_off, size: 18, color: c.textPrimary),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                outcome.kind == ShiftTrackingAutoStartKind.gpsOff
-                    ? l10n.trackingGpsOff
-                    : l10n.trackingPermissionDenied,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: context.text.bodySmall.copyWith(color: c.textPrimary),
-              ),
+            Row(
+              children: [
+                Icon(Icons.location_off, size: 18, color: c.textPrimary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    outcome.kind == ShiftTrackingAutoStartKind.gpsOff
+                        ? l10n.trackingGpsOff
+                        : l10n.trackingPermissionDenied,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.text.bodySmall.copyWith(color: c.textPrimary),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: AppSpace.sm),
-            if (outcome.kind == ShiftTrackingAutoStartKind.gpsOff)
-              FilledButton(
-                key: const ValueKey('tracking-open-gps-settings'),
-                onPressed: () => unawaited(starter.openLocationSettings()),
-                child: Text(l10n.trackingOpenLocationSettings),
-              ),
-            TextButton(
-              key: const ValueKey('tracking-start-retry'),
-              onPressed: session == null
-                  ? null
-                  : () => unawaited(
-                      starter.startTrackingFor(
-                        session,
-                        notificationTitle: l10n.trackingNotificationTitle,
-                        notificationBody: l10n.trackingNotificationBody,
-                      ),
+            const SizedBox(height: AppSpace.xs),
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: AppSpace.xs,
+                children: [
+                  if (outcome.kind == ShiftTrackingAutoStartKind.gpsOff)
+                    FilledButton(
+                      key: const ValueKey('tracking-open-gps-settings'),
+                      onPressed: () => unawaited(starter.openLocationSettings()),
+                      child: Text(l10n.trackingOpenLocationSettings),
                     ),
-              child: Text(l10n.retry),
+                  TextButton(
+                    key: const ValueKey('tracking-start-retry'),
+                    onPressed: session == null
+                        ? null
+                        : () => unawaited(
+                            starter.startTrackingFor(
+                              session,
+                              notificationTitle:
+                                  l10n.trackingNotificationTitle,
+                              notificationBody: l10n.trackingNotificationBody,
+                            ),
+                          ),
+                    child: Text(l10n.retry),
+                  ),
+                ],
+              ),
             ),
           ],
         ),

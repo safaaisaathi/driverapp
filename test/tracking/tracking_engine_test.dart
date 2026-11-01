@@ -79,13 +79,18 @@ void main() {
         const Duration(milliseconds: 1400),
       );
 
+  /// The buffer the last [buildEngine] start opened — lets a test seed a
+  /// backlog and inspect what each flush took (issue #13).
+  _FakeTrailBuffer? lastBuffer;
+
   TrackingEngine buildEngine({int check = 1, int? flush}) => TrackingEngine(
         vansRepository: vans,
         tripsRepository: trips,
         positionSource: positions,
         batterySource: battery,
         serviceHandle: service,
-        trailBufferFactory: (tripId) async => _FakeTrailBuffer(),
+        trailBufferFactory: (tripId) async =>
+            lastBuffer = _FakeTrailBuffer(),
         clock: () => clock,
         checkIntervalSec: check,
         flushIntervalSec: flush,
@@ -340,8 +345,48 @@ void main() {
       await engine.stop();
     });
 
-    test('stop() performs the FINAL flush (End Shift semantics)', () async {
-      final engine = buildEngine();
+    test('one flush carries at most maxTrailBatchPoints, oldest first, and '
+        'stop() drains the rest (issue #13)', () async {
+      final engine = buildEngine(flush: 5);
+      await engine.start(
+        tripId: 'trip-1',
+        vanId: 'van-01',
+        notificationTitle: 'T',
+        notificationBody: '',
+      );
+
+      final buffer = lastBuffer!;
+      final base = DateTime.utc(2026, 10, 24, 8);
+      for (var i = 0; i < 2500; i++) {
+        await buffer.add(
+          GpsPoint(lat: i.toDouble(), lng: 77, t: base.add(Duration(seconds: i))),
+        );
+      }
+      expect(buffer.pendingCount, 2500);
+
+      // Wait for the FIRST flush tick only (5 s cadence; the fake write is
+      // instant, so the window to assert is wide).
+      final deadline = DateTime.now().add(const Duration(seconds: 15));
+      while (trips.trips['trip-1']!.gpsTrail.isEmpty) {
+        if (DateTime.now().isAfter(deadline)) fail('no flush within 15 s');
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+
+      final first = trips.trips['trip-1']!.gpsTrail;
+      expect(first.length, maxTrailBatchPoints);
+      expect(first.first.lat, 0);
+      expect(first.last.lat, maxTrailBatchPoints - 1);
+      expect(buffer.pendingCount, 2500 - maxTrailBatchPoints);
+
+      // End Shift drains the backlog in further measured batches, order kept.
+      await engine.stop();
+      final all = trips.trips['trip-1']!.gpsTrail;
+      expect(all.length, 2500);
+      expect(all.first.lat, 0);
+      expect(all.last.lat, 2499);
+    });
+
+    test('stop() performs the FINAL flush (End Shift semantics)', () async {      final engine = buildEngine();
       await engine.start(
         tripId: 'trip-1',
         vanId: 'van-01',
@@ -581,8 +626,10 @@ class _FakeTrailBuffer implements TrailBuffer {
 
   @override
   Future<List<GpsPoint>> takeOldest({int? limit}) async {
-    final take = List<GpsPoint>.of(_points);
-    _points.clear();
+    final count =
+        limit == null || limit >= _points.length ? _points.length : limit;
+    final take = _points.sublist(0, count);
+    _points.removeRange(0, count);
     return take;
   }
 

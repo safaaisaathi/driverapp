@@ -50,3 +50,17 @@ DateTime utcStartOfIstDay(DateTime now) {
   final istMidnight = DateTime.utc(d.year, d.month, d.day);
   return istMidnight.subtract(_istOffset);
 }
+
+/// The half-open UTC window `[start, endExclusive)` that brackets the IST
+/// calendar day containing [instant] — the READ counterpart of the
+/// `trips.date` WRITE frame ([utcStartOfIstDay]).
+///
+/// Building the window from the instant's LOCAL calendar fields (the pre-bag
+/// behaviour, issue #15) only works when the phone sits in IST: on any other
+/// zone the local date of "now" is a different day than the IST date, so
+/// today's trip fell outside its own query. IST has no DST, so the IST day is
+/// exactly 24 h and [endExclusive] is a fixed offset.
+({DateTime start, DateTime endExclusive}) istDayWindow(DateTime instant) {
+  final start = utcStartOfIstDay(instant);
+  return (start: start, endExclusive: start.add(const Duration(days: 1)));
+}

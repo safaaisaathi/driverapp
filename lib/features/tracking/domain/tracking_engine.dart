@@ -43,12 +43,6 @@ import 'trail_buffer.dart';
 /// Seconds between trail flushes (PRD-2 0.13 Flow A step 4).
 const int trailFlushIntervalSec = 30;
 
-/// Hard cap for the local Trail buffer per trip: beyond this the OLDEST
-/// points are dropped (developer ruling, ticket report — keeps a long
-/// dead-zone from growing the batch beyond a healthy write size and memory
-/// bounds; not a contract constant).
-const int maxTrailBufferPoints = 5000;
-
 /// Run status observable through [TrackingEngine.changes].
 enum TrackingRunStatus {
   /// Not started, or stopped again by [TrackingEngine.stop].
@@ -196,6 +190,10 @@ class TrackingEngine {
   StreamSubscription<Van?>? _vanDocSub;
   Timer? _checkTimer;
   Timer? _flushTimer;
+
+  /// One flush write at a time: a slow uplink can outlast the 30 s tick, and
+  /// a second overlapping batch would race the first out of order.
+  bool _flushInFlight = false;
   int _intervalSec = gpsIntervalSec;
   GeoPoint? _lastWritten;
   DateTime? _lastWriteAt;
@@ -392,6 +390,12 @@ class TrackingEngine {
     final buffer = _trailBuffer;
 
     await _flushTrailBufferFor(tripId, buffer);
+    // End Shift drains the WHOLE buffer, one measured batch at a time: a
+    // final flush that wrote everything at once is the write that stalled
+    // on a slow uplink (issue #13).
+    while ((buffer?.pendingCount ?? 0) > 0) {
+      await _flushTrailBufferFor(tripId, buffer);
+    }
 
     _trailBuffer = null;
     _lastWritten = null;
@@ -540,11 +544,14 @@ class TrackingEngine {
   /// to the FRONT of the buffer, order preserved, so catch-up data keeps
   /// the trail in order on the next flush.
   Future<void> _guardedFlushTrail() async {
-    if (_tripId == null || _stopping) return;
+    if (_tripId == null || _stopping || _flushInFlight) return;
+    _flushInFlight = true;
     try {
       await _flushTrailBuffer();
     } catch (error) {
       debugPrint('tracking: trail flush failed (will retry): $error');
+    } finally {
+      _flushInFlight = false;
     }
   }
 
@@ -561,7 +568,7 @@ class TrackingEngine {
   ) async {
     if (buffer == null) return;
 
-    final batch = await buffer.takeOldest();
+    final batch = await buffer.takeOldest(limit: maxTrailBatchPoints);
     if (batch.isEmpty) return;
     debugPrint('tracking: flush ${batch.length} points');
 

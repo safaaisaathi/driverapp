@@ -12,6 +12,7 @@ import 'package:driverapp/core/models/models.dart';
 import 'package:driverapp/core/repositories/repositories.dart';
 import 'package:driverapp/features/live_route/live_route_providers.dart';
 import 'package:driverapp/features/live_route/live_route_screen.dart';
+import 'package:driverapp/features/shift_start/data/shift_tracking_auto_start.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -193,9 +194,10 @@ void main() {
     WidgetTester tester,
     List<dynamic> overrides, {
     List<dynamic> extra = const [],
+    double devicePixelRatio = 2.6,
   }) {
     tester.view.physicalSize = const Size(1080, 2340);
-    tester.view.devicePixelRatio = 2.6;
+    tester.view.devicePixelRatio = devicePixelRatio;
     addTearDown(tester.view.reset);
     return tester.pumpWidget(
       ProviderScope(
@@ -461,6 +463,40 @@ void main() {
     },
   );
 
+  testWidgets('tracking banner fits a 360 dp screen with the long location '
+      'label (issue #23)', (tester) async {
+    // Physical 1080 at DPR 3 = 360 dp wide: the narrowest shipping phone.
+    // The banner used to be one Row (message + "Open location settings" +
+    // Retry) and overflowed by 20 px on the M215F.
+    await pumpScreen(tester, [
+      vansRepositoryProvider.overrideWithValue(
+        FakeVansRepository([van(updatedAt: now)]),
+      ),
+      tripsRepositoryProvider.overrideWithValue(FakeTripsRepository([])),
+      wardsRepositoryProvider.overrideWithValue(
+        FakeWardsRepository([wardA, wardB, wardC]),
+      ),
+      routesRepositoryProvider.overrideWithValue(
+        FakeRoutesRepository([route()]),
+      ),
+    ], extra: [
+      shiftTrackingAutoStartStatusProvider.overrideWith(_GpsOffController.new),
+    ], devicePixelRatio: 3.0);
+    await settle(tester);
+
+    // A layout overflow throws in tests, so reaching here already proves the
+    // fit; the seam keys pin that both actions are mounted and reachable.
+    expect(
+      find.byKey(const Key('liveRoute.trackingStateBanner')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('tracking-open-gps-settings')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('tracking-start-retry')), findsOneWidget);
+  });
+
   testWidgets('offline override shows the banner over cached data', (
     tester,
   ) async {
@@ -594,4 +630,12 @@ void main() {
     await tester.pump();
     expect(counted.activeListeners, 0);
   });
+}
+
+/// Drives the tracking banner into its gps-off state without Geolocator
+/// (issue #23's banner layout test).
+final class _GpsOffController extends ShiftTrackingAutoStartStatusController {
+  @override
+  ShiftTrackingAutoStart? build() =>
+      const ShiftTrackingAutoStart(ShiftTrackingAutoStartKind.gpsOff);
 }
