@@ -69,6 +69,7 @@ final class IdentityFlowState {
     required this.phase,
     this.driver,
     this.vanPlate,
+    this.routeName,
     this.lastRawCode,
     this.session,
   });
@@ -84,6 +85,12 @@ final class IdentityFlowState {
   /// (the card then falls back to the raw van id in the UI).
   final String? vanPlate;
 
+  /// The allotted route's name (`routes/{driver.routeId}.name`), resolved
+  /// at lookup time for the welcome-back card's Route row (ruling #28).
+  /// Null when the route doc is missing or unreadable: the row then falls
+  /// back to the raw route id, never blocks the lookup.
+  final String? routeName;
+
   /// The code as the driver typed it (normalized on submit); the retry of
   /// notFound/lookupFailed re-looks-up this.
   final String? lastRawCode;
@@ -95,6 +102,7 @@ final class IdentityFlowState {
     IdentityFlowPhase? phase,
     Driver? driver,
     String? vanPlate,
+    String? routeName,
     String? lastRawCode,
     ShiftSession? session,
   }) =>
@@ -102,6 +110,7 @@ final class IdentityFlowState {
         phase: phase ?? this.phase,
         driver: driver ?? this.driver,
         vanPlate: vanPlate ?? this.vanPlate,
+        routeName: routeName ?? this.routeName,
         lastRawCode: lastRawCode ?? this.lastRawCode,
         session: session ?? this.session,
       );
@@ -129,6 +138,8 @@ class IdentityFlowController extends Notifier<IdentityFlowState> {
   VansRepository get _vans => ref.read(vansRepositoryProvider);
 
   TripsRepository get _trips => ref.read(tripsRepositoryProvider);
+
+  RoutesRepository get _routes => ref.read(routesRepositoryProvider);
 
   MessagingGateway get _messaging => ref.read(driverMessagingGatewayProvider);
 
@@ -170,6 +181,15 @@ class IdentityFlowController extends Notifier<IdentityFlowState> {
       // The van doc backs the confirm card's plate and the Start action;
       // a failed read is an outage, not a not-found.
       final van = await _vans.readVan(driver.vanId);
+      // The route doc backs the welcome card's Route row (#28). A missing or
+      // unreadable route is NOT a lookup failure: the row falls back to the
+      // raw route id, and a driver must never be locked out by admin data.
+      String? routeName;
+      try {
+        routeName = (await _routes.readRoute(driver.routeId))?.name;
+      } on Exception {
+        routeName = null;
+      }
       // The identity is confirmed the moment the confirm card appears:
       // remember the code on-device (0.16 "after the first confirm the
       // code is remembered"). rememberDriver never throws.
@@ -180,6 +200,7 @@ class IdentityFlowController extends Notifier<IdentityFlowState> {
         phase: IdentityFlowPhase.confirmReady,
         driver: driver,
         vanPlate: van?.plateNo,
+        routeName: routeName,
         lastRawCode: raw,
       );
     } on Exception catch (error) {
@@ -222,6 +243,43 @@ class IdentityFlowController extends Notifier<IdentityFlowState> {
       );
     } on Exception {
       state = state.copyWith(phase: IdentityFlowPhase.startFailed);
+    }
+  }
+
+  /// Launch-time resume (ruling #27): when the confirmed driver's van still
+  /// holds an open shift that belongs to them, reattach it WITHOUT a tap —
+  /// the screen then treats the flow like a normal [IdentityFlowPhase.onShift]
+  /// and navigates straight to the live route with tracking started.
+  ///
+  /// Returns the session when resumed. Returns `null` (and leaves the flow
+  /// where it is, so the welcome card keeps its one-tap Start) when:
+  /// - the van has no open shift (the driver ended it before leaving),
+  /// - the open shift belongs to another driver (never a takeover), or
+  /// - the read failed (offline launch: the card must still render).
+  ///
+  /// A running shift is only ever reattached through [StartShift.execute],
+  /// which reads the trip and never writes it; no trip is created here.
+  Future<ShiftSession?> resumeIfActive() async {
+    final driver = state.driver;
+    if (driver == null) return null;
+    if (state.phase == IdentityFlowPhase.onShift) return state.session;
+    if (state.phase != IdentityFlowPhase.confirmReady) return null;
+    try {
+      final van = await _vans.readVan(driver.vanId);
+      if (van == null) return null;
+      final startShift = _startShift;
+      if (!startShift.isResumable(van)) return null;
+      final session = await startShift.execute(van, driver, DateTime.now());
+      ref.read(shiftControllerProvider.notifier).activate(session);
+      state = state.copyWith(
+        phase: IdentityFlowPhase.onShift,
+        session: session,
+      );
+      return session;
+    } on Exception {
+      // Another driver's shift on a shared van, or an offline read: stay on
+      // the welcome card and let the driver's one tap surface the reason.
+      return null;
     }
   }
 

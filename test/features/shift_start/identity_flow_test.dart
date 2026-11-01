@@ -132,6 +132,14 @@ final class Harness {
             .overrideWithValue(driversRepo ?? drivers),
         vansRepositoryProvider.overrideWithValue(vans),
         tripsRepositoryProvider.overrideWithValue(trips),
+        // Ruling #28: the welcome card resolves the route name at lookup
+        // time; the fake keeps that read off Firestore.
+        routesRepositoryProvider.overrideWithValue(
+          FakeRoutesRepository([
+            RouteModel.fromMap(routeDocMap()),
+            RouteModel.fromMap(routeDocMap(id: 'route-driver')),
+          ]),
+        ),
         driverMessagingGatewayProvider.overrideWithValue(messaging),
         driverIdentityStoreProvider.overrideWithValue(identityStore),
         // The cold-start gate (issue #18) defaults to immediate in tests;
@@ -419,6 +427,69 @@ void main() {
       expect(harness.state.phase, IdentityFlowPhase.onShift);
       harness.resetToEntry();
       expect(harness.state.phase, IdentityFlowPhase.onShift);
+    });
+  });
+
+  group('launch-time resume (ruling #27)', () {
+    Trip openTrip({String driverId = 'AB-1234'}) => Trip.fromMap(<String, Object?>{
+          ...tripDocMapOpen(),
+          'driverId': driverId,
+        });
+
+    test('a still-running shift reattaches with no write and no tap', () async {
+      final harness = Harness(
+        driversSeed: [sampleDriver()],
+        vansSeed: [
+          sampleVan(status: 'on_shift', currentTripId: 'trip-01'),
+        ],
+        tripsRepo: FakeTripsRepository([openTrip()]),
+      );
+
+      await harness.submit('AB-1234');
+      expect(harness.state.phase, IdentityFlowPhase.confirmReady);
+      // Ruling #28: the route name is resolved at lookup time.
+      expect(harness.state.routeName, 'Godhra Fort Route');
+
+      final session =
+          await harness.container.read(identityFlowProvider.notifier).resumeIfActive();
+
+      expect(session?.tripId, 'trip-01');
+      expect(session?.vanId, 'van-01');
+      expect(harness.state.phase, IdentityFlowPhase.onShift);
+      // Resume reads the open trip, it never creates a second one.
+      expect((harness.trips as FakeTripsRepository).trips.length, 1);
+      expect(harness.vans.vans['van-01']!.status, VanStatus.onShift);
+    });
+
+    test('no running shift: the welcome card keeps its one-tap start', () async {
+      final harness = Harness(
+        driversSeed: [sampleDriver()],
+        vansSeed: [sampleVan()], // idle, no currentTripId
+      );
+
+      await harness.submit('AB-1234');
+      final session =
+          await harness.container.read(identityFlowProvider.notifier).resumeIfActive();
+
+      expect(session, isNull);
+      expect(harness.state.phase, IdentityFlowPhase.confirmReady);
+    });
+
+    test("another driver's shift is never taken over at launch", () async {
+      final harness = Harness(
+        driversSeed: [sampleDriver()],
+        vansSeed: [
+          sampleVan(status: 'on_shift', currentTripId: 'trip-01'),
+        ],
+        tripsRepo: FakeTripsRepository([openTrip(driverId: 'CD-5678')]),
+      );
+
+      await harness.submit('AB-1234');
+      final session =
+          await harness.container.read(identityFlowProvider.notifier).resumeIfActive();
+
+      expect(session, isNull);
+      expect(harness.state.phase, IdentityFlowPhase.confirmReady);
     });
   });
 

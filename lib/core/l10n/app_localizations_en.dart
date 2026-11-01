@@ -31,6 +31,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get vanLabel => 'Van';
 
   @override
+  String get routeLabel => 'Route';
+
+  @override
   String get splashTagline => 'Clean city, one route at a time.';
 
   @override

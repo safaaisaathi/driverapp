@@ -140,6 +140,12 @@ abstract class AppLocalizations {
   /// **'Van'**
   String get vanLabel;
 
+  /// No description provided for @routeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Route'**
+  String get routeLabel;
+
   /// No description provided for @splashTagline.
   ///
   /// In en, this message translates to:

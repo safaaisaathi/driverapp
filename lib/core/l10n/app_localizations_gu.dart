@@ -31,6 +31,9 @@ class AppLocalizationsGu extends AppLocalizations {
   String get vanLabel => 'વેન';
 
   @override
+  String get routeLabel => 'રૂટ';
+
+  @override
   String get splashTagline => 'સ્વચ્છ શહેર, એક એક રૂટ.';
 
   @override

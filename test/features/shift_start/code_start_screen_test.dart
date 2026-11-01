@@ -71,14 +71,16 @@ Van sampleVan({
   String id = 'van-01',
   String plateNo = 'GJ-05-AB-1234',
   String routeId = 'route-van',
+  String status = 'idle',
+  String? currentTripId,
 }) =>
     Van.fromMap(<String, Object?>{
       'id': id,
       'plateNo': plateNo,
       'routeId': routeId,
-      'status': 'idle',
+      'status': status,
       'lastLocation': null,
-      'currentTripId': null,
+      'currentTripId': currentTripId,
       'batteryPct': 80,
     });
 
@@ -234,12 +236,23 @@ Future<ProviderContainer> pumpScreen(
   required TripsRepository trips,
   InMemoryDriverIdentityStore? identityStore,
   void Function(BuildContext context)? onShiftStarted,
+  RoutesRepository? routesRepo,
 }) async {
   final container = ProviderContainer(
     overrides: [
       driversRepositoryProvider.overrideWithValue(driversRepo),
       vansRepositoryProvider.overrideWithValue(vans),
       tripsRepositoryProvider.overrideWithValue(trips),
+      // Ruling #28: the welcome card resolves the route name at lookup
+      // time; the fake keeps that read off Firestore.
+      routesRepositoryProvider.overrideWithValue(
+        routesRepo ??
+            FakeRoutesRepository([
+              RouteModel.fromMap(routeDocMap()),
+              RouteModel.fromMap(routeDocMap(id: 'route-driver')),
+              RouteModel.fromMap(routeDocMap(id: 'route-van')),
+            ]),
+      ),
       driverIdentityStoreProvider
           .overrideWithValue(identityStore ?? InMemoryDriverIdentityStore()),
       driverMessagingGatewayProvider
@@ -275,6 +288,18 @@ Future<void> pumpUntil(WidgetTester tester, Finder finder,
     await tester.pump(const Duration(milliseconds: 25));
   }
   expect(finder, findsOneWidget);
+}
+
+/// Taps the welcome card's "Different driver?" link. Ruling #28 gave the
+/// card five rows, so at the 800x600 test viewport the link can sit below
+/// the fold: scroll it into view first (the screen itself is one scroll
+/// view, so this mirrors what a driver does on a short screen).
+Future<void> tapChangeCode(WidgetTester tester) async {
+  final link = find.byKey(const ValueKey('d1-change-code'));
+  await tester.ensureVisible(link);
+  await tester.pumpAndSettle();
+  await tester.tap(link);
+  await tester.pumpAndSettle();
 }
 
 /// Pumps until [condition] holds (async navigation hand-over).
@@ -722,7 +747,7 @@ void main() {
     );
     await pumpUntil(tester, find.text(enDriverName));
 
-    await tester.tap(find.byKey(const ValueKey('d1-change-code')));
+    await tapChangeCode(tester);
     await tester.pump();
     expect(find.byKey(const ValueKey('d1-code-field')), findsOneWidget);
 
@@ -803,7 +828,7 @@ void main() {
     );
     await pumpUntil(tester, find.text(enDriverName));
 
-    await tester.tap(find.byKey(const ValueKey('d1-change-code')));
+    await tapChangeCode(tester);
     await tester.pump();
 
     // The regular entry form; the remembered code is NOT cleared (only a
@@ -905,7 +930,7 @@ void main() {
     );
     await pumpUntil(tester, find.text(enDriverName));
 
-    await tester.tap(find.byKey(const ValueKey('d1-change-code')));
+    await tapChangeCode(tester);
     await tester.pump();
     // The new-user form carries the top-left back button.
     expect(find.byKey(const ValueKey('d1-change-back')), findsOneWidget);
@@ -930,7 +955,7 @@ void main() {
     );
     await pumpUntil(tester, find.text(enDriverName));
 
-    await tester.tap(find.byKey(const ValueKey('d1-change-code')));
+    await tapChangeCode(tester);
     await tester.pump();
     expect(find.byKey(const ValueKey('d1-change-back')), findsOneWidget);
 
@@ -1045,6 +1070,77 @@ void main() {
     final engine = _engineOf(tester);
     expect(engine.startedWith.single.tripId, trip.id);
     expect(engine.startedWith.single.vanId, 'van-01');
+  });
+
+  testWidgets('ruling #28: the welcome card shows name, code, van, route and '
+      'wards (five rows)', (tester) async {
+    await pumpScreen(
+      tester,
+      driversRepo: FakeDriversRepository([sampleDriver()]),
+      vans: FakeVansRepository([sampleVan()]),
+      trips: FakeTripsRepository(),
+      identityStore: returningStore('AB-1234'),
+    );
+    await pumpUntil(tester, find.text(enDriverName));
+
+    expect(find.text('Name'), findsOneWidget);
+    expect(find.text('Code'), findsOneWidget);
+    expect(find.text('Van'), findsOneWidget);
+    expect(find.text('Route'), findsOneWidget);
+    expect(find.text('Wards'), findsOneWidget);
+    // Values resolved at lookup time: real plate + real route name.
+    expect(find.text('GJ-05-AB-1234'), findsOneWidget);
+    expect(find.text('Godhra Fort Route'), findsOneWidget);
+    expect(find.text('2 wards allotted'), findsOneWidget);
+  });
+
+  testWidgets('ruling #27: a still-running shift goes straight to D2 with '
+      'no tap', (tester) async {
+    final openTrip = Trip.fromMap(<String, Object?>{
+      ...tripDocMapOpen(),
+      'driverId': 'AB-1234',
+    });
+    final trips = FakeTripsRepository([openTrip]);
+    var navigated = false;
+    await pumpScreen(
+      tester,
+      driversRepo: FakeDriversRepository([sampleDriver()]),
+      vans: FakeVansRepository(
+        [sampleVan(status: 'on_shift', currentTripId: 'trip-01')],
+      ),
+      trips: trips,
+      identityStore: returningStore('AB-1234'),
+      onShiftStarted: (_) => navigated = true,
+    );
+
+    // No tap on "Start my Shift": the launch-time resume reattaches the
+    // open trip and hands over to D2.
+    await pumpUntilCondition(tester, () => navigated);
+    expect(trips.trips, hasLength(1), reason: 'resume never duplicates');
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(CodeStartScreen)),
+    );
+    expect(container.read(shiftControllerProvider)?.tripId, 'trip-01');
+    expect(_engineOf(tester).startedWith.single.tripId, 'trip-01');
+  });
+
+  testWidgets('ruling #27: no running shift keeps the one-tap welcome card',
+      (tester) async {
+    var navigated = false;
+    await pumpScreen(
+      tester,
+      driversRepo: FakeDriversRepository([sampleDriver()]),
+      vans: FakeVansRepository([sampleVan()]),
+      trips: FakeTripsRepository(),
+      identityStore: returningStore('AB-1234'),
+      onShiftStarted: (_) => navigated = true,
+    );
+    await pumpUntil(tester, find.text(enDriverName));
+    // Give the launch-time resume check room to (wrongly) fire.
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(navigated, isFalse);
+    expect(find.byKey(const ValueKey('d1-welcome-start')), findsOneWidget);
   });
 
   // OTP-box rendering (driver demo feedback 2026-10-30): the code entry

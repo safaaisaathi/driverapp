@@ -1032,11 +1032,16 @@ Shown on the Start Shift screen when the device is returning. Inserted above the
 ```
 +---------------------------+
 |  Welcome back, Driver     |  headline
-|  Van: GJ-17-1234   Route: |  body
-|  East route               |
-|  Change code          (>) |  text link
+|  Name      Ramesh Patel   |
+|  Code      AB-1234        |
+|  Van       GJ-17-1234     |
+|  Route     East route     |
+|  Wards     2 wards allotted |
+|  Different driver?    (>) |  text link
 +---------------------------+
 ```
+
+Amended 2026-11-01 (ruling #28): five rows — name, code, van, route, ward count. Amended 2026-11-01 (ruling #27): when the van still holds this driver's open shift, the launch lookup resumes it and goes straight to the live route; the card is the no-open-shift surface (one tap on `Start my Shift`).
 
 
 
