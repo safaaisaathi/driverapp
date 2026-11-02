@@ -9,7 +9,9 @@ service cloud.firestore {
     match /vans/{vanId} {
       allow read: if request.auth != null;
       // 0.8 write scope: the driver's own van writes only (location /
-      // status / battery / currentTripId), nothing else.
+      // status / battery / currentTripId), nothing else. `depot` (ruling
+      // #29) is deliberately absent: it is an ADMIN tag, written from the
+      // console / PRD-3 panel, never by the driver app.
       allow update: if request.auth != null
         && request.resource.data.diff(resource.data).affectedKeys()
            .hasOnly(['lastLocation', 'status', 'batteryPct', 'currentTripId']);
@@ -37,6 +39,10 @@ service cloud.firestore {
     match /complaints/{complaintId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null;
+      // D4 (F-D6, PRD-2 §3 "Pending Reports"): "Will Revisit" sets
+      // status = assigned, "Done" sets status = resolved + resolvedAt.
+      // Without `allow update` every D4 button failed in production.
+      allow update: if request.auth != null;
     }
   }
 }

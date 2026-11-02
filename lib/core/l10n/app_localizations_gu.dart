@@ -31,6 +31,9 @@ class AppLocalizationsGu extends AppLocalizations {
   String get vanLabel => 'વેન';
 
   @override
+  String get routeLabel => 'રૂટ';
+
+  @override
   String get splashTagline => 'સ્વચ્છ શહેર, એક એક રૂટ.';
 
   @override
@@ -529,4 +532,11 @@ class AppLocalizationsGu extends AppLocalizations {
 
   @override
   String get identityChangeCode => 'બીજા ડ્રાઇવર?';
+
+  @override
+  String get autoEndNoticeTitle => 'ડેપો પર શિફ્ટ પૂરી થઈ.';
+
+  @override
+  String get autoEndNoticeBody =>
+      'ગાડી 3 કલાક સુધી ડેપોની 500 મીટરની અંદર ઊભી રહી, તેથી શિફ્ટ આપમેળે પૂરી થઈ ગઈ.';
 }

@@ -31,6 +31,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get vanLabel => 'Van';
 
   @override
+  String get routeLabel => 'Route';
+
+  @override
   String get splashTagline => 'Clean city, one route at a time.';
 
   @override
@@ -529,4 +532,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get identityChangeCode => 'Different driver?';
+
+  @override
+  String get autoEndNoticeTitle => 'Shift ended at depot.';
+
+  @override
+  String get autoEndNoticeBody =>
+      'The van stayed within 500 m of the depot for 3 hours, so the shift ended automatically.';
 }

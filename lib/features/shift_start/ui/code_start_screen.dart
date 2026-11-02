@@ -207,6 +207,9 @@ class _CodeStartHostState extends ConsumerState<_CodeStartHost> {
   /// action (Start / Retry) per the demo feedback 10/2026.
   bool _editing = true;
 
+  /// One launch-time resume check per screen lifetime (ruling #27).
+  bool _resumeChecked = false;
+
   @override
   void didUpdateWidget(_CodeStartHost oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -273,6 +276,22 @@ class _CodeStartHostState extends ConsumerState<_CodeStartHost> {
     ref.read(identityFlowProvider.notifier).submitCode(code);
   }
 
+  /// Fires the launch-time resume check ONCE (ruling #27): when the welcome
+  /// lookup lands and the van still holds this driver's open shift, the flow
+  /// flips to [IdentityFlowPhase.onShift] and the screen navigates straight
+  /// to D2. With no open shift the welcome card keeps its one-tap Start.
+  /// One attempt per screen lifetime: popping back from D2 never bounces the
+  /// driver out again.
+  void _maybeAutoResume() {
+    if (_changeMode || _resumeChecked) return;
+    final flow = ref.read(identityFlowProvider);
+    if (flow.phase != IdentityFlowPhase.confirmReady || flow.driver == null) {
+      return;
+    }
+    _resumeChecked = true;
+    ref.read(identityFlowProvider.notifier).resumeIfActive();
+  }
+
   /// The change-code link (ticket 5): reveals the regular entry form by
   /// dropping the current confirm context in the flow. One-way; the
   /// remembered code stays until a new confirm overwrites it.
@@ -315,6 +334,17 @@ class _CodeStartHostState extends ConsumerState<_CodeStartHost> {
         _attemptedRememberedCode != identity.rememberedCode) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _maybeAutoLookup();
+      });
+    }
+    // Ruling #27: once the welcome lookup lands, a still-running shift
+    // resumes without a tap. The post-frame idiom keeps the provider write
+    // out of build.
+    if (!_changeMode &&
+        widget.flow.phase == IdentityFlowPhase.confirmReady &&
+        widget.flow.driver != null &&
+        !_resumeChecked) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _maybeAutoResume();
       });
     }
     final flow = widget.flow;
@@ -781,13 +811,14 @@ class _ConfirmRow extends StatelessWidget {
   }
 }
 
-/// The welcome-back card (4.19 / 9.27, ticket 5): white card radius 28,
+/// The welcome-back card (4.19 / 9.27, ruling #28): white card radius 28,
 /// padding 20 — greeting, body, then the live-fetched record as the same
-/// label-over-value rows the confirm card uses (name, code, ward count).
+/// label-over-value rows the confirm card uses: name, code, van, route and
+/// ward count.
 ///
 /// Issue #19: the card is the returning driver's ONLY surface, so it
 /// renders in every welcome phase. Until the lookup lands (`driver == null`)
-/// the remembered Code row still shows; name and wards appear with the
+/// the remembered Code row still shows; the other four appear with the
 /// record. A failure phase appends its inline line separately, under the
 /// card.
 class _WelcomeCard extends StatelessWidget {
@@ -835,12 +866,26 @@ class _WelcomeCard extends StatelessWidget {
             label: l10n.identityCodeLabel,
             value: code,
           ),
-          if (driver != null)
+          if (driver != null) ...[
+            // Ruling #28: the card carries five rows — name, code, van,
+            // route, wards — so a driver can confirm the whole allotment
+            // before the one tap (DESIGN 9.27's van + route included).
+            _ConfirmRow(
+              icon: Icons.local_shipping_outlined,
+              label: l10n.vanLabel,
+              value: flow.vanPlate ?? driver.vanId,
+            ),
+            _ConfirmRow(
+              icon: Icons.alt_route_outlined,
+              label: l10n.routeLabel,
+              value: flow.routeName ?? driver.routeId,
+            ),
             _ConfirmRow(
               icon: Icons.map_outlined,
               label: l10n.identityFieldWards,
               value: l10n.identityWardsAllotted(driver.wardIds.length),
             ),
+          ],
           // The failure copy lives INSIDE the card (issue #19): the ruling
           // is "the welcome card itself carries the error", including the
           // title the driver reported ("Couldn't check the code").

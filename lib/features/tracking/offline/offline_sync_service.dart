@@ -22,7 +22,7 @@ library;
 
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 import 'package:driverapp/core/models/models.dart';
 import 'package:driverapp/core/repositories/repositories.dart';
 
@@ -131,6 +131,11 @@ class OfflineSyncService {
     _tripId = tripId;
     _refreshCount();
   }
+
+  /// The trip currently attached for catch-up drain, or `null` before the
+  /// first [attachTrip]. Test seam for the start/resume wiring.
+  @visibleForTesting
+  String? get attachedTripId => _tripId;
 
   /// Flush pass, safe to call concurrently (one pass runs at a time; a
   /// concurrent call's returned future completes after the trailing pass

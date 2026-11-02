@@ -7,6 +7,7 @@
   "offline": "You're offline",
   "retry": "Retry",
   "vanLabel": "Van",
+  "routeLabel": "Route",
   "splashTagline": "Clean city, one route at a time.",
   "welcomeTitle": "Welcome",
   "welcomeBody": "Safaai Saathi is ready for today's shift.",
@@ -206,5 +207,7 @@
   "identityWelcomeBackTitle": "Welcome back",
   "identityWelcomeBackBody": "This phone remembers you.",
   "identityStartMyShift": "Start my Shift",
-  "identityChangeCode": "Different driver?"
+  "identityChangeCode": "Different driver?",
+  "autoEndNoticeTitle": "Shift ended at depot.",
+  "autoEndNoticeBody": "The van stayed within 500 m of the depot for 3 hours, so the shift ended automatically."
 }

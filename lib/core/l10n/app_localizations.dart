@@ -140,6 +140,12 @@ abstract class AppLocalizations {
   /// **'Van'**
   String get vanLabel;
 
+  /// No description provided for @routeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Route'**
+  String get routeLabel;
+
   /// No description provided for @splashTagline.
   ///
   /// In en, this message translates to:
@@ -985,6 +991,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Different driver?'**
   String get identityChangeCode;
+
+  /// No description provided for @autoEndNoticeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Shift ended at depot.'**
+  String get autoEndNoticeTitle;
+
+  /// No description provided for @autoEndNoticeBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The van stayed within 500 m of the depot for 3 hours, so the shift ended automatically.'**
+  String get autoEndNoticeBody;
 }
 
 class _AppLocalizationsDelegate

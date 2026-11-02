@@ -1,3 +1,5 @@
+import 'package:driverapp/core/domain/geo_point.dart';
+
 import 'firestore_time.dart';
 
 /// `van.status` (0.3). Contract strings only: idle | on_shift | offline.
@@ -101,6 +103,11 @@ class Van {
 
   final int? batteryPct;
 
+  /// `vans.depot` (0.2 addition, ruling #29): the admin-set depot centre
+  /// `{lat, lng}`. Drivers never write it. `null` = no depot, so the
+  /// auto-end rule cannot fire.
+  final GeoPoint? depot;
+
   const Van({
     required this.id,
     required this.plateNo,
@@ -109,6 +116,7 @@ class Van {
     required this.lastLocation,
     required this.currentTripId,
     required this.batteryPct,
+    this.depot,
   });
 
   factory Van.fromMap(Map<String, Object?> map) {
@@ -125,6 +133,7 @@ class Van {
             ),
       currentTripId: map['currentTripId'] as String?,
       batteryPct: (map['batteryPct'] as num?)?.toInt(),
+      depot: _parseDepot(map['depot']),
     );
   }
 
@@ -136,6 +145,9 @@ class Van {
         'lastLocation': lastLocation?.toMap(),
         'currentTripId': currentTripId,
         'batteryPct': batteryPct,
+        // Omitted when null: a full-doc round trip must never erase an
+        // admin-set depot.
+        if (depot != null) 'depot': {'lat': depot!.lat, 'lng': depot!.lng},
       };
 
   @override
@@ -148,7 +160,8 @@ class Van {
       other.status == status &&
       other.lastLocation == lastLocation &&
       other.currentTripId == currentTripId &&
-      other.batteryPct == batteryPct;
+      other.batteryPct == batteryPct &&
+      other.depot == depot;
 
   @override
   int get hashCode => Object.hash(
@@ -160,8 +173,22 @@ class Van {
         lastLocation,
         currentTripId,
         batteryPct,
+        depot,
       );
 
   @override
   String toString() => 'Van(${toMap()})';
+}
+
+/// Parses `vans.depot` = `{lat, lng}`; throws on a shape mismatch so a bad
+/// admin edit surfaces instead of silently disabling auto-end.
+GeoPoint? _parseDepot(Object? raw) {
+  if (raw == null) return null;
+  final map = Map<String, Object?>.from(raw as Map<Object?, Object?>);
+  final lat = map['lat'];
+  final lng = map['lng'];
+  if (lat is! num || lng is! num) {
+    throw const FormatException('vans.depot does not match {lat,lng} (0.2)');
+  }
+  return (lat: lat.toDouble(), lng: lng.toDouble());
 }

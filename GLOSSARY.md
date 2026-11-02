@@ -20,6 +20,10 @@ _Avoid_: schedule, path
 The driver's working session, from Start Shift to End Shift.
 _Avoid_: session, duty
 
+**Depot dwell (auto-end)**:
+The rule that ends a shift by itself when the van stays inside 500 m of its depot for 3 hours non-stop. The depot is the admin-set `vans.depot = {lat, lng}` tag; leaving the radius or moving 100 m restarts the 3-hour clock.
+_Avoid_: parking timeout, idle shift
+
 **Trip**:
 The log record of one shift: the van's trail, the wards done, and alert history.
 _Avoid_: journey, ride
@@ -94,11 +98,27 @@ Login architecture change: driver enters a unique code `XX-0000` (admin allots v
 - [x] `connectivity_plus` reports interface presence, not internet reachability — CLOSED BY DESIGN 2026-10-29: no reachability probe (battery cost on a driver phone, zero correctness gain; failed writes re-queue with order preserved). Ticket-14 rehearsal step added: airplane-mode ON mid-shift → offline banner + queue grows → airplane-mode OFF → queue drains in order, lastLocation fresh.
 - [x] `LocaleController` restore was fire-and-forget — RESOLVED 2026-10-29: `ensureRestored()` awaited in `main()` before `runApp()` (first frame carries the stored language). Device-verified 2026-10-30: gu toggle → force-stop → relaunch → welcome screen renders gu immediately.
 
+### Launch/identity audit (2026-10-31 — `docs/AUDIT-launch-identity-flow.md`)
+
+A read-only audit of the launch → identity flow. Triage of what is real, what was already fixed, and what needs a ruling:
+
+- [x] FGS never stops at End Shift (audit §6, P0) — FIXED: `TrackingEngine._applyStop` now calls `service.stop()`, so the persistent "Tracking active" notification no longer outlives the shift (PRD-2 §3 + F-D5 step 4). Test: `test/tracking/tracking_engine_test.dart` (stop calls the service once; a second stop stays one).
+- [x] `OfflineSyncService.attachTrip` had no production caller (audit §6, P0) — FIXED: the F-D2 auto-start seam attaches the session's trip before the permission flow, so a shift's catch-up Trail buffer drains on reconnect (F-D7 + §4 AC#4). Test: `test/features/shift_start/tracking_auto_start_test.dart`.
+- [x] `complaints` rules had no `allow update` (audit §6, P0) — FIXED in `firestore.rules` and DEPLOYED to `safaaisaathi-63a87` on 2026-11-01 (`firebase deploy --only firestore:rules`), so D4's "Will Revisit" (status = assigned) and "Done" (status = resolved + resolvedAt) now write in production.
+- [x] F-19 launch-time open-shift resume (the audit's "key ask") — RULED #27 and BUILT (2026-11-01): when the van still holds THIS driver's open shift, the welcome lookup reattaches it (read-only) and goes straight to D2 with tracking started, no tap; with no open shift the welcome card keeps its one tap. Another driver's shift and a failed read fall back to the card. PRD-2 §0.16 carries the ruling; tests: `identity_flow_test.dart` (resume/ownership) + `code_start_screen_test.dart` (direct vs one-tap).
+- [ ] F-05 "Different driver?" does not clear the stored code — NOT A BUG: `resetToEntry` deliberately keeps the code ("only a new confirm overwrites it"), and the verified back-arrow seam depends on it.
+- [x] F-06 welcome card shows Name/Code/Wards, not Van/Route — RULED #28 and BUILT (2026-11-01): five rows — Name, Code, Van plate, Route name, ward count. The route name is resolved at lookup time and falls back to the raw route id, never failing the lookup. PRD-2 §0.16 + DESIGN §9.27 updated.
+- [x] F-07 "Different driver?" vs the design's "Change code" — CLOSED: the identity-review ruling (2026-10-31) chose "Different driver?"; the design file is the stale side.
+- [ ] F-08 shared-van conflict shows the generic "Check the connection" copy — NEEDS RULING (copy is a product call; the flow collapses `ShiftStartConflict` into `startFailed` today).
+- [x] `offlineStatusProvider` returned an empty stream (audit §6, P2) — FIXED: the D2 offline badge was permanently hidden because the provider's default never flipped to the connectivity_plus detector the offline ticket shipped. It now maps `connectivitySourceProvider.status` (interface presence) to offline; the D2 pump harnesses pin it per test so no test reaches the platform channel.
+- [x] vanId custom-claim rule check (audit §6) — CLOSED BY DESIGN: the §0.16 security stance says the 0.8 rules carry no custom-claim checks; the production wall is rules tightening + App Check.
+- [x] Doc drift (F-14/F-15/F-16) — the runbook's "session restore → D2 relaunch" line is pre-identity and now false (corrected above); the dev-entrypoint list now includes `dev_flow_preview.dart` + `dev_identity_start.dart`.
+
 ### Improvement Bag
 - [ ] Productionize build config per the "Production-grade config & security plan" (2026-10-29): Android flavors `dev`/`prod` + per-flavor gitignored `google-services.json` + apply the Gradle plugin + plain `initializeApp()`; App Check + Play Integrity on staging/prod; key restrictions (SHA-256 bind); CI secrets (JSONs + keystore) + AAB pipeline; kill `DEMO_SEED_BYPASS`. AFTER ticket 14 (restructures the Android build). *(me, after ticket 14)*
 - [x] Locale flip `en` → `gu` before demo — DONE (issue #14, B1): the SHIPPING default is now Gujarati (`defaultAppLocale = Locale('gu')` in `core/l10n/locale_controller.dart`; MaterialApp fallback + toggle fallback read it). A stored choice wins in either direction; deviation pinned in `test/core/l10n/default_locale_test.dart`. 407/407 green.
 - [ ] `whereIn` >30-ward chunking (ruling 12) — build when demo routes exceed 30 wards. *(me)*
-- [ ] Delete dev entrypoints at integration: `dev_tracking.dart`, `dev_pending_reports.dart`, `dev_live_route.dart`, `dev_notices.dart`, `dev_min.dart`. *(me → 14)*
+- [ ] Delete dev entrypoints at integration: `dev_tracking.dart`, `dev_pending_reports.dart`, `dev_live_route.dart`, `dev_notices.dart`, `dev_min.dart`, `dev_flow_preview.dart`, `dev_identity_start.dart`. *(me → 14)*
 - [ ] Index seeds for Backend Owner: notices OR-branch sort, pending-reports `(wardId, createdAt)`, trip `(vanId, date)` (rulings 10/11/16). *(Backend Owner)*
 - [x] Real Firebase config: **delivered 2026-10-26** — Android app `1:179594621556:android:8bdac1de2d29745aad1721` registered on `safaaisaathi-63a87` via `flutterfire configure`; CLI logged in as the owner's Google account. Values reach the app at RUN TIME via dart-defines `DRIVERAPP_FB_API_KEY` / `_FB_APP_ID` / `_FB_SENDER_ID` (see `sharedProjectFirebaseOptions()`) — **no keys in the repo** (§0.10); generated files (`lib/firebase_options.dart`, `google-services.json`, `firebase.json`) are gitignored. Run with `--dart-define=DRIVERAPP_USE_EMULATOR=false` + the 3 value defines — since 2026-10-29 the values live in the gitignored **`.env`** and ride in via `--dart-define-from-file`; the committed `scripts/run_device.sh` wraps the whole thing (auto-rebuilds `.env` from the flutterfire file if it goes missing). Gradle `google-services` plugin deliberately NOT applied (fresh clones build without the private JSON). *(me)*
 - [x] Integration: insert `MockLocationWarningBanner(vanId: vanId)` at top of D2's body `Column` (ticket 11 report §c) when D2 merges. *(me — at 06 merge)* — DONE at the 06 merge; covered by full-suite gates.
@@ -147,7 +167,7 @@ Login architecture change: driver enters a unique code `XX-0000` (admin allots v
 - **Backend prerequisites** (verified live 2026-10-29, project `safaaisaathi-63a87`): `firebase deploy --only firestore:rules` after EVERY rules edit (the driver write scope incl. `currentTripId` must be in the RELEASED rules, not just the file); `verifyDriverPin` / `setDriverPin` callables deployed — check hits with `firebase functions:log --only verifyDriverPin`; anonymous-auth provider enabled; seeded docs `vans/van-01` (plate GJ-01-V-2201), `routes/route-01` "West Loop", `wards/ward-1..3`, `vanSecrets/*` (hash = sha256 of `pin|vanId`, rate-limit 5/10 min).
 - **Boot verify (in order)**: no `bootstrap degraded` lines in the run log → `I/FirebaseApp … initializing all Firebase APIs` → D1 skeleton resolves into the van picker (or straight to D2 via session restore when the van is `on_shift` with a `currentTripId`) → D2 renders OSM tiles + ward circles + van marker → `tracking: cycle … flush OK (N)` lines every 10 s → `vans/van-01.lastLocation.updatedAt` is seconds old (check via Firestore REST or the Firebase MCP `firestore_get_document`).
 - **Permission flow §4.19 on a fresh install**: location-while-in-use → background-location → notifications → battery-exception rationales, in that order; all four granted before the tracking engine starts. Battery denied ⇒ "Tracking is off … Retry" banner: grant it, then tap Retry — no relaunch needed.
-- **Session restore**: a shift left `on_shift` (Hive, F-D7) re-enters D2 directly on relaunch. To re-walk D1 pick-van → PIN, End Shift first (released rules now allow `currentTripId = null`).
+- **Session restore** (SUPERSEDED 2026-10-31 by the identity flow — kept for the pre-identity record): a shift left `on_shift` (Hive, F-D7) re-enters D2 directly on relaunch. To re-walk D1 pick-van → PIN, End Shift first (released rules now allow `currentTripId = null`). Under the current flow there is NO Hive session→D2 path: splash routes on the `setupDone` flag → the start-shift page (welcome-back card for a returning driver), and resume is one tap on "Start my Shift".
 - Never launch a second `flutter run` while one is live (session-kill law, 2026-10-28) — stop the first with `pkill -f "flutter_tools[.]snapshot"` (bracket trick) first.
 
 ### Production-grade config & security plan (recorded 2026-10-29 — how THIS setup scales to prod)
