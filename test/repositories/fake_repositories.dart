@@ -170,6 +170,21 @@ class FakeTripsRepository implements TripsRepository {
   Future<Trip?> readTrip(String tripId) async => trips[tripId];
 
   @override
+  Stream<Trip?> watchTrip(String tripId) {
+    late StreamController<Trip?> controller;
+    late StreamSubscription<void> changesSub;
+    controller = StreamController<Trip?>(
+      onListen: () {
+        controller.add(trips[tripId]);
+        changesSub =
+            _changes.stream.listen((_) => controller.add(trips[tripId]));
+      },
+      onCancel: () => changesSub.cancel(),
+    );
+    return controller.stream;
+  }
+
+  @override
   Stream<Trip?> watchTripByVanIdAndDate({
     required String vanId,
     required DateTime date,

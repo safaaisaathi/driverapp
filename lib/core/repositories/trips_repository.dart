@@ -35,6 +35,12 @@ abstract class TripsRepository {
   /// so the fresh `ShiftSession` carries the trip's exact identity.
   Future<Trip?> readTrip(String tripId);
 
+  /// Watches one trip doc by id (`null` when it vanished). The live route
+  /// screen follows `vans/{vanId}.currentTripId` through this, so a shift
+  /// that started before IST midnight (its `date` is yesterday) still reads
+  /// as the open trip.
+  Stream<Trip?> watchTrip(String tripId);
+
   /// Watch today's trip for [vanId]: the open (or just-closed) trip whose
   /// `date` is [date] — the resume-never-duplicate seam and the live route
   /// screen both read through this.

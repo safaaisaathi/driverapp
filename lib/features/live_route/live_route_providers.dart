@@ -44,16 +44,47 @@ final vanDocProvider =
       }),
 );
 
-/// Today's open trip for the van (source of the done-tick set,
-/// `trips.wardsDone`). The repository bounds the query to `today` in IST
-/// (0.13 "Today"); a null emission means no trip (yet) today.
+/// The open trip for the van (source of the done-tick set,
+/// `trips.wardsDone`).
+///
+/// The van's own pointer, `vans/{vanId}.currentTripId`, is the authority
+/// (defect 2026-11-03): the day query alone made a shift invisible whenever
+/// the trip's `date` was not today's IST day. It is written at shift start
+/// and cleared at shift end (0.13), so while it is set that trip IS the open
+/// one, no matter which calendar day the shift began on.
+///
+/// With the pointer set the provider watches that exact doc. A missing doc,
+/// or a trip that is already closed, falls back to the old day query: the
+/// just-closed trip stays visible for the End Shift summary, and a stale
+/// pointer from a past day resolves to null instead of a dead trip.
 final openTripProvider =
-    StreamProvider.autoDispose.family<Trip?, String>(
-  (ref, vanId) => ref.watch(tripsRepositoryProvider).watchTripByVanIdAndDate(
+    StreamProvider.autoDispose.family<Trip?, String>((ref, vanId) async* {
+  final trips = ref.watch(tripsRepositoryProvider);
+  final currentTripId = ref.watch(
+    vanDocProvider(vanId).select((van) => van.value?.currentTripId),
+  );
+
+  if (currentTripId == null) {
+    yield* trips.watchTripByVanIdAndDate(
+      vanId: vanId,
+      date: DateTime.now(),
+    );
+    return;
+  }
+
+  await for (final trip in trips.watchTrip(currentTripId)) {
+    if (trip == null || trip.endedAt != null) {
+      // Pointer set but no open trip behind it: today's trip (if any) is
+      // the only remaining candidate.
+      yield* trips.watchTripByVanIdAndDate(
         vanId: vanId,
         date: DateTime.now(),
-      ),
-);
+      );
+      return;
+    }
+    yield trip;
+  }
+});
 
 /// The route doc (the visiting order lives ONLY in `routes.wardIds`, 0.2).
 /// One shot read — route order is a seeded contract list, not live data.
