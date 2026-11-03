@@ -61,6 +61,14 @@ final class FirestoreTripsRepository implements TripsRepository {
   }
 
   @override
+  Stream<Trip?> watchTrip(String tripId) =>
+      _trips.doc(tripId).snapshots().map((snapshot) {
+        if (!snapshot.exists) return null;
+        final data = <String, Object?>{...snapshot.data()!, 'id': snapshot.id};
+        return Trip.fromMap(data);
+      });
+
+  @override
   Stream<Trip?> watchTripByVanIdAndDate({
     required String vanId,
     required DateTime date,

@@ -153,7 +153,7 @@ void main() {
         'scheduledStartTime': '07:30',
       });
 
-  Van van({DateTime? updatedAt}) => Van.fromMap({
+  Van van({DateTime? updatedAt, String? currentTripId}) => Van.fromMap({
     'id': 'van-01',
     'plateNo': 'GJ-05-AB-1234',
     'routeId': 'route-01',
@@ -166,7 +166,7 @@ void main() {
             'updatedAt': updatedAt,
             'speedKmph': 12.5,
           },
-    'currentTripId': null,
+    'currentTripId': currentTripId,
     'batteryPct': 76,
   });
 
@@ -343,6 +343,114 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets(
+    'stale trip (started before IST midnight) resolves through '
+    'vans.currentTripId: done ticks and the mark control stay live',
+    (tester) async {
+      // Defect 2026-11-03: the day query only looked at TODAY's `trips.date`,
+      // so a shift opened before midnight read as "no open trip" all day —
+      // Mark Ward Done stayed disabled and End Shift was unreachable.
+      final yesterday = now.subtract(const Duration(days: 1));
+      final stale = Trip.fromMap({
+        'id': 'trip-stale',
+        'vanId': 'van-01',
+        'routeId': 'route-01',
+        'date': yesterday,
+        'startedAt': yesterday,
+        'endedAt': null,
+        'wardsDone': [
+          {'wardId': 'wa', 'doneAt': yesterday, 'flagged': false},
+        ],
+        'alertedWardIds': [],
+        'gpsTrail': [],
+        'mockLocationDetected': false,
+      });
+
+      await pumpScreen(tester, [
+        vansRepositoryProvider.overrideWithValue(
+          FakeVansRepository([
+            van(updatedAt: now, currentTripId: 'trip-stale'),
+          ]),
+        ),
+        tripsRepositoryProvider.overrideWithValue(
+          FakeTripsRepository([stale]),
+        ),
+        wardsRepositoryProvider.overrideWithValue(
+          FakeWardsRepository([wardA, wardB, wardC]),
+        ),
+        routesRepositoryProvider.overrideWithValue(
+          FakeRoutesRepository([route()]),
+        ),
+      ]);
+      await settle(tester);
+
+      // The van pointer is the authority: the trip's own data renders.
+      expect(find.byKey(const Key('liveRoute.doneTick.wa')), findsOneWidget);
+      expect(find.byKey(const Key('liveRoute.wardRow.wb')), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('liveRoute.wardRow.wb')),
+          matching: find.byKey(const Key('liveRoute.nextChip')),
+        ),
+        findsOneWidget,
+        reason: 'the next ward follows the stale trip, not a empty fallback',
+      );
+      final markWc = tester.widget<IconButton>(
+        find.byKey(const Key('liveRoute.markWard.wc')),
+      );
+      expect(
+        markWc.onPressed,
+        isNotNull,
+        reason: 'a stale open trip must keep the mark control enabled',
+      );
+    },
+  );
+
+  testWidgets(
+    'stale trip without the van pointer is not invented by the day query',
+    (tester) async {
+      // Guards the fallback: with no pointer the provider keeps the old
+      // today-only rule, so a past-day trip never surfaces out of nowhere.
+      final yesterday = now.subtract(const Duration(days: 1));
+      final stale = Trip.fromMap({
+        'id': 'trip-stale',
+        'vanId': 'van-01',
+        'routeId': 'route-01',
+        'date': yesterday,
+        'startedAt': yesterday,
+        'endedAt': null,
+        'wardsDone': [
+          {'wardId': 'wa', 'doneAt': yesterday, 'flagged': false},
+        ],
+        'alertedWardIds': [],
+        'gpsTrail': [],
+        'mockLocationDetected': false,
+      });
+
+      await pumpScreen(tester, [
+        vansRepositoryProvider.overrideWithValue(
+          FakeVansRepository([van(updatedAt: now)]),
+        ),
+        tripsRepositoryProvider.overrideWithValue(
+          FakeTripsRepository([stale]),
+        ),
+        wardsRepositoryProvider.overrideWithValue(
+          FakeWardsRepository([wardA, wardB, wardC]),
+        ),
+        routesRepositoryProvider.overrideWithValue(
+          FakeRoutesRepository([route()]),
+        ),
+      ]);
+      await settle(tester);
+
+      expect(find.byKey(const Key('liveRoute.doneTick.wa')), findsNothing);
+      final markWc = tester.widget<IconButton>(
+        find.byKey(const Key('liveRoute.markWard.wc')),
+      );
+      expect(markWc.onPressed, isNull);
+    },
+  );
 
   testWidgets('route complete: the sheet primary becomes End Shift', (
     tester,

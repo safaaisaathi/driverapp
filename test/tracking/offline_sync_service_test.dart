@@ -598,6 +598,9 @@ class _FaultyTrips implements TripsRepository {
   }) => _inner.setMockLocationDetected(tripId, detected: detected);
 
   @override
+  Stream<Trip?> watchTrip(String tripId) => _inner.watchTrip(tripId);
+
+  @override
   Stream<Trip?> watchTripByVanIdAndDate({
     required String vanId,
     required DateTime date,

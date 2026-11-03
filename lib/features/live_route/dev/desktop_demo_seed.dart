@@ -263,6 +263,16 @@ class DevTripsRepository implements TripsRepository {
   Future<Trip?> readTrip(String tripId) async => _trips[tripId]?.value;
 
   @override
+  Stream<Trip?> watchTrip(String tripId) async* {
+    final store = _trips[tripId];
+    if (store == null) {
+      yield null;
+      return;
+    }
+    yield* store.stream;
+  }
+
+  @override
   Stream<Trip?> watchTripByVanIdAndDate({
     required String vanId,
     required DateTime date,
