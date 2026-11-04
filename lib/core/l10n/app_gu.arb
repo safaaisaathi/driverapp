@@ -208,6 +208,15 @@
   "identityWelcomeBackBody": "આ ફોન તમને ઓળખે છે.",
   "identityStartMyShift": "મારી શિફ્ટ શરૂ કરો",
   "identityChangeCode": "બીજા ડ્રાઇવર?",
+  "identityShiftConflictOtherDriver": "આ ગાડી બીજા ડ્રાઇવરની શિફ્ટ પર છે. શરૂ કરતાં પહેલાં ઓફિસને પૂછો.",
+  "identityShiftConflictClaimed": "આ ગાડી પહેલેથી બીજા ફોન સાથે જોડાયેલી છે. તેને છોડવા ઓફિસને કહો.",
+  "identityShiftConflictStaleMarker": "આ ગાડીની શિફ્ટની નોંધ જૂની છે. ઓફિસને તપાસવા કહો.",
+  "identityRateLimitedTitle": "ઘણા પ્રયત્નો થઈ ગયા",
+  "identityRateLimitedBody": "થોડી મિનિટ રાહ જુઓ, પછી તમારો કોડ ફરી નાખો.",
+  "identityNotAuthorisedTitle": "ફરી સાઇન ઇન કરો",
+  "identityNotAuthorisedBody": "તમારું સેશન ખાતરી કરી શકાયું નહીં. તમારો કોડ ફરી નાખો.",
+  "identityShiftClosedTitle": "આ શિફ્ટ પહેલેથી પૂરી થઈ ગઈ છે",
+  "identityShiftClosedBody": "આ ગાડી પર નવી શિફ્ટ શરૂ કરતાં પહેલાં ઓફિસને પૂછો.",
   "autoEndNoticeTitle": "ડેપો પર શિફ્ટ પૂરી થઈ.",
   "autoEndNoticeBody": "ગાડી 3 કલાક સુધી ડેપોની 500 મીટરની અંદર ઊભી રહી, તેથી શિફ્ટ આપમેળે પૂરી થઈ ગઈ."
 }

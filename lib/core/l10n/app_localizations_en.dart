@@ -534,6 +534,39 @@ class AppLocalizationsEn extends AppLocalizations {
   String get identityChangeCode => 'Different driver?';
 
   @override
+  String get identityShiftConflictOtherDriver =>
+      'This van is on a shift with another driver. Ask the office before starting.';
+
+  @override
+  String get identityShiftConflictClaimed =>
+      'This van is already linked to another phone. Ask the office to release it.';
+
+  @override
+  String get identityShiftConflictStaleMarker =>
+      'This van\'s shift record is out of date. Ask the office to check it.';
+
+  @override
+  String get identityRateLimitedTitle => 'Too many attempts';
+
+  @override
+  String get identityRateLimitedBody =>
+      'Wait a few minutes, then try your code again.';
+
+  @override
+  String get identityNotAuthorisedTitle => 'Please sign in again';
+
+  @override
+  String get identityNotAuthorisedBody =>
+      'Your session could not be confirmed. Enter your code again.';
+
+  @override
+  String get identityShiftClosedTitle => 'That shift is already closed';
+
+  @override
+  String get identityShiftClosedBody =>
+      'Ask the office before starting a new shift on this van.';
+
+  @override
   String get autoEndNoticeTitle => 'Shift ended at depot.';
 
   @override

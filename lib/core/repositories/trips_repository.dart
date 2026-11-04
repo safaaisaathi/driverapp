@@ -1,34 +1,21 @@
 import '../models/models.dart';
 
-/// Data access for the `trips` collection (0.2, 0.13).
+/// Data access for the `trips` collection (0.2, 0.13, CHG-0003, CHG-0005).
 ///
-/// Trip is the log record of one shift (Glossary). The driver app creates it
-/// at shift start, appends Mark Ward Done entries and Trail batches while on
-/// shift, and closes it at End Shift. `trips.alertedWardIds` is written by the
-/// backend's `arrivalAlert` (0.7) — the driver app never rewrites it, so this
-/// interface deliberately has no setter for it (0.15.4 gaps are listed in the
-/// ticket report, not improvised).
+/// The trip is SERVER-OWNED: `startShift`, `endShift` and `markWardDone` are
+/// callables because the duplicate-trip race is real and the shift markers
+/// belong to the server (02-contracts/callables.json). This interface is
+/// therefore read-only, with ONE write: the trail chunk.
+///
+/// The trail is the contract's one documented direct-write exception: the
+/// points land in `trips/{tripId}/trail/{n}` chunks of at most 1000
+/// (`trailChunk.schema.json`), never in the legacy `trips.gpsTrail` array
+/// (CHG-0005).
 abstract class TripsRepository {
-  /// Creates the trip doc and returns the created Trip with its contract `id`
-  /// filled in.
-  Future<Trip> createTrip(Trip trip);
-
-  /// Appends one Mark Ward Done entry to `trips.wardsDone`.
-  Future<void> appendWardDone(String tripId, WardDone entry);
-
-  /// Appends a batch of buffered Trail points to `trips.gpsTrail` in one
-  /// write (0.13 Flow A step 4: every 30 s the buffered points are appended).
+  /// Appends trail points as `trail` chunks of at most [trailChunkMaxPoints]
+  /// each. Chunk documents are `{points, from, to}` where `from`/`to` are
+  /// indexes in the trip's full trail.
   Future<void> appendGpsTrail(String tripId, List<GpsPoint> points);
-
-  /// Sets `trips.endedAt` (End Shift).
-  Future<void> setEndedAt(String tripId, DateTime endedAt);
-
-  /// Sets `trips.mockLocationDetected` (grilled decision: mock-location admin
-  /// notification is written here, the push side is a backend concern).
-  Future<void> setMockLocationDetected(
-    String tripId, {
-    required bool detected,
-  });
 
   /// Reads one trip doc once (`null` when it vanished). The resume branch
   /// reattaches to the existing trip through this read (F-D1, ticket 04)
@@ -42,8 +29,8 @@ abstract class TripsRepository {
   Stream<Trip?> watchTrip(String tripId);
 
   /// Watch today's trip for [vanId]: the open (or just-closed) trip whose
-  /// `date` is [date] — the resume-never-duplicate seam and the live route
-  /// screen both read through this.
+  /// `date` is [date] — the fallback for a van doc without a marker, and the
+  /// End Shift summary's source.
   Stream<Trip?> watchTripByVanIdAndDate({
     required String vanId,
     required DateTime date,
@@ -51,11 +38,13 @@ abstract class TripsRepository {
 
   /// The most recent trips of [vanId] as of [asOfDate] — the Trip
   /// History screen (wireframe WF-22: Today / Yesterday rows; a still
-  /// open trip shows as "running"). Read-only: trips are created by
-  /// this app's shift flow, never issued from the history screen.
+  /// open trip shows as "running"). Read-only.
   Stream<List<Trip>> watchRecentTrips({
     required String vanId,
     required DateTime asOfDate,
     int limit = 30,
   });
 }
+
+/// The contract's chunk cap (`trailChunk.schema.json` `points.maxItems`).
+const int trailChunkMaxPoints = 1000;

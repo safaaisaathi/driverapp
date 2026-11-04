@@ -107,7 +107,7 @@ void main() {
 
     // The app stays open when the engine latches mid-shift; the banner must
     // appear without any rebuild (the doc watch IS the state).
-    await trips.setMockLocationDetected('trip-1', detected: true);
+    trips.setMockLocationDetected('trip-1', detected: true);
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('mock_location_banner')), findsOneWidget);

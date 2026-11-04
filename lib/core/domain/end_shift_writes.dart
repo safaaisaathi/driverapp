@@ -1,32 +1,26 @@
-/// The exact End Shift write set (PRD-2 F-D5), shared by the manual D5 flow
+/// The End Shift action (PRD-2 F-D5, CHG-0003), shared by the manual D5 flow
 /// and the depot auto-end (ruling #29).
 ///
-/// One home for the mutation order so the two entry points can never drift:
-/// 1. `trips.endedAt` = [endedAt] (default now),
-/// 2. `vans.status = idle`,
-/// 3. `vans.currentTripId = null`,
-/// 4. stop tracking (trail flush + foreground service).
+/// The trip close and the van's marker are the server's write: `endShift`
+/// runs one transaction that sets `trips.endedAt` + `status = ended` and
+/// clears `vans.currentTripId` ONLY when the marker still points at this
+/// trip. The app's write set is therefore just the call plus the tracking
+/// stop, so the two entry points can never drift.
 library;
 
-import 'package:driverapp/core/models/models.dart';
-import 'package:driverapp/core/repositories/repositories.dart';
+import '../contract/shift_gateway.dart';
 
-/// Performs the End Shift writes and then stops tracking.
+/// Calls `endShift` and then stops tracking.
 ///
 /// A tracking stop failure never leaves the trip open, so [stopTracking] is
-/// best effort (the repository writes above already landed). Rethrows any
-/// Firestore failure so the caller can show its failed state.
+/// best effort (the callable already landed). Rethrows any callable failure
+/// as a [ContractException] so the caller can show its failed state.
 Future<void> writeEndShift({
-  required VansRepository vans,
-  required TripsRepository trips,
-  required String vanId,
+  required ShiftGateway gateway,
   required String tripId,
   required Future<void> Function() stopTracking,
-  DateTime? endedAt,
 }) async {
-  await trips.setEndedAt(tripId, endedAt ?? DateTime.now());
-  await vans.updateStatus(vanId, VanStatus.idle);
-  await vans.updateCurrentTripId(vanId, null);
+  await gateway.endShift(tripId);
   try {
     await stopTracking();
   } catch (_) {

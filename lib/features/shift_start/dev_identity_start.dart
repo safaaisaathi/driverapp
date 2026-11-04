@@ -24,6 +24,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/config/firebase_bootstrap.dart' show NoopMessagingGateway;
+import '../../core/contract/gateway_providers.dart';
 import '../../core/identity/driver_identity_controller.dart';
 import '../../core/identity/driver_identity_store.dart';
 import '../../core/l10n/app_localizations.dart';
@@ -150,6 +151,9 @@ class DevTrackingEngine implements TrackingEngine {
       );
 
   @override
+  bool get mockLocationLatched => false;
+
+  @override
   Future<TrackingStartResult> start({
     required String tripId,
     required String vanId,
@@ -172,43 +176,19 @@ class DevTrackingEngine implements TrackingEngine {
   Future<void> stop() async {}
 }
 
-/// The seed's trips double keys every doc by the id it is handed — and
-/// Start Shift builds the trip with an empty id (the Firestore repo mints
-/// the real one). This thin wrapper assigns a stable dev id so the created
-/// trip, `vans.currentTripId` and the session all point somewhere real.
-class _IdAssigningTripsRepository extends DevTripsRepository {
-  int _counter = 0;
-
-  @override
-  Future<Trip> createTrip(Trip trip) => super.createTrip(
-        Trip(
-          id: 'dev-trip-${++_counter}',
-          vanId: trip.vanId,
-          routeId: trip.routeId,
-          driverId: trip.driverId,
-          wardIds: trip.wardIds,
-          date: trip.date,
-          startedAt: trip.startedAt,
-          endedAt: trip.endedAt,
-          wardsDone: trip.wardsDone,
-          alertedWardIds: trip.alertedWardIds,
-          gpsTrail: trip.gpsTrail,
-          mockLocationDetected: trip.mockLocationDetected,
-        ),
-      );
-}
+String _devVanIdFor(String driverCode) => devSeedVanId;
 
 Driver _driver({
   required String code,
   required String name,
-  required String phone,
+  required String phoneMasked,
   required bool active,
   List<String> wardIds = const ['ward-1', 'ward-2', 'ward-3'],
 }) =>
     Driver(
       id: code,
       name: name,
-      phone: phone,
+      phoneMasked: phoneMasked,
       vanId: devSeedVanId,
       routeId: devSeedRouteId,
       wardIds: wardIds,
@@ -222,7 +202,23 @@ Future<void> main() async {
   // writes the 0.16 driver identity), so the seed van is parked idle - the
   // demo seed itself stays on shift for the live-route screen.
   seed.vans.parkAsIdle(devSeedVanId);
-  final trips = _IdAssigningTripsRepository();
+  final trips = DevTripsRepository();
+  final drivers = <String, Driver>{
+    'AB-1234': _driver(
+      code: 'AB-1234',
+      name: 'Ramesh Patel',
+      phoneMasked: '98XXXXXX10',
+      active: true,
+    ),
+    // Inactive on purpose: the flow treats it as not-found (0.16).
+    'CD-5678': _driver(
+      code: 'CD-5678',
+      name: 'Jayesh Shah',
+      phoneMasked: '91XXXXXX80',
+      active: false,
+      wardIds: ['ward-1'],
+    ),
+  };
   final container = ProviderContainer(
     overrides: [
       vansRepositoryProvider.overrideWithValue(seed.vans),
@@ -231,23 +227,21 @@ Future<void> main() async {
       wardsRepositoryProvider.overrideWithValue(seed.wards),
       noticesRepositoryProvider.overrideWithValue(seed.notices),
       complaintsRepositoryProvider.overrideWithValue(seed.complaints),
-      driversRepositoryProvider.overrideWithValue(
-        DevDriverLookup({
-          'AB-1234': _driver(
-            code: 'AB-1234',
-            name: 'Ramesh Patel',
-            phone: '+919876543210',
-            active: true,
-          ),
-          // Inactive on purpose: the flow treats it as not-found (0.16).
-          'CD-5678': _driver(
-            code: 'CD-5678',
-            name: 'Jayesh Shah',
-            phone: '9123456780',
-            active: false,
-            wardIds: ['ward-1'],
-          ),
-        }),
+      driversRepositoryProvider.overrideWithValue(DevDriverLookup(drivers)),
+      // CHG-0003: the bind and the shift calls are server seams now, so the
+      // desktop preview supplies their doubles.
+      driverSessionGatewayProvider.overrideWithValue(
+        const DevDriverSessionGateway(vanIdFor: _devVanIdFor),
+      ),
+      shiftGatewayProvider.overrideWithValue(
+        DevShiftGateway(
+          trips: trips,
+          vans: seed.vans,
+          driverFor: (driverId) => drivers[driverId],
+          routeWardIds: {
+            devSeedRouteId: const ['ward-1', 'ward-2', 'ward-3'],
+          },
+        ),
       ),
       driverIdentityStoreProvider.overrideWithValue(DevIdentityStore()),
       driverMessagingGatewayProvider.overrideWithValue(

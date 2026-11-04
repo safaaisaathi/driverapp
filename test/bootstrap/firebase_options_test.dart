@@ -2,17 +2,17 @@ import 'package:driverapp/core/config/firebase_options.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  group('demoFirebaseOptions (placeholder shape)', () {
-    test('targets the emulator demo project, never the shared project', () {
-      final options = firebaseOptions(FirebaseBackend.emulatorSuite);
+  group('emulatorFirebaseOptions (placeholder shape)', () {
+    test('targets the ONE shared project, on both backends (CHG-0008)', () {
+      final emulator = firebaseOptions(FirebaseBackend.emulatorSuite);
 
-      // Ticket 02 assigns the emulator demo project id; the shared demo
-      // project is reached only through `sharedProjectFirebaseOptions`.
-      expect(options.projectId, 'driver-app-demo');
+      // Every backend is safaaisaathi-63a87. There is no second project id
+      // in the app any more (the old demo placeholder is gone).
+      expect(emulator.projectId, 'safaaisaathi-63a87');
     });
 
     test('every required field is a non-empty placeholder', () {
-      final options = demoFirebaseOptions();
+      final options = emulatorFirebaseOptions();
 
       expect(options.apiKey, isNotEmpty);
       expect(options.appId, isNotEmpty);
@@ -23,7 +23,7 @@ void main() {
     test('options source is a single pure function over the backend', () {
       // Switching backends never rewrites call sites: one function decides.
       expect(firebaseOptions(FirebaseBackend.emulatorSuite).projectId,
-          demoFirebaseOptions().projectId);
+          emulatorFirebaseOptions().projectId);
     });
 
     test('shared-project options refuse to boot without real keys (0.10)', () {

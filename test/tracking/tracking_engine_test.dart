@@ -6,8 +6,8 @@
 /// writes, trail buffering/batching order, resume reattach, stop-flush,
 /// service-failure states, and the Flow F revive (offline → on_shift on
 /// next write). Real-device behaviour (permissions, service survival) is
-/// ticket 14. F-D9 (ticket 11): the mock/real intake hook latches
-/// `trips.mockLocationDetected` exactly once per trip run.
+/// ticket 14. F-D9 (ticket 11): the mock/real intake hook latches LOCALLY
+/// exactly once per trip run; the trip doc is server-owned (CHG-0003).
 ///
 /// Timer tests run on REAL timers with the test-only cadence overrides
 /// (`checkIntervalSec: 1`) instead of fakeAsync: fakeAsync cannot pump the
@@ -17,6 +17,7 @@ library;
 
 import 'dart:async';
 
+import 'package:driverapp/core/contract/reason_codes.dart';
 import 'package:driverapp/core/domain/geo_point.dart';
 import 'package:driverapp/core/models/models.dart';
 import 'package:driverapp/features/tracking/domain/battery_source.dart';
@@ -30,28 +31,12 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../repositories/fake_repositories.dart';
 
-/// The trips fake plus a call recorder: the latch acceptance is "the write
-/// happens at most once" — a doc-field read alone can't see repeat writes.
-class _RecordingTripsRepository extends FakeTripsRepository {
-  _RecordingTripsRepository([super.seed]);
-
-  /// Every `setMockLocationDetected` call, in order (latch ⇒ one call).
-  final List<bool> mockWrites = <bool>[];
-
-  @override
-  Future<void> setMockLocationDetected(
-    String tripId, {
-    required bool detected,
-  }) async {
-    mockWrites.add(detected);
-    await super.setMockLocationDetected(tripId, detected: detected);
-  }
-}
-
+/// The trips fake plus the engine latency: the F-D9 latch acceptance is "the
+/// flag flips once" — and, after CHG-0003, "the app never writes the doc".
 void main() {
   // ---------------------------------------------------------------- fakes
   late FakeVansRepository vans;
-  late _RecordingTripsRepository trips;
+  late FakeTripsRepository trips;
   late _FakePositions positions;
   late _FakeBattery battery;
   late _FakeService service;
@@ -90,6 +75,7 @@ void main() {
     int check = 1,
     int? flush,
     void Function(String tripId)? onAutoEnd,
+    FakeShiftGateway? gateway,
   }) =>
       TrackingEngine(
         vansRepository: vans,
@@ -97,6 +83,8 @@ void main() {
         positionSource: positions,
         batterySource: battery,
         serviceHandle: service,
+        shiftGateway: gateway ??
+            FakeShiftGateway(trips: trips, vans: vans, clock: () => clock),
         trailBufferFactory: (tripId) async =>
             lastBuffer = _FakeTrailBuffer(),
         clock: () => clock,
@@ -107,7 +95,7 @@ void main() {
 
   setUp(() {
     vans = FakeVansRepository([van('van-01')]);
-    trips = _RecordingTripsRepository([
+    trips = FakeTripsRepository([
       // The engine never creates trips — the trip doc exists before the
       // engine starts (Start Shift / D1 creates it; ticket 04).
       Trip(
@@ -496,33 +484,37 @@ void main() {
       return engine;
     }
 
-    test('one mock fix latches trips.mockLocationDetected = true', () async {
+    test('one mock fix latches LOCALLY, the app writes no trip field',
+        () async {
       final engine = await runEngine();
 
       positions.emit(mockAt(22.6780));
       await oneTick();
 
-      expect(trips.mockWrites, [true]); // set through the repository seam
-      expect(trips.trips['trip-1']!.mockLocationDetected, isTrue);
+      expect(engine.mockLocationLatched, isTrue); // local banner latch
+      // CHG-0003: trips is server-owned; the strict rules deny this write.
+      expect(trips.trips['trip-1']!.mockLocationDetected, isFalse);
 
       await engine.stop();
     });
 
-    test('many mock fixes → the write happens ONCE (local latch)', () async {
+    test('many mock fixes → the local latch flips ONCE', () async {
       final engine = await runEngine();
 
       positions.emit(mockAt(22.6780));
       await oneTick();
+      expect(engine.mockLocationLatched, isTrue);
       positions.emit(mockAt(22.67817));
       await oneTick();
       positions.emit(mockAt(22.6783));
       await oneTick();
 
-      expect(trips.mockWrites, hasLength(1)); // never re-written per fix
+      expect(engine.mockLocationLatched, isTrue);
+      expect(trips.trips['trip-1']!.mockLocationDetected, isFalse);
       await engine.stop();
     });
 
-    test('real fixes never set the field', () async {
+    test('real fixes never latch', () async {
       final engine = await runEngine();
 
       positions.emit(fixAt(22.6780)); // real (isMocked defaults false)
@@ -530,26 +522,26 @@ void main() {
       positions.emit(fixAt(22.67817));
       await oneTick();
 
-      expect(trips.mockWrites, isEmpty);
+      expect(engine.mockLocationLatched, isFalse);
       expect(trips.trips['trip-1']!.mockLocationDetected, isFalse);
 
       await engine.stop();
     });
 
-    test('latch persists across later REAL fixes (never unset)', () async {
+    test('the latch persists across later REAL fixes (never unset)', () async {
       final engine = await runEngine();
 
       positions.emit(mockAt(22.6780));
       await oneTick();
-      expect(trips.trips['trip-1']!.mockLocationDetected, isTrue);
+      expect(engine.mockLocationLatched, isTrue);
 
       positions.emit(fixAt(22.67817)); // driver stops mocking; real GPS again
       await oneTick();
       positions.emit(fixAt(22.6783));
       await oneTick();
 
-      expect(trips.mockWrites, hasLength(1)); // no write of false, ever
-      expect(trips.trips['trip-1']!.mockLocationDetected, isTrue);
+      expect(engine.mockLocationLatched, isTrue);
+      expect(trips.trips['trip-1']!.mockLocationDetected, isFalse);
 
       await engine.stop();
     });
@@ -567,6 +559,11 @@ void main() {
         positionSource: positions,
         batterySource: battery,
         serviceHandle: service,
+        shiftGateway: FakeShiftGateway(
+          trips: trips,
+          vans: failingVans,
+          clock: () => clock,
+        ),
         trailBufferFactory: (tripId) async => buffer = _FakeTrailBuffer(),
         clock: () => clock,
         checkIntervalSec: 1,
@@ -655,7 +652,7 @@ void main() {
       await engine.stop();
     });
 
-    test('a failed end write keeps the shift running and silent', () async {
+    test('a failed end call keeps the shift running and silent', () async {
       vans = FakeVansRepository([
         van(
           'van-01',
@@ -664,24 +661,10 @@ void main() {
           depot: (lat: 22.6780, lng: 77.0),
         ),
       ]);
-      trips = _FailingEndTripsRepository([
-        Trip(
-          id: 'trip-1',
-          vanId: 'van-01',
-          routeId: 'route-01',
-          driverId: '',
-          wardIds: const <String>[],
-          date: DateTime.utc(2026, 10, 24),
-          startedAt: DateTime.utc(2026, 10, 24, 8),
-          endedAt: null,
-          wardsDone: const <WardDone>[],
-          alertedWardIds: const <String>[],
-          gpsTrail: const <GpsPoint>[],
-          mockLocationDetected: false,
-        ),
-      ]);
+      final gateway = FakeShiftGateway(trips: trips, vans: vans)
+        ..endError = const ContractException(ReasonCode.internal);
       final notices = <String>[];
-      final engine = buildEngine(onAutoEnd: notices.add);
+      final engine = buildEngine(onAutoEnd: notices.add, gateway: gateway);
 
       await engine.start(
         tripId: 'trip-1',
@@ -704,17 +687,6 @@ void main() {
       await engine.stop();
     });
   });
-}
-
-/// Trips fake whose End Shift write always fails (offline / rules), so the
-/// auto-end must keep the shift open instead of half-ending it.
-class _FailingEndTripsRepository extends _RecordingTripsRepository {
-  _FailingEndTripsRepository(super.seed);
-
-  @override
-  Future<void> setEndedAt(String tripId, DateTime endedAt) async {
-    throw StateError('offline');
-  }
 }
 
 // ---------------------------------------------------------------------------

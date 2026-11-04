@@ -35,15 +35,9 @@ abstract class VansRepository {
   /// Reads one van doc once (`null` when it vanished). Shift Start refreshes
   /// the picked van this way — a read, not a watch — to inspect
   /// `currentTripId`/`status` for the resume branch.
-  Future<Van?> readVan(String vanId);
-
-  /// Sets `vans.currentTripId` (0.2): written at shift start and cleared
-  /// at End Shift (behaviour rules 3 / 0.13 F-D1+F-D5). Resume never
-  /// duplicates trips reads it back.
   ///
-  /// Contract note: the 0.8 rules summary lists only `lastLocation`,
-  /// `status`, `batteryPct` in the driver's write scope, but 0.13's
-  /// app behaviour requires writing `currentTripId` — recorded in the
-  /// F-D1 ticket report for the Backend Owner (0.8 update pending).
-  Future<void> updateCurrentTripId(String vanId, String? tripId);
+  /// There is deliberately no `updateCurrentTripId`: the shift markers belong
+  /// to the server (`startShift`/`endShift`), because two phones on one van
+  /// would race for them (CHG-0003, firestore.strict.rules `vans.update`).
+  Future<Van?> readVan(String vanId);
 }

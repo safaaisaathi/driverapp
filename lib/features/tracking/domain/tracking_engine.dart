@@ -34,6 +34,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart'
     show debugPrint, visibleForTesting;
 import 'package:driverapp/core/config/constants.dart';
+import 'package:driverapp/core/contract/shift_gateway.dart';
 import 'package:driverapp/core/domain/end_shift_writes.dart';
 import 'package:driverapp/core/domain/geo_point.dart';
 import 'package:driverapp/core/domain/write_policy.dart';
@@ -157,12 +158,16 @@ class TrackingEngine {
     /// F-D7: when wired, a failed location write queues the LATEST candidate
     /// instead of being dropped (OfflineSyncService drains it on reconnect).
     OfflineWriteQueue? offlineWriteQueue,
+    /// CHG-0003: the shift callables. The depot auto-end (ruling #29) closes
+    /// the trip through `endShift`, the same callable D5 uses.
+    required ShiftGateway shiftGateway,
     /// Ruling #29: called with the ended trip id after the depot rule
     /// auto-ends a shift, so the app layer can clear its shift session and
     /// show the notice.
     void Function(String tripId)? onShiftAutoEnded,
   })  : _vans = vansRepository,
         _trips = tripsRepository,
+        _gateway = shiftGateway,
         _position = positionSource,
         _battery = batterySource,
         _service = serviceHandle,
@@ -175,6 +180,7 @@ class TrackingEngine {
 
   final VansRepository _vans;
   final TripsRepository _trips;
+  final ShiftGateway _gateway;
   final PositionSource _position;
   final BatterySource _battery;
   final ForegroundServiceHandle _service;
@@ -226,6 +232,12 @@ class TrackingEngine {
   /// is (kill/restart safe, never unset by the app). Latched here after the
   /// first mocked fix; a failed write re-arms the write for the next mock.
   bool _mockLocationLatched = false;
+
+  /// Test-only view of the F-D9 local latch: true after the first mocked fix
+  /// of this run. The trip doc (`trips.mockLocationDetected`) is the real
+  /// ground truth, and only the server writes it (CHG-0003).
+  @visibleForTesting
+  bool get mockLocationLatched => _mockLocationLatched;
 
   /// Ruling #29: depot dwell state for the current run, `null` until the van
   /// doc carries a depot.
@@ -390,32 +402,24 @@ class TrackingEngine {
   }
 
   /// Position intake (F-D2 step 3): every fix updates the write-policy
-  /// candidate. F-D9 rides on the same point: a mocked fix latches
-  /// `trips.mockLocationDetected = true` on the open trip, at most once per
-  /// run (the local latch; the app NEVER writes `false` — the doc field is
-  /// the latch the office and the banner read).
+  /// candidate. F-D9 rides on the same point: a mocked fix latches the local
+  /// banner flag, at most once per run.
+  ///
+  /// The latch is LOCAL ONLY now (CHG-0003): `trips` is server-owned and the
+  /// strict rules deny a client write, so there is no contract path for the
+  /// app to persist `mockLocationDetected`. The banner still shows; the
+  /// remote record is a contract request (see the adoption report).
   void _onFixIntake(VanFix fix) {
     _latestFix = fix;
     if (!fix.isMocked || _mockLocationLatched || _tripId == null) return;
     _flagMockLocation();
   }
 
-  /// Write the F-D9 latch through the repository (never direct Firestore).
-  /// A failed write re-arms the local latch so the next mocked fix retries;
-  /// offline connectivity alone cannot lose it, because (ruling 7) the repo
-  /// write is the only mutation and it only ever sets `true`.
+  /// Latch the F-D9 banner for this run.
   void _flagMockLocation() {
-    final tripId = _tripId;
-    if (tripId == null) return;
+    if (_tripId == null) return;
     _mockLocationLatched = true;
-    unawaited(
-      _trips.setMockLocationDetected(tripId, detected: true).catchError(
-            (Object error) {
-              debugPrint('tracking: mock-location flag failed: $error');
-              _mockLocationLatched = false; // retry on the next mock fix
-            },
-          ),
-    );
+    debugPrint('tracking: mock location detected (local latch only)');
   }
 
   Future<void> _applyStop() async {
@@ -564,26 +568,22 @@ class TrackingEngine {
     }
   }
 
-  /// Ruling #29: the van has been parked at the depot for 3 hours. Write the
-  /// SAME end-shift set as D5 (shared core), stop the engine, then tell the
-  /// app layer to clear its session. A failed write keeps the trip open and
-  /// retries after [depotAutoEndRetryDelay] (an offline phone must not lose
-  /// the shift, and must not spin on Firestore either).
+  /// Ruling #29: the van has been parked at the depot for 3 hours. Close the
+  /// SAME shift as D5 (shared core, the `endShift` callable), stop the
+  /// engine, then tell the app layer to clear its session. A failed call
+  /// keeps the trip open and retries after [depotAutoEndRetryDelay] (an
+  /// offline phone must not lose the shift, and must not spin either).
   Future<void> _autoEndShift(DateTime now) async {
     final tripId = _tripId;
-    final vanId = _vanId;
-    if (tripId == null || vanId == null || _autoEnding) return;
+    if (tripId == null || _autoEnding) return;
     final retryAfter = _autoEndRetryAfter;
     if (retryAfter != null && now.isBefore(retryAfter)) return;
 
     _autoEnding = true;
     try {
       await writeEndShift(
-        vans: _vans,
-        trips: _trips,
-        vanId: vanId,
+        gateway: _gateway,
         tripId: tripId,
-        endedAt: now,
         stopTracking: stop,
       );
       debugPrint('tracking: depot auto-end wrote the end-shift set ($tripId)');

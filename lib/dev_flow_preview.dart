@@ -38,8 +38,15 @@ import 'core/models/models.dart';
 import 'core/repositories/repository_providers.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_mode_controller.dart';
+import 'core/contract/gateway_providers.dart';
 import 'features/live_route/dev/desktop_demo_seed.dart'
-    show DevDesktopSeed, DevTripsRepository, devSeedRouteId, devSeedVanId;
+    show
+        DevDesktopSeed,
+        DevDriverSessionGateway,
+        DevShiftGateway,
+        DevTripsRepository,
+        devSeedRouteId,
+        devSeedVanId;
 import 'features/launching/splash_screen.dart';
 import 'features/shift_start/data/fcm_topics.dart'
     show driverMessagingGatewayProvider;
@@ -59,47 +66,19 @@ import 'features/tracking/tracking_providers.dart'
 Driver devDriver({
   required String code,
   required String name,
-  required String phone,
+  required String phoneMasked,
   required bool active,
   List<String> wardIds = const ['ward-1', 'ward-2', 'ward-3'],
 }) =>
     Driver(
       id: code,
       name: name,
-      phone: phone,
+      phoneMasked: phoneMasked,
       vanId: devSeedVanId,
       routeId: devSeedRouteId,
       wardIds: wardIds,
       active: active,
     );
-
-/// The seed's trips double keys every doc by the id it is handed — and
-/// Start Shift builds the trip with an empty id (the Firestore repo mints
-/// the real one). This thin wrapper assigns a stable dev id so the created
-/// trip, `vans.currentTripId` and the session all point somewhere real.
-/// (Same wrapper as `dev_identity_start.dart`; kept local so both dev
-/// entrypoints stay self-contained.)
-class _IdAssigningTripsRepository extends DevTripsRepository {
-  int _counter = 0;
-
-  @override
-  Future<Trip> createTrip(Trip trip) => super.createTrip(
-        Trip(
-          id: 'dev-trip-${++_counter}',
-          vanId: trip.vanId,
-          routeId: trip.routeId,
-          driverId: trip.driverId,
-          wardIds: trip.wardIds,
-          date: trip.date,
-          startedAt: trip.startedAt,
-          endedAt: trip.endedAt,
-          wardsDone: trip.wardsDone,
-          alertedWardIds: trip.alertedWardIds,
-          gpsTrail: trip.gpsTrail,
-          mockLocationDetected: trip.mockLocationDetected,
-        ),
-      );
-}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -108,31 +87,45 @@ Future<void> main() async {
   // writes the 0.16 driver identity), so the seed van is parked idle - the
   // demo seed itself stays on shift for the live-route screen.
   seed.vans.parkAsIdle(devSeedVanId);
+  final trips = DevTripsRepository();
+  final drivers = <String, Driver>{
+    'AB-1234': devDriver(
+      code: 'AB-1234',
+      name: 'Ramesh Patel',
+      phoneMasked: '98XXXXXX10',
+      active: true,
+    ),
+    // Inactive on purpose: the flow treats it as not-found (0.16).
+    'CD-5678': devDriver(
+      code: 'CD-5678',
+      name: 'Jayesh Shah',
+      phoneMasked: '91XXXXXX80',
+      active: false,
+      wardIds: ['ward-1'],
+    ),
+  };
   final container = ProviderContainer(
     overrides: [
       vansRepositoryProvider.overrideWithValue(seed.vans),
-      tripsRepositoryProvider.overrideWithValue(_IdAssigningTripsRepository()),
+      tripsRepositoryProvider.overrideWithValue(trips),
       routesRepositoryProvider.overrideWithValue(seed.routes),
       wardsRepositoryProvider.overrideWithValue(seed.wards),
       noticesRepositoryProvider.overrideWithValue(seed.notices),
       complaintsRepositoryProvider.overrideWithValue(seed.complaints),
-      driversRepositoryProvider.overrideWithValue(
-        DevDriverLookup({
-          'AB-1234': devDriver(
-            code: 'AB-1234',
-            name: 'Ramesh Patel',
-            phone: '+919876543210',
-            active: true,
-          ),
-          // Inactive on purpose: the flow treats it as not-found (0.16).
-          'CD-5678': devDriver(
-            code: 'CD-5678',
-            name: 'Jayesh Shah',
-            phone: '9123456780',
-            active: false,
-            wardIds: ['ward-1'],
-          ),
-        }),
+      driversRepositoryProvider.overrideWithValue(DevDriverLookup(drivers)),
+      // CHG-0003: server seams, so the preview supplies their doubles.
+      driverSessionGatewayProvider.overrideWithValue(
+        DevDriverSessionGateway(vanIdFor: (code) => devSeedVanId),
+      ),
+      shiftGatewayProvider.overrideWithValue(
+        DevShiftGateway(
+          trips: trips,
+          vans: seed.vans,
+          driverFor: (driverId) => drivers[driverId],
+          routeWardIds: {
+            devSeedRouteId: const ['ward-1', 'ward-2', 'ward-3'],
+          },
+        ),
       ),
       // The identity store is in-memory: nothing touches the
       // SharedPreferences channel on the desktop host.

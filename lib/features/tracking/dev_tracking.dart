@@ -5,16 +5,15 @@
 /// `main.dart` at [runDevTrackingApp].
 ///
 /// The seeded van id below is a @visibleForTesting constant, clearly
-/// dev-only. The demo creates its OWN trip in the seeded emulator data via
-/// the trips repository (D1 owns the real `vans.currentTripId` write; the
-/// engine only READS it for resume).
+/// dev-only. The demo starts tracking on the seed's OPEN SHIFT: after
+/// CHG-0003 the app cannot create a trip itself (the `startShift` callable
+/// owns it), so the seed must already carry `vans.currentTripId`.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:driverapp/core/config/firebase_bootstrap.dart';
 import 'package:driverapp/core/l10n/app_localizations.dart';
-import 'package:driverapp/core/models/models.dart';
 import 'package:driverapp/core/repositories/repository_providers.dart';
 
 import 'tracking_providers.dart';
@@ -97,33 +96,24 @@ class _DevTrackingScreenState extends ConsumerState<DevTrackingScreen> {
       return;
     }
 
-    // (2) Dev-only trip (D1 will own this part after integration).
+    // (2) The open shift the seed already carries. The trip is server-owned
+    // (CHG-0003): no client-side trip creation exists to call here.
     final van = await ref
         .read(vansRepositoryProvider)
         .watchVan(devTrackingVanId)
         .first;
-    final created = await ref.read(tripsRepositoryProvider).createTrip(
-          Trip(
-            id: '',
-            vanId: devTrackingVanId,
-            routeId: van?.routeId ?? 'route-01',
-            // The dev-only trip has no driver behind it and predates the
-            // 0.16 contract, so D2 falls back to `routes.wardIds`.
-            driverId: '',
-            wardIds: const <String>[],
-            date: DateTime.now(),
-            startedAt: DateTime.now(),
-            endedAt: null,
-            wardsDone: const <WardDone>[],
-            alertedWardIds: const <String>[],
-            gpsTrail: const <GpsPoint>[],
-            mockLocationDetected: false,
-          ),
-        );
+    final tripId = van?.currentTripId;
+    if (tripId == null) {
+      debugPrint(
+        'dev-tracking: $devTrackingVanId has no open shift; seed '
+        'vans.currentTripId or start a shift through the callable first',
+      );
+      return;
+    }
 
     // (3) Start the singleton engine.
     final result = await ref.read(trackingEngineProvider).start(
-          tripId: created.id,
+          tripId: tripId,
           vanId: devTrackingVanId,
           notificationTitle: localizations.trackingNotificationTitle,
           notificationBody: localizations.trackingNotificationBody,

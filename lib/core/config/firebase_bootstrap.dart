@@ -1,17 +1,18 @@
-/// Firebase bootstrap & anonymous session (Ticket 02).
+/// Firebase bootstrap (Ticket 02).
 ///
 /// Boot wiring, in order:
 /// 1. Hive (local first-launch flag storage) — see [openBootstrapFlagBox].
 /// 2. `Firebase.initializeApp` with [firebaseOptions] (emulator options by
 ///    default; PRD-2 0.10).
-/// 3. Emulator wiring for Firestore/Auth ([_wireEmulators]).
-/// 4. Anonymous sign-in so launch/screens can read `vans`/`wards`/`routes`
-///    (_spec § Implementation Decisions; PRD-2 0.8 rules allow anonymous
-///    reads of those collections). Failures degrade the app instead of
-///    crashing it (Ticket 02).
-/// 5. FCM init with auto token acquisition ON (no permission request yet —
+/// 3. Emulator wiring for Firestore/Auth/Functions ([_wireEmulators]).
+/// 4. FCM init with auto token acquisition ON (no permission request yet —
 ///    that belongs to the tracking ticket) and a one-time subscription to
 ///    topic `all` ([ensureSubscribedToAllTopic], PRD-2 0.6.6).
+///
+/// There is NO anonymous sign-in any more (CHG-0003): the session is the
+/// driver's custom token, minted by `bindDeviceToVan` and applied by the
+/// start-shift flow. A boot therefore finishes wired-but-signed-out, and the
+/// screens that need data sign in first.
 ///
 /// UI state is observable (and awaitable) through [bootstrapProvider].
 /// `main()` is fire-and-forget: the app NEVER hard-crashes when the
@@ -22,6 +23,7 @@ library;
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:driverapp/features/tracking/offline/data/hive_firestore_timestamp_adapter.dart';
 import 'package:driverapp/features/tracking/offline/offline_providers.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -57,10 +59,9 @@ sealed class BootstrapStatus {
 
   const factory BootstrapStatus.pending() = BootstrapPending;
 
-  /// Firebase is initialized, an anonymous session is held, FCM is wired.
-  const factory BootstrapStatus.ready({
-    required String anonymousUid,
-  }) = BootstrapReady;
+  /// Firebase is initialized and wired; the app is signed OUT. A driver
+  /// session arrives later through `bindDeviceToVan` (CHG-0003).
+  const factory BootstrapStatus.ready({String? uid}) = BootstrapReady;
 
   /// Firebase/emulator unavailable: app keeps working locally and retries
   /// silently. A later success upgrades the state to [BootstrapReady].
@@ -72,9 +73,10 @@ final class BootstrapPending extends BootstrapStatus {
 }
 
 final class BootstrapReady extends BootstrapStatus {
-  const BootstrapReady({required this.anonymousUid});
+  const BootstrapReady({this.uid});
 
-  final String anonymousUid;
+  /// The Auth uid when a session survived the relaunch, else null.
+  final String? uid;
 }
 
 final class BootstrapDegraded extends BootstrapStatus {
@@ -92,23 +94,19 @@ final bootstrapProvider = NotifierProvider<BootstrapController, BootstrapStatus>
 /// (issue #18): a boot that never resolves must not hang the screen.
 const Duration sessionGateCap = Duration(seconds: 8);
 
-/// Gate for the first Firestore read (issue #18).
+/// Gate for the first callable/Firestore use (issue #18, re-scoped by
+/// CHG-0003).
 ///
-/// A returning driver's screen fires its lookup right after the first frame,
-/// while `main()`'s fire-and-forget boot may still be signing in anonymously;
-/// the unauthenticated read failed on EVERY cold launch (device-verified),
-/// then succeeded on manual retry. This future resolves when the anonymous
-/// session exists or the boot has a first verdict (ready OR degraded: the
-/// caller proceeds and surfaces its own failure), capped by [sessionGateCap].
+/// The start-shift flow calls `bindDeviceToVan` and then reads Firestore, so
+/// it must not race `Firebase.initializeApp`. This future resolves when the
+/// boot has Firebase up (or the boot has a first verdict: the caller proceeds
+/// and surfaces its own failure), capped by [sessionGateCap].
 ///
 /// Immediate when boot wiring was never started (unit-test containers), so
 /// existing suites are unaffected; override to script the race.
 final sessionGateProvider = Provider<Future<void>>((ref) {
   final boot = ref.read(bootstrapProvider.notifier);
   if (!boot.bootStarted) return Future<void>.value();
-  // ONLY a real session releases the gate (issue #21): the boot's first
-  // verdict may be `degraded`, which means no app and no token, and
-  // releasing on that verdict would fire the unauthenticated read again.
   return boot.sessionReady().timeout(sessionGateCap, onTimeout: () {});
 });
 
@@ -119,9 +117,9 @@ final sessionGateProvider = Provider<Future<void>>((ref) {
 class BootstrapController extends Notifier<BootstrapStatus> {
   Completer<BootstrapStatus>? _done;
 
-  /// Completes the first time an anonymous session is held (issue #18):
-  /// screens gate their first Firestore read on [sessionReady] so a
-  /// cold-start read never races the boot's sign-in.
+  /// Completes the first time Firebase is initialized and its endpoints are
+  /// wired (issue #18, re-scoped by CHG-0003): the start-shift flow gates its
+  /// bind call and its first read on [sessionReady] so neither races boot.
   Completer<void>? _sessionReady;
 
   @override
@@ -132,8 +130,8 @@ class BootstrapController extends Notifier<BootstrapStatus> {
   /// immediately instead of waiting for a session that will never come.
   bool get bootStarted => _running;
 
-  /// Completes when an anonymous session exists; immediately when this
-  /// container is already [BootstrapReady] (a warm boot).
+  /// Completes when Firebase is up; immediately when this container is
+  /// already [BootstrapReady] (a warm boot).
   Future<void> sessionReady() {
     if (state is BootstrapReady) return Future<void>.value();
     return (_sessionReady ??= Completer<void>()).future;
@@ -156,7 +154,7 @@ class BootstrapController extends Notifier<BootstrapStatus> {
       attempt++;
       try {
         await _runOnce(progress, effectiveBackend);
-        state = BootstrapStatus.ready(anonymousUid: progress.anonymousUid!);
+        state = BootstrapStatus.ready(uid: progress.uid);
         break;
       } catch (error, stackTrace) {
         state = BootstrapStatus.degraded(error: error);
@@ -194,11 +192,6 @@ class BootstrapController extends Notifier<BootstrapStatus> {
   Future<FirebaseApp> Function(FirebaseBackend backend) initializeApp =
       _defaultInitializeApp;
 
-  /// Anonymous sign-in (Auth platform channel).
-  @visibleForTesting
-  Future<String> Function(FirebaseApp app) signInAnonymously =
-      _defaultSignInAnonymously;
-
   /// FCM gateway; production uses [FirebaseMessagingGateway].
   @visibleForTesting
   MessagingGateway messagingGateway = const FirebaseMessagingGateway();
@@ -209,19 +202,19 @@ class BootstrapController extends Notifier<BootstrapStatus> {
     // 2. Firebase core — with the two-engine "already exists" adopt fix
     //    (see [_initializeFirebaseApp]).
     progress.app ??= await _initializeFirebaseApp(backend);
-    // 3. Emulator wiring (before any Firestore/Auth use).
+    // A relaunch keeps Firebase Auth's persisted session: report it, and let
+    // the start-shift flow re-bind if the token is old (CHG-0003).
+    progress.uid ??= FirebaseAuth.instanceFor(app: progress.app!).currentUser?.uid;
+    // 3. Emulator wiring (before any Firestore/Auth/Functions use).
     if (!progress.emulatorsWired && backend == FirebaseBackend.emulatorSuite) {
       _wireEmulators(progress.app!);
       progress.emulatorsWired = true;
     }
-    // 4. Anonymous session at launch.
-    progress.anonymousUid ??= await signInAnonymously(progress.app!);
-    // Release the first-read gate (issues #18/#21) the moment the session
-    // exists: Firestore needs the token, not FCM, so the driver never waits
-    // on the messaging round trip.
+    // Release the first-use gate (issue #18) the moment Firebase is up: the
+    // start-shift flow binds and reads after this, never before.
     final session = _sessionReady;
     if (session != null && !session.isCompleted) session.complete();
-    // 5. FCM: init + one-time topic `all` subscription.
+    // 4. FCM: init + one-time topic `all` subscription.
     if (!progress.messagingReady) {
       await messagingGateway.init();
       progress.messagingReady = true;
@@ -276,7 +269,7 @@ final class _BootProgress {
   FlagBox? flagBox;
   FirebaseApp? app;
   bool emulatorsWired = false;
-  String? anonymousUid;
+  String? uid;
   bool messagingReady = false;
   bool allSubscribed = false;
 }
@@ -288,19 +281,6 @@ Future<FirebaseApp> _defaultInitializeApp(FirebaseBackend backend) =>
       name: defaultFirebaseAppName,
       options: firebaseOptions(backend),
     );
-
-/// Real anonymous sign-in behind [BootstrapController.signInAnonymously]
-/// (Auth platform channel — moved out of the controller so tests can inject
-/// a double).
-Future<String> _defaultSignInAnonymously(FirebaseApp app) async {
-  final credential =
-      await FirebaseAuth.instanceFor(app: app).signInAnonymously();
-  final user = credential.user;
-  if (user == null) {
-    throw StateError('signInAnonymously returned no user (Ticket 02)');
-  }
-  return user.uid;
-}
 
 /// Boot wiring entry point. Fire-and-forget from `main()` — never throws
 /// (Ticket 02); UI observes [bootstrapProvider] / awaits `done()`.
@@ -348,18 +328,20 @@ Duration bootstrapRetryDelay(int attempt) =>
 // Emulator wiring
 // ---------------------------------------------------------------------------
 
-/// Points Firestore/Auth at the local Emulator Suite (Ticket 02, PRD-2
-/// 0.10). Ports 8080 (Firestore) and 9099 (Auth) per Ticket 02; host via
-/// [kFirebaseEmulatorHost].
+/// Points Firestore/Auth/Functions at the local Emulator Suite (Ticket 02,
+/// PRD-2 0.10). Ports 8080 (Firestore), 9099 (Auth) and 5001 (Functions) per
+/// Ticket 02; host via [kFirebaseEmulatorHost].
 ///
-/// Cloud Functions (port 5001) is wired in [_wireEmulators]; the old
-/// `verifyDriverPin` callable is DELETED from the app (0.16 code login; the
-/// Function itself stays deployed until the backend sweep).
+/// Cloud Functions joins the same suite: the driver app calls the platform's
+/// session and shift callables, so the Functions emulator has to be reachable
+/// on the same host as Firestore and Auth.
 void _wireEmulators(FirebaseApp app) {
   FirebaseFirestore.instanceFor(app: app)
       .useFirestoreEmulator(kFirebaseEmulatorHost, kFirestoreEmulatorPort);
   FirebaseAuth.instanceFor(app: app)
       .useAuthEmulator(kFirebaseEmulatorHost, kAuthEmulatorPort);
+  FirebaseFunctions.instanceFor(app: app)
+      .useFunctionsEmulator(kFirebaseEmulatorHost, kFunctionsEmulatorPort);
 }
 
 // ---------------------------------------------------------------------------

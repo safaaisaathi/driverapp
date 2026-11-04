@@ -25,7 +25,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/identity/driver_identity_controller.dart';
-import '../../../core/models/driver.dart' show maskDriverPhone;import '../../../core/theme/app_colors.dart';
+import '../../../core/contract/reason_codes.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text.dart';
 import '../../../core/theme/app_tokens.dart';
 import '../../../features/tracking/tracking_providers.dart'
@@ -229,6 +230,7 @@ class _CodeStartHostState extends ConsumerState<_CodeStartHost> {
       case IdentityFlowPhase.startFailed:
       case IdentityFlowPhase.notFound:
       case IdentityFlowPhase.lookupFailed:
+      case IdentityFlowPhase.accessFailed:
         // A search landed: drop focus (the demo asked for the boxes out of
         // focus after the search) and hand the CTA to the result action.
         _setEditing(false);
@@ -422,6 +424,8 @@ class _CodeStartHostState extends ConsumerState<_CodeStartHost> {
                         IdentityFlowPhase.notFound => const _NotFoundState(),
                         IdentityFlowPhase.lookupFailed =>
                           const _LookupFailedState(),
+                        IdentityFlowPhase.accessFailed =>
+                          _AccessFailedState(reason: flow.reason),
                         IdentityFlowPhase.confirmReady ||
                         IdentityFlowPhase.starting ||
                         IdentityFlowPhase.startFailed =>
@@ -741,7 +745,9 @@ class _ConfirmCard extends StatelessWidget {
           _ConfirmRow(
             icon: Icons.call_outlined,
             label: l10n.identityFieldPhone,
-            value: maskDriverPhone(driver.phone),
+            // CHG-0002: the server masks the number at the source
+            // (98XXXXXX10). The app never reads the raw phone.
+            value: driver.phoneMasked,
           ),
           if (flow.phase == IdentityFlowPhase.startFailed) ...[
             const SizedBox(height: AppSpace.md),
@@ -753,7 +759,7 @@ class _ConfirmCard extends StatelessWidget {
                 const SizedBox(width: AppSpace.xs),
                 Flexible(
                   child: Text(
-                    l10n.shiftStartFailed,
+                    _startFailureText(l10n, flow.reason),
                     style: text.bodySmall.copyWith(color: colors.error),
                   ),
                 ),
@@ -889,7 +895,7 @@ class _WelcomeCard extends StatelessWidget {
           // The failure copy lives INSIDE the card (issue #19): the ruling
           // is "the welcome card itself carries the error", including the
           // title the driver reported ("Couldn't check the code").
-          _WelcomeErrorBlock(phase: flow.phase),
+          _WelcomeErrorBlock(phase: flow.phase, reason: flow.reason),
         ],
       ),
     );
@@ -900,18 +906,23 @@ class _WelcomeCard extends StatelessWidget {
 /// error tint, keyed by the same `d1-*` seam the standalone error states
 /// use. Renders nothing outside the failure phases.
 class _WelcomeErrorBlock extends StatelessWidget {
-  const _WelcomeErrorBlock({required this.phase});
+  const _WelcomeErrorBlock({required this.phase, this.reason});
 
   final IdentityFlowPhase phase;
+
+  /// The refusal code for [IdentityFlowPhase.accessFailed] and
+  /// [IdentityFlowPhase.startFailed]; the words come from [failureCopy].
+  final ReasonCode? reason;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final colors = context.colors;
     final text = context.text;
+    final refusal = failureCopy(l10n, reason);
     // (key, title, body): a saved-but-unusable code reads like an unknown
     // one; the start failure keeps the single-sentence treatment the
-    // confirm card uses.
+    // confirm card uses unless the server named a reason.
     final (String key, String? title, String body) = switch (phase) {
       IdentityFlowPhase.lookupFailed => (
           'd1-lookup-failed',
@@ -928,7 +939,18 @@ class _WelcomeErrorBlock extends StatelessWidget {
           l10n.identityNotFoundTitle,
           l10n.identityNotFoundBody,
         ),
-      IdentityFlowPhase.startFailed => ('d1-start-error', null, l10n.shiftStartFailed),
+      IdentityFlowPhase.accessFailed => (
+          'd1-access-failed',
+          refusal.title ?? l10n.identityLookupFailedTitle,
+          refusal.title == null
+              ? l10n.identityLookupFailedBody
+              : refusal.body,
+        ),
+      IdentityFlowPhase.startFailed => (
+          'd1-start-error',
+          refusal.title,
+          refusal.title == null ? l10n.shiftStartFailed : refusal.body,
+        ),
       _ => ('', null, ''),
     };
     if (key.isEmpty) return const SizedBox.shrink();
@@ -952,7 +974,7 @@ class _WelcomeErrorBlock extends StatelessWidget {
               ),
             ],
           ),
-          if (title != null) ...[
+          if (title != null && body.isNotEmpty) ...[
             const SizedBox(height: AppSpace.xs),
             Text(
               body,
@@ -998,6 +1020,64 @@ class _ChangeCodeLink extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The driver-facing words for a refusal code (the app owns the words,
+/// `errors.json`). A null title means "this build has no specific copy", so
+/// the caller falls back to its generic line. A null/empty body means the
+/// message is one sentence.
+({String? title, String body}) failureCopy(
+  AppLocalizations l10n,
+  ReasonCode? code,
+) =>
+    switch (code) {
+      ReasonCode.vanAlreadyClaimed =>
+        (title: l10n.identityShiftConflictClaimed, body: ''),
+      ReasonCode.vanHeldByAnotherDriver =>
+        (title: l10n.identityShiftConflictOtherDriver, body: ''),
+      ReasonCode.staleMarker =>
+        (title: l10n.identityShiftConflictStaleMarker, body: ''),
+      ReasonCode.rateLimited => (
+          title: l10n.identityRateLimitedTitle,
+          body: l10n.identityRateLimitedBody,
+        ),
+      ReasonCode.notAuthorised => (
+          title: l10n.identityNotAuthorisedTitle,
+          body: l10n.identityNotAuthorisedBody,
+        ),
+      ReasonCode.invalidState => (
+          title: l10n.identityShiftClosedTitle,
+          body: l10n.identityShiftClosedBody,
+        ),
+      _ => (title: null, body: ''),
+    };
+
+/// One line for the confirm card's start error.
+String _startFailureText(AppLocalizations l10n, ReasonCode? reason) {
+  final copy = failureCopy(l10n, reason);
+  if (copy.title != null) return copy.title!;
+  return l10n.shiftStartFailed;
+}
+
+/// The bind was refused (another phone holds the van, too many attempts,
+/// not authorised): same blocking-error treatment as not-found, with the
+/// code's own words.
+class _AccessFailedState extends StatelessWidget {
+  const _AccessFailedState({this.reason});
+
+  final ReasonCode? reason;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final copy = failureCopy(l10n, reason);
+    return _IdentityErrorState(
+      stateKey: 'd1-access-failed',
+      icon: Icons.lock_outline,
+      title: copy.title ?? l10n.identityLookupFailedTitle,
+      body: copy.title == null ? l10n.identityLookupFailedBody : copy.body,
     );
   }
 }
@@ -1132,11 +1212,14 @@ class _CtaBar extends StatelessWidget {
       switch (flow.phase) {
         case IdentityFlowPhase.lookupFailed:
         case IdentityFlowPhase.notFound:
+        case IdentityFlowPhase.accessFailed:
           onPressed = () => _flowOf(context).retry();
           label = l10n.retry;
-          ctaKey = flow.phase == IdentityFlowPhase.notFound
-              ? 'd1-not-found-retry'
-              : 'd1-lookup-failed-retry';
+          ctaKey = switch (flow.phase) {
+            IdentityFlowPhase.notFound => 'd1-not-found-retry',
+            IdentityFlowPhase.accessFailed => 'd1-access-failed-retry',
+            _ => 'd1-lookup-failed-retry',
+          };
         case IdentityFlowPhase.confirmReady:
         case IdentityFlowPhase.startFailed:
           // The welcome start IS the confirm-card start (same flow start()).
@@ -1174,6 +1257,7 @@ class _CtaBar extends StatelessWidget {
           }
         case IdentityFlowPhase.notFound:
         case IdentityFlowPhase.lookupFailed:
+        case IdentityFlowPhase.accessFailed:
           // A box-tap edit on a manual failure: a typed code submits
           // through Continue; otherwise the retry of the failed code.
           if (editing && codeText().trim().isNotEmpty) {
@@ -1186,9 +1270,11 @@ class _CtaBar extends StatelessWidget {
           } else {
             onPressed = () => _flowOf(context).retry();
             label = l10n.retry;
-            ctaKey = flow.phase == IdentityFlowPhase.notFound
-                ? 'd1-not-found-retry'
-                : 'd1-lookup-failed-retry';
+            ctaKey = switch (flow.phase) {
+              IdentityFlowPhase.notFound => 'd1-not-found-retry',
+              IdentityFlowPhase.accessFailed => 'd1-access-failed-retry',
+              _ => 'd1-lookup-failed-retry',
+            };
           }
         case IdentityFlowPhase.initial:
         case IdentityFlowPhase.invalidCode:

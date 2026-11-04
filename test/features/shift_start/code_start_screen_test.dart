@@ -8,6 +8,9 @@
 library;
 
 import 'package:driverapp/core/identity/driver_identity_controller.dart';
+import 'package:driverapp/core/contract/gateway_providers.dart';
+import 'package:driverapp/core/identity/install_id.dart';
+import 'package:driverapp/core/contract/shift_gateway.dart';
 import 'package:driverapp/core/l10n/app_localizations.dart';
 import 'package:driverapp/core/models/models.dart';
 import 'package:driverapp/core/repositories/repositories.dart';
@@ -171,6 +174,9 @@ class RecordingTrackingEngine implements TrackingEngine {
       );
 
   @override
+  bool get mockLocationLatched => false;
+
+  @override
   Future<TrackingStartResult> start({
     required String tripId,
     required String vanId,
@@ -213,36 +219,48 @@ final class _LookupFailed implements Exception {
   const _LookupFailed();
 }
 
-class FailingCreateTripsRepository extends FakeTripsRepository {
-  bool fail = true;
-
-  @override
-  Future<Trip> createTrip(Trip trip) async {
-    if (fail) throw const _CreateTripFailed();
-    return super.createTrip(trip);
-  }
-}
-
-final class _CreateTripFailed implements Exception {
-  const _CreateTripFailed();
-}
-
 // -- harness -----------------------------------------------------------------
 
 Future<ProviderContainer> pumpScreen(
   WidgetTester tester, {
   required DriversRepository driversRepo,
   required FakeVansRepository vans,
-  required TripsRepository trips,
+  required FakeTripsRepository trips,
+  FakeDriverSessionGateway? sessionGateway,
+  FakeShiftGateway? shiftGateway,
+  Iterable<Driver>? gatewayDrivers,
   InMemoryDriverIdentityStore? identityStore,
   void Function(BuildContext context)? onShiftStarted,
   RoutesRepository? routesRepo,
 }) async {
+  final gateway = shiftGateway ??
+      FakeShiftGateway(
+        trips: trips,
+        vans: vans,
+        drivers: gatewayDrivers ?? [sampleDriver(), otherDriver()],
+        routeWardIds: {
+          'route-driver': const ['ward-01', 'ward-02'],
+          'route-01': const ['ward-01', 'ward-02'],
+        },
+      );
   final container = ProviderContainer(
     overrides: [
       driversRepositoryProvider.overrideWithValue(driversRepo),
+      installIdStoreProvider.overrideWithValue(FakeInstallIdStore()),
       vansRepositoryProvider.overrideWithValue(vans),
       tripsRepositoryProvider.overrideWithValue(trips),
+      shiftGatewayProvider.overrideWithValue(gateway),
+      driverSessionGatewayProvider.overrideWithValue(
+        sessionGateway ??
+            FakeDriverSessionGateway(
+              bindingFor: (code) => DriverBinding(
+                token: 'bind-$code',
+                vanId: 'van-01',
+                driverId: code,
+                claimMode: 'firstClaim',
+              ),
+            ),
+      ),
       // Ruling #28: the welcome card resolves the route name at lookup
       // time; the fake keeps that read off Firestore.
       routesRepositoryProvider.overrideWithValue(
@@ -418,7 +436,8 @@ void main() {
     expect(session!.vanId, 'van-01');
     final trip = trips.trips.values.single;
     expect(trip.vanId, 'van-01');
-    expect(trip.routeId, 'route-van', reason: 'routeId comes from the van');
+    expect(trip.routeId, 'route-driver',
+        reason: 'the server takes routeId from the driver doc');
     expect(session.tripId, trip.id);
 
     // Van marker writes + topic subscription (0.13 / 0.6.6).
@@ -479,15 +498,25 @@ void main() {
     expect(find.text(enDriverName), findsOneWidget);
   });
 
-  testWidgets('start write failure: localized error, the CTA stays '
-      'available and retry starts once the write succeeds', (tester) async {
-    final trips = FailingCreateTripsRepository();
+  testWidgets('start call failure: localized error, the CTA stays '
+      'available and retry starts once the call succeeds', (tester) async {
+    final trips = FakeTripsRepository();
+    final vans = FakeVansRepository([sampleVan()]);
+    final gateway = FakeShiftGateway(
+      trips: trips,
+      vans: vans,
+      drivers: [sampleDriver()],
+      routeWardIds: {
+        'route-driver': const ['ward-01', 'ward-02'],
+      },
+    )..startFailuresRemaining = 1;
     var navigated = false;
     await pumpScreen(
       tester,
       driversRepo: FakeDriversRepository([sampleDriver()]),
-      vans: FakeVansRepository([sampleVan()]),
+      vans: vans,
       trips: trips,
+      shiftGateway: gateway,
       onShiftStarted: (_) => navigated = true,
     );
 
@@ -495,9 +524,8 @@ void main() {
     await pumpUntil(tester, find.byKey(const ValueKey('d1-confirm-card')));
     await tester.tap(find.byKey(const ValueKey('d1-confirm-start')));
     await pumpUntil(tester, find.text(enStartFailed));
-    expect(trips.trips, isEmpty, reason: 'the failed write created no doc');
+    expect(trips.trips, isEmpty, reason: 'the failed call created no doc');
 
-    trips.fail = false;
     await tester.tap(
       find.byKey(const ValueKey('d1-confirm-start')).hitTestable(),
     );
@@ -1003,13 +1031,23 @@ void main() {
 
   testWidgets('welcome start failure keeps the card with the start error '
       'inside and retries the start (issue #19)', (tester) async {
-    final trips = FailingCreateTripsRepository();
+    final trips = FakeTripsRepository();
+    final vans = FakeVansRepository([sampleVan()]);
+    final gateway = FakeShiftGateway(
+      trips: trips,
+      vans: vans,
+      drivers: [sampleDriver()],
+      routeWardIds: {
+        'route-driver': const ['ward-01', 'ward-02'],
+      },
+    )..startFailuresRemaining = 1;
     var navigated = false;
     await pumpScreen(
       tester,
       driversRepo: FakeDriversRepository([sampleDriver()]),
-      vans: FakeVansRepository([sampleVan()]),
+      vans: vans,
       trips: trips,
+      shiftGateway: gateway,
       identityStore: returningStore('AB-1234'),
       onShiftStarted: (_) => navigated = true,
     );
@@ -1024,8 +1062,7 @@ void main() {
     expect(find.byKey(const ValueKey('d1-code-field')), findsNothing);
     expect(find.byKey(const ValueKey('d1-welcome-start')), findsOneWidget);
 
-    // The write goes through: the same pill retries the start.
-    trips.fail = false;
+    // The call goes through: the same pill retries the start.
     await tester.tap(find.byKey(const ValueKey('d1-welcome-start')));
     await pumpUntilCondition(tester, () => navigated);
     expect(trips.trips, hasLength(1));
@@ -1061,7 +1098,8 @@ void main() {
     expect(session!.vanId, 'van-01');
     final trip = trips.trips.values.single;
     expect(trip.vanId, 'van-01');
-    expect(trip.routeId, 'route-van', reason: 'routeId comes from the van');
+    expect(trip.routeId, 'route-driver',
+        reason: 'the server takes routeId from the driver doc');
     expect(session.tripId, trip.id);
     expect(vans.vans['van-01']!.status, VanStatus.onShift);
     expect(vans.vans['van-01']!.currentTripId, trip.id);

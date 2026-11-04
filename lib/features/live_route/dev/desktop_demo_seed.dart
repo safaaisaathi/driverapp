@@ -23,6 +23,9 @@ library;
 
 import 'dart:async';
 
+import 'package:driverapp/core/contract/reason_codes.dart';
+import 'package:driverapp/core/contract/shift_gateway.dart';
+import 'package:driverapp/core/domain/ist_clock.dart';
 import 'package:driverapp/core/models/models.dart';
 import 'package:driverapp/core/repositories/repositories.dart';
 
@@ -161,7 +164,8 @@ class DevVansRepository implements VansRepository {
   @override
   Future<Van?> readVan(String vanId) async => _store(vanId).value;
 
-  @override
+  /// Dev-only server simulation: the shift callables own this field in the
+  /// real app (CHG-0003). Not part of [VansRepository].
   Future<void> updateCurrentTripId(String vanId, String? tripId) async {
     final van = _store(vanId).value!;
     _store(vanId).set(
@@ -211,13 +215,14 @@ class DevTripsRepository implements TripsRepository {
     mockLocationDetected: mockLocationDetected ?? trip.mockLocationDetected,
   );
 
-  @override
+  /// Dev-only server simulation: `startShift` creates the trip. Not part of
+  /// [TripsRepository] any more (CHG-0003).
   Future<Trip> createTrip(Trip trip) async {
     seedTrip(trip);
     return trip;
   }
 
-  @override
+  /// Dev-only server simulation: `markWardDone` appends the entry.
   Future<void> appendWardDone(String tripId, WardDone entry) async {
     final trip = _store(tripId).value!;
     _mutate(_withFields(trip, wardsDone: [...trip.wardsDone, entry]));
@@ -229,7 +234,7 @@ class DevTripsRepository implements TripsRepository {
     _mutate(_withFields(trip, gpsTrail: [...trip.gpsTrail, ...points]));
   }
 
-  @override
+  /// Dev-only server simulation: `endShift` stamps `endedAt`.
   Future<void> setEndedAt(String tripId, DateTime endedAt) async {
     final trip = _store(tripId).value!;
     _mutate(
@@ -250,7 +255,8 @@ class DevTripsRepository implements TripsRepository {
     );
   }
 
-  @override
+  /// Dev-only server simulation: the OFFICE sets the latch. The driver app
+  /// can no longer write it (CHG-0003).
   Future<void> setMockLocationDetected(
     String tripId, {
     required bool detected,
@@ -315,6 +321,137 @@ class DevTripsRepository implements TripsRepository {
 
   static bool _sameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
+}
+
+/// ---------------------------------------------------------------------------
+/// Callable seams (dev doubles)
+/// ---------------------------------------------------------------------------
+
+/// Desktop `bindDeviceToVan` + sign-in double: mints a fake token and binds
+/// the driver to the seeded van. Nothing leaves the process.
+class DevDriverSessionGateway implements DriverSessionGateway {
+  const DevDriverSessionGateway({required this.vanIdFor});
+
+  final String Function(String driverCode) vanIdFor;
+
+  @override
+  Future<DriverBinding> bindDeviceToVan({
+    required String driverCode,
+    required String installId,
+  }) async =>
+      DriverBinding(
+        token: 'dev-token-$driverCode',
+        vanId: vanIdFor(driverCode),
+        driverId: driverCode,
+        claimMode: 'firstClaim',
+      );
+
+  @override
+  Future<void> signInWithCustomToken(String token) async {}
+}
+
+/// Desktop `startShift` / `endShift` / `markWardDone` double: writes the same
+/// documents the server would, against the in-memory seed.
+class DevShiftGateway implements ShiftGateway {
+  DevShiftGateway({
+    required this.trips,
+    required this.vans,
+    required this.driverFor,
+    required this.routeWardIds,
+    DateTime Function()? clock,
+  }) : _clock = clock ?? DateTime.now;
+
+  final DevTripsRepository trips;
+
+  final DevVansRepository vans;
+
+  final Driver? Function(String driverId) driverFor;
+
+  final Map<String, List<String>> routeWardIds;
+
+  final DateTime Function() _clock;
+
+  int _counter = 0;
+
+  @override
+  Future<ShiftStartResult> startShift({
+    required String driverId,
+    required DateTime date,
+  }) async {
+    final driver = driverFor(driverId);
+    if (driver == null) throw const ContractException(ReasonCode.notFound);
+    final van = await vans.readVan(driver.vanId);
+    if (van == null) throw const ContractException(ReasonCode.notFound);
+
+    final marker = van.currentTripId;
+    if (marker != null && van.status == VanStatus.onShift) {
+      final open = await trips.readTrip(marker);
+      if (open == null) throw const ContractException(ReasonCode.staleMarker);
+      if (open.driverId != driverId) {
+        throw const ContractException(ReasonCode.vanHeldByAnotherDriver);
+      }
+      return ShiftStartResult(
+        token: 'dev-token-$driverId-$marker',
+        tripId: marker,
+        vanId: driver.vanId,
+      );
+    }
+
+    final now = _clock();
+    final tripId = 'dev-trip-${++_counter}';
+    await trips.createTrip(
+      Trip(
+        id: tripId,
+        vanId: driver.vanId,
+        routeId: driver.routeId,
+        driverId: driver.id,
+        wardIds: routeWardIds[driver.routeId] ?? driver.wardIds,
+        date: utcStartOfIstDay(now),
+        startedAt: now,
+        endedAt: null,
+        wardsDone: const <WardDone>[],
+        alertedWardIds: const <String>[],
+        gpsTrail: const <GpsPoint>[],
+        mockLocationDetected: false,
+      ),
+    );
+    await vans.updateCurrentTripId(driver.vanId, tripId);
+    await vans.updateStatus(driver.vanId, VanStatus.onShift);
+    return ShiftStartResult(
+      token: 'dev-token-$driverId-$tripId',
+      tripId: tripId,
+      vanId: driver.vanId,
+    );
+  }
+
+  @override
+  Future<DateTime> endShift(String tripId) async {
+    final trip = await trips.readTrip(tripId);
+    if (trip == null) throw const ContractException(ReasonCode.notFound);
+    final endedAt = _clock();
+    await trips.setEndedAt(tripId, endedAt);
+    final van = await vans.readVan(trip.vanId);
+    if (van != null && van.currentTripId == tripId) {
+      await vans.updateCurrentTripId(trip.vanId, null);
+      await vans.updateStatus(trip.vanId, VanStatus.idle);
+    }
+    return endedAt;
+  }
+
+  @override
+  Future<void> markWardDone({
+    required String tripId,
+    required String wardId,
+    required bool flagged,
+  }) async {
+    if (await trips.readTrip(tripId) == null) {
+      throw const ContractException(ReasonCode.notFound);
+    }
+    await trips.appendWardDone(
+      tripId,
+      WardDone(wardId: wardId, doneAt: _clock(), flagged: flagged),
+    );
+  }
 }
 
 /// ---------------------------------------------------------------------------

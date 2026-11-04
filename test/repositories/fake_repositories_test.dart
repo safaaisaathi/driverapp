@@ -87,22 +87,23 @@ void main() {
       repo = FakeTripsRepository([trip]);
     });
 
-    test('createTrip assigns a fresh contract id and stores the trip',
+    test('seedTrip stores a server-created trip (the app cannot create one)',
         () async {
-      final created = await repo.createTrip(trip);
-      expect(created.id, isNot('trip-01')); // fresh id, not the seed's
-      expect(created.id, isNotEmpty);
-      expect(created.vanId, 'van-01');
-      expect(created.routeId, 'route-01');
-      expect(repo.trips.containsKey(created.id), isTrue);
+      final created = Trip.fromMap({
+        ...tripDocMapOpen(id: 'trip-created'),
+        'driverId': 'AB-1234',
+      });
+      repo.seedTrip(created);
+      expect(repo.trips['trip-created'], created);
 
-      final second = await repo.createTrip(trip);
-      expect(second.id, isNot(created.id)); // resume-never-duplicate seam
+      final second = Trip.fromMap(tripDocMapOpen(id: 'trip-second'));
+      repo.seedTrip(second);
+      expect(repo.trips.keys, containsAll(['trip-created', 'trip-second']));
     });
 
     test('watchTripByVanIdAndDate streams the fresh trip through updates',
         () async {
-      final created = await repo.createTrip(trip);
+      final created = repo.trips.values.single;
       final events = <Trip?>[];
       final subscription = repo
           .watchTripByVanIdAndDate(vanId: 'van-01', date: DateTime(2026, 10, 20))
@@ -112,7 +113,7 @@ void main() {
       expect(events.single!.id, created.id);
       expect(events.single!.endedAt, isNull); // tripDocMapOpen shape
 
-      await repo.appendWardDone(
+      repo.appendWardDoneTo(
         created.id,
         WardDone(
           wardId: 'ward-02',
@@ -235,9 +236,10 @@ void main() {
       await subscription.cancel();
     });
 
-    test('appendWardDone appends in order and keeps flagged semantics', () async {
-      final created = await repo.createTrip(trip);
-      await repo.appendWardDone(
+    test('appendWardDoneTo appends in order and keeps flagged semantics',
+        () async {
+      final created = repo.trips.values.single;
+      repo.appendWardDoneTo(
         created.id,
         WardDone(
           wardId: 'ward-02',
@@ -256,37 +258,53 @@ void main() {
           flagged: true,
         ),
       );
-
-      await repo.appendGpsTrail(
-        created.id,
-        [
-          GpsPoint(lat: 22.7759, lng: 73.7092, t: DateTime(2026, 10, 20, 9, 6)),
-        ],
-      );
-      expect(repo.trips[created.id]!.gpsTrail, hasLength(3));
-      expect(
-        repo.trips[created.id]!.gpsTrail.last,
-        GpsPoint(lat: 22.7759, lng: 73.7092, t: DateTime(2026, 10, 20, 9, 6)),
-      );
     });
 
-    test('appendGpsTrail batches several points in one call', () async {
-      final created = await repo.createTrip(trip);
+    test('appendGpsTrail writes contract trail chunks, never gpsTrail', () async {
+      final created = repo.trips.values.single;
       final points = [
         GpsPoint(lat: 22.7759, lng: 73.7092, t: DateTime(2026, 10, 20, 9, 6)),
         GpsPoint(lat: 22.7761, lng: 73.7094, t: DateTime(2026, 10, 20, 9, 7)),
       ];
       await repo.appendGpsTrail(created.id, points);
-      final stored = repo.trips[created.id]!.gpsTrail;
-      expect(stored, hasLength(4)); // 2 seeded by tripDocMapOpen + batch of 2
-      expect(stored.skip(2).map((point) => point.t), points.map((point) => point.t));
+
+      final chunks = repo.trailChunks[created.id]!;
+      expect(chunks, hasLength(1));
+      expect(chunks.single.from, 0);
+      expect(chunks.single.to, 2);
+      expect(chunks.single.points, points);
+      // The aggregate is a TEST convenience only; the real repo writes chunks.
+      expect(repo.trips[created.id]!.gpsTrail, hasLength(4));
     });
 
-    test('setEndedAt / setMockLocationDetected update the trip doc', () async {
-      final created = await repo.createTrip(trip);
+    test('appendGpsTrail splits at the 1000-point chunk cap', () async {
+      final created = repo.trips.values.single;
+      final points = List<GpsPoint>.generate(
+        1001,
+        (index) => GpsPoint(
+          lat: 22.77 + index / 100000,
+          lng: 73.71,
+          t: DateTime(2026, 10, 20, 9).add(Duration(seconds: index)),
+        ),
+      );
+
+      await repo.appendGpsTrail(created.id, points);
+
+      final chunks = repo.trailChunks[created.id]!;
+      expect(chunks, hasLength(2));
+      expect(chunks[0].points, hasLength(1000));
+      expect(chunks[0].to, 1000);
+      expect(chunks[1].points, hasLength(1));
+      expect(chunks[1].from, 1000);
+      expect(chunks[1].to, 1001);
+    });
+
+    test('server-sim helpers stamp endedAt and the mock-location latch',
+        () async {
+      final created = repo.trips.values.single;
       final end = DateTime(2026, 10, 20, 13, 30);
-      await repo.setEndedAt(created.id, end);
-      await repo.setMockLocationDetected(created.id, detected: true);
+      repo.markEnded(created.id, end);
+      repo.setMockLocationDetected(created.id, detected: true);
 
       final stored = repo.trips[created.id]!;
       expect(stored.endedAt, end);
@@ -294,7 +312,6 @@ void main() {
     });
 
     test('watchTripByVanIdAndDate ignores other vans and other days', () async {
-      await repo.createTrip(trip);
       final otherVan = await repo
           .watchTripByVanIdAndDate(vanId: 'van-99', date: DateTime(2026, 10, 20))
           .first;

@@ -7,6 +7,7 @@ library;
 
 import 'dart:async';
 
+import 'package:driverapp/core/contract/gateway_providers.dart';
 import 'package:driverapp/core/l10n/app_localizations.dart';
 import 'package:driverapp/core/models/models.dart';
 import 'package:driverapp/core/repositories/repositories.dart';
@@ -83,10 +84,6 @@ class CountingVansRepository implements VansRepository {
   // Seams added by the ticket-10 merge (interface grew) — forward through.
   @override
   Future<Van?> readVan(String vanId) => inner.readVan(vanId);
-
-  @override
-  Future<void> updateCurrentTripId(String vanId, String? tripId) =>
-      inner.updateCurrentTripId(vanId, tripId);
 }
 
 /// A vans repository that only errors — drives the error state. Emits null
@@ -105,10 +102,6 @@ class ThrowingVansRepository implements VansRepository {
   // Seams added by the ticket-10 merge — this fake is error-first everywhere.
   @override
   Future<Van?> readVan(String vanId) async => throw Exception('down');
-
-  @override
-  Future<void> updateCurrentTripId(String vanId, String? tripId) async =>
-      throw Exception('down');
 
   @override
   Future<void> updateLastLocation({
@@ -525,14 +518,15 @@ void main() {
   );
 
   testWidgets(
-    'trip stream: appendWardDone through the fake ticks the ward list',
+    'trip stream: the markWardDone callable ticks the ward list',
     (tester) async {
       final trips = FakeTripsRepository([]); // no trip at first → nothing done.
+      final vans = FakeVansRepository([van(updatedAt: now)]);
+      final gateway = FakeShiftGateway(trips: trips, vans: vans);
       await pumpScreen(tester, [
-        vansRepositoryProvider.overrideWithValue(
-          FakeVansRepository([van(updatedAt: now)]),
-        ),
+        vansRepositoryProvider.overrideWithValue(vans),
         tripsRepositoryProvider.overrideWithValue(trips),
+        shiftGatewayProvider.overrideWithValue(gateway),
         wardsRepositoryProvider.overrideWithValue(
           FakeWardsRepository([wardA, wardB, wardC]),
         ),
@@ -554,12 +548,15 @@ void main() {
       // No done ticks yet.
       expect(find.byKey(const Key('liveRoute.doneTick.wa')), findsNothing);
 
-      final created = await trips.createTrip(tripFrom([]));
+      // The server creates the trip and records the mark; the app only sees
+      // the stream re-emission (CHG-0003).
+      trips.seedTrip(tripFrom([]));
       await settle(tester);
       await tester.runAsync(
-        () => trips.appendWardDone(
-          created.id,
-          WardDone(wardId: 'wa', doneAt: now, flagged: false),
+        () => gateway.markWardDone(
+          tripId: 'trip-1',
+          wardId: 'wa',
+          flagged: false,
         ),
       );
       await settle(tester);

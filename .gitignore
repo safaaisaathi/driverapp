@@ -55,6 +55,6 @@ android/app/google-services.json
 devtools_options.yaml
 android/build/
 
-# Cloud Functions: build artifacts + deps never committed
-functions/node_modules/
-functions/lib/
+# Dev scripts' deps never committed (the app has no backend copy: CHG-0006,
+# CHG-0009; scripts/ is a local read/write tool run with a service account).
+scripts/node_modules/

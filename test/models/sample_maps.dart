@@ -126,7 +126,7 @@ Map<String, Object?> complaintDocMap({String id = 'complaint-01'}) => {
 Map<String, Object?> driverDocMap({String id = 'AB-1234'}) => {
       'id': id,
       'name': 'Ramesh Patel',
-      'phone': '9876543210',
+      'phoneMasked': '98XXXXXX10',
       'vanId': 'van-01',
       'routeId': 'route-01',
       'wardIds': <String>['ward-01', 'ward-02'],

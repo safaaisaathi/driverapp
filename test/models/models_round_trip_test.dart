@@ -259,9 +259,18 @@ void main() {
     });
 
     test('complaint.status', () {
+      // CHG-0010 widened the set with the cross-verification loop.
       expect(
         ComplaintStatus.values.map((value) => value.value),
-        const ['received', 'assigned', 'resolved', 'escalated'],
+        const [
+          'received',
+          'assigned',
+          'resolved',
+          'escalated',
+          'pending_verification',
+          'auto_resolved',
+          'reopened',
+        ],
       );
     });
 

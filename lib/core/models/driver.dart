@@ -16,33 +16,21 @@ String? normalizeDriverCode(String raw) {
 
 final RegExp _driverCodePattern = RegExp(r'^[A-Z]{2}-[0-9]{4}$');
 
-/// Confirm-card display form of the driver's phone (0.16): strips a
-/// leading `+91` country code and shows only the first 2 and last 2
-/// digits, e.g. `9876543210` → `98XXXXXX10` (the X count mirrors the real
-/// length). Anything that keeps fewer than 4 digits after stripping is
-/// returned trimmed but unmasked — the office seeds the phone, and a
-/// broken value must never throw on screen.
-String maskDriverPhone(String phone) {
-  final trimmed = phone.trim();
-  final withoutCountryCode = trimmed.startsWith('+91')
-      ? trimmed.substring(3)
-      : trimmed;
-  if (withoutCountryCode.length < 4) return trimmed;
-  return '${withoutCountryCode.substring(0, 2)}'
-      '${'X' * (withoutCountryCode.length - 4)}'
-      '${withoutCountryCode.substring(withoutCountryCode.length - 2)}';
-}
-
-/// The `drivers` collection (0.16): doc id = the normalized driver code
-/// `AB-1234` (regex `^[A-Z]{2}-[0-9]{4}$`). Fields: name, phone, vanId,
-/// routeId, wardIds (one or more), active. Writes are admin-only; the app
-/// only reads.
+/// The `drivers` collection (0.16, CHG-0002): doc id = the normalized driver
+/// code `AB-1234` (regex `^[A-Z]{2}-[0-9]{4}$`). Fields: name, phoneMasked,
+/// vanId, routeId, wardIds (one or more), active. Writes are admin-only; the
+/// app only reads.
+///
+/// `phoneMasked` is MASKED AT THE SOURCE by the admin callable
+/// (`98XXXXXX10`). The app never reads a raw phone: that value lives in
+/// `staffPhones/{code}`, which only the district office may read. The mask is
+/// not re-applied here, because re-masking a masked value would corrupt it.
 class Driver {
   final String id;
 
   final String name;
 
-  final String phone;
+  final String phoneMasked;
 
   final String vanId;
 
@@ -57,7 +45,7 @@ class Driver {
   const Driver({
     required this.id,
     required this.name,
-    required this.phone,
+    required this.phoneMasked,
     required this.vanId,
     required this.routeId,
     required this.wardIds,
@@ -72,7 +60,7 @@ class Driver {
     return Driver(
       id: map['id'] as String,
       name: map['name'] as String,
-      phone: map['phone'] as String,
+      phoneMasked: map['phoneMasked'] as String,
       vanId: map['vanId'] as String,
       routeId: map['routeId'] as String,
       wardIds:
@@ -85,7 +73,7 @@ class Driver {
   Map<String, Object?> toMap() => {
         'id': id,
         'name': name,
-        'phone': phone,
+        'phoneMasked': phoneMasked,
         'vanId': vanId,
         'routeId': routeId,
         'wardIds': wardIds,
@@ -98,7 +86,7 @@ class Driver {
       other.runtimeType == runtimeType &&
       other.id == id &&
       other.name == name &&
-      other.phone == phone &&
+      other.phoneMasked == phoneMasked &&
       other.vanId == vanId &&
       other.routeId == routeId &&
       _listEquals(other.wardIds, wardIds) &&
@@ -109,7 +97,7 @@ class Driver {
         runtimeType,
         id,
         name,
-        phone,
+        phoneMasked,
         vanId,
         routeId,
         wardIds,

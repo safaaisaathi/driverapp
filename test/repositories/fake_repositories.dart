@@ -1,21 +1,30 @@
 import 'dart:async';
 
+import 'package:driverapp/core/contract/reason_codes.dart';
+import 'package:driverapp/core/contract/shift_gateway.dart';
 import 'package:driverapp/core/domain/ist_clock.dart';
+import 'package:driverapp/core/identity/install_id.dart';
 import 'package:driverapp/core/models/models.dart';
 import 'package:driverapp/core/repositories/repositories.dart';
 
-/// In-memory implementations of the seven repository interfaces (spec seam 1).
+/// In-memory implementations of the repository interfaces (spec seam 1) plus
+/// the two callable seams (CHG-0003).
 ///
 /// Feature tests override the provider wiring with these:
 ///
 /// ```dart
 /// vansRepositoryProvider.overrideWithValue(FakeVansRepository(...))
+/// shiftGatewayProvider.overrideWithValue(FakeShiftGateway(...))
 /// ```
 ///
-/// Observable behavior mirrors the Firestore implementations (fresh doc id on
-/// create, createdAt-descending notice order, day-bounded complaint queries)
+/// Observable behavior mirrors the Firestore implementations (createdAt-
+/// descending notice order, day-bounded complaint queries, trail chunking)
 /// without any Firebase. Copies are made through `toMap` → `fromMap` so the
 /// fakes also keep exercising the model round-trip path.
+///
+/// The trip and shift writes are the SERVER's now: [FakeShiftGateway] plays
+/// that role against the same in-memory maps, so a flow test sees exactly
+/// what a real callable would leave behind.
 
 
 class FakeVansRepository implements VansRepository {
@@ -87,7 +96,8 @@ class FakeVansRepository implements VansRepository {
     _changes.add(null);
   }
 
-  @override
+  /// Test-only server simulation: `startShift`/`endShift` set and clear the
+  /// van's marker. Not part of [VansRepository] any more (CHG-0003).
   Future<void> updateCurrentTripId(String vanId, String? tripId) async {
     final data = _requireVan(vanId).toMap()..['currentTripId'] = tripId;
     vans[vanId] = Van.fromMap(data);
@@ -109,24 +119,21 @@ class FakeTripsRepository implements TripsRepository {
 
   final Map<String, Trip> trips;
 
+  /// Trail chunks per trip id, in write order (`trailChunk.schema.json`).
+  final Map<String, List<FakeTrailChunk>> trailChunks = {};
+
   final _changes = StreamController<void>.broadcast();
 
-  int _idCounter = 0;
-
-  @override
-  Future<Trip> createTrip(Trip trip) async {
-    final data = <String, Object?>{
-      ...trip.toMap(),
-      'id': 'trip-${_idCounter++}',
-    };
-    final created = Trip.fromMap(data);
-    trips[created.id] = created;
+  /// Test-only server simulation: `startShift` creates the trip and
+  /// `markWardDone` appends one entry. Not part of [TripsRepository] any
+  /// more (CHG-0003): the app cannot write a trip directly.
+  void seedTrip(Trip trip) {
+    trips[trip.id] = trip;
     _changes.add(null);
-    return created;
   }
 
-  @override
-  Future<void> appendWardDone(String tripId, WardDone entry) async {
+  /// Test-only server simulation: `markWardDone` appends the entry.
+  void appendWardDoneTo(String tripId, WardDone entry) {
     final data = _require(tripId).toMap();
     data['wardsDone'] = <Object?>[
       ...(data['wardsDone'] as List<Object?>? ?? const <Object?>[]),
@@ -136,32 +143,53 @@ class FakeTripsRepository implements TripsRepository {
     _changes.add(null);
   }
 
+  /// Test-only server simulation: `endShift` stamps `endedAt`.
+  void markEnded(String tripId, DateTime endedAt) {
+    final data = _require(tripId).toMap()
+      ..['endedAt'] = dateTimeToDocTime(endedAt);
+    trips[tripId] = Trip.fromMap(data);
+    _changes.add(null);
+  }
+
+  /// Test-only server simulation: the OFFICE (or a function) sets the
+  /// mock-location latch. The driver app itself can no longer write it
+  /// (CHG-0003; `trips` is server-owned).
+  void setMockLocationDetected(String tripId, {required bool detected}) {
+    final data = _require(tripId).toMap()
+      ..['mockLocationDetected'] = detected;
+    trips[tripId] = Trip.fromMap(data);
+    _changes.add(null);
+  }
+
   @override
   Future<void> appendGpsTrail(String tripId, List<GpsPoint> points) async {
+    if (points.isEmpty) return;
+    _require(tripId);
+    final chunks = trailChunks.putIfAbsent(tripId, () => []);
+    var cursor = chunks.isEmpty ? 0 : chunks.last.to;
+    for (var offset = 0; offset < points.length; offset += trailChunkMaxPoints) {
+      final end = offset + trailChunkMaxPoints;
+      final slice = points.sublist(
+        offset,
+        end > points.length ? points.length : end,
+      );
+      chunks.add(
+        FakeTrailChunk(
+          points: List.unmodifiable(slice),
+          from: cursor,
+          to: cursor + slice.length,
+        ),
+      );
+      cursor += slice.length;
+    }
+    // Test convenience only: the fake also keeps the legacy aggregate so
+    // trail assertions in engine tests stay readable. The real repository
+    // writes chunks and nothing else.
     final data = _require(tripId).toMap();
     data['gpsTrail'] = <Object?>[
       ...(data['gpsTrail'] as List<Object?>? ?? const <Object?>[]),
-      // Mirror FieldValue.arrayUnion: the whole batch appended in one write.
       ...points.map((point) => point.toMap()).cast<Object?>(),
     ];
-    trips[tripId] = Trip.fromMap(data);
-    _changes.add(null);
-  }
-
-  @override
-  Future<void> setEndedAt(String tripId, DateTime endedAt) async {
-    final data = _require(tripId).toMap()..['endedAt'] = dateTimeToDocTime(endedAt);
-    trips[tripId] = Trip.fromMap(data);
-    _changes.add(null);
-  }
-
-  @override
-  Future<void> setMockLocationDetected(
-    String tripId, {
-    required bool detected,
-  }) async {
-    final data = _require(tripId).toMap()
-      ..['mockLocationDetected'] = detected;
     trips[tripId] = Trip.fromMap(data);
     _changes.add(null);
   }
@@ -447,4 +475,245 @@ class FakeRoutesRepository implements RoutesRepository {
 
   @override
   Future<RouteModel?> readRoute(String routeId) async => routes[routeId];
+}
+
+/// One `trips/{tripId}/trail/{n}` chunk (`trailChunk.schema.json`).
+final class FakeTrailChunk {  const FakeTrailChunk({
+    required this.points,
+    required this.from,
+    required this.to,
+  });
+
+  final List<GpsPoint> points;
+
+  final int from;
+
+  final int to;
+}
+
+/// The `bindDeviceToVan` + custom-token sign-in seam (CHG-0003).
+///
+/// A bind failure is scripted with [bindErrors]/[bindFailuresRemaining]; a
+/// successful bind returns a token and the caller's binding.
+class FakeDriverSessionGateway implements DriverSessionGateway {
+  FakeDriverSessionGateway({this.bindingFor});
+
+  /// The binding the callable would mint. Defaults to `van-01` and the code
+  /// itself as the driver id.
+  final DriverBinding Function(String driverCode)? bindingFor;
+
+  final List<({String driverCode, String installId})> binds = [];
+
+  final List<String> signedInTokens = [];
+
+  ContractException? bindError;
+
+  ContractException? signInError;
+
+  int bindFailuresRemaining = 0;
+
+  @override
+  Future<DriverBinding> bindDeviceToVan({
+    required String driverCode,
+    required String installId,
+  }) async {
+    binds.add((driverCode: driverCode, installId: installId));
+    if (bindFailuresRemaining > 0) {
+      bindFailuresRemaining--;
+      throw const ContractException(ReasonCode.internal);
+    }
+    final error = bindError;
+    if (error != null) throw error;
+    return bindingFor?.call(driverCode) ??
+        DriverBinding(
+          token: 'token-$driverCode',
+          vanId: 'van-01',
+          driverId: driverCode,
+          claimMode: 'firstClaim',
+        );
+  }
+
+  @override
+  Future<void> signInWithCustomToken(String token) async {
+    signedInTokens.add(token);
+    final error = signInError;
+    if (error != null) throw error;
+  }
+}
+
+/// Emulates `startShift` / `endShift` / `markWardDone` against the in-memory
+/// maps. The behaviour mirrors the platform callables (transaction on the
+/// van marker, deterministic trip id, snapshot of the route's wards) so a
+/// flow test observes exactly the server's writes.
+class FakeShiftGateway implements ShiftGateway {
+  FakeShiftGateway({
+    required this.trips,
+    required this.vans,
+    Iterable<Driver>? drivers,
+    Map<String, List<String>>? routeWardIds,
+    DateTime Function()? clock,
+    String Function(String driverId)? tripIdFor,
+  })  : drivers = {
+          for (final driver in drivers ?? const <Driver>[]) driver.id: driver,
+        },
+        routeWardIds = routeWardIds ?? const {},
+        _clock = clock ?? DateTime.now,
+        _tripIdFor = tripIdFor; // ignore: prefer_initializing_formals
+
+  final FakeTripsRepository trips;
+
+  final FakeVansRepository vans;
+
+  final Map<String, Driver> drivers;
+
+  /// `routes/{routeId}.wardIds` snapshots, keyed by route id. Missing routes
+  /// fall back to the driver's allotment so a test can seed only one doc.
+  final Map<String, List<String>> routeWardIds;
+
+  final DateTime Function() _clock;
+
+  final String Function(String driverId)? _tripIdFor;
+
+  final List<({String driverId, DateTime date})> startCalls = [];
+
+  final List<String> endCalls = [];
+
+  final List<({String tripId, String wardId, bool flagged})> marks = [];
+
+  /// Scripted refusals/outages, checked before the emulated write.
+  ContractException? startError;
+
+  ContractException? endError;
+
+  ContractException? markError;
+
+  int startFailuresRemaining = 0;
+
+  int endFailuresRemaining = 0;
+
+  int markFailuresRemaining = 0;
+
+  @override
+  Future<ShiftStartResult> startShift({
+    required String driverId,
+    required DateTime date,
+  }) async {
+    startCalls.add((driverId: driverId, date: date));
+    if (startFailuresRemaining > 0) {
+      startFailuresRemaining--;
+      throw const ContractException(ReasonCode.internal);
+    }
+    final error = startError;
+    if (error != null) throw error;
+
+    final driver = drivers[driverId];
+    if (driver == null) throw const ContractException(ReasonCode.notFound);
+    final van = vans.vans[driver.vanId];
+    if (van == null) throw const ContractException(ReasonCode.notFound);
+
+    final marker = van.currentTripId;
+    if (marker != null && van.status == VanStatus.onShift) {
+      final open = trips.trips[marker];
+      if (open == null) throw const ContractException(ReasonCode.staleMarker);
+      if (open.driverId != driverId) {
+        throw const ContractException(ReasonCode.vanHeldByAnotherDriver);
+      }
+      if (open.vanId != driver.vanId) {
+        throw const ContractException(ReasonCode.staleMarker);
+      }
+      return ShiftStartResult(
+        token: 'token-$driverId-$marker',
+        tripId: marker,
+        vanId: driver.vanId,
+      );
+    }
+
+    final now = _clock();
+    final dayKey = todayIsoIST(now);
+    final tripId = _tripIdFor?.call(driverId) ?? '${driverId}_$dayKey';
+    final wardIds = routeWardIds[driver.routeId] ?? driver.wardIds;
+    trips.seedTrip(
+      Trip(
+        id: tripId,
+        vanId: driver.vanId,
+        routeId: driver.routeId,
+        driverId: driver.id,
+        wardIds: wardIds,
+        date: utcStartOfIstDay(now),
+        startedAt: now,
+        endedAt: null,
+        wardsDone: const <WardDone>[],
+        alertedWardIds: const <String>[],
+        gpsTrail: const <GpsPoint>[],
+        mockLocationDetected: false,
+      ),
+    );
+    await vans.updateCurrentTripId(driver.vanId, tripId);
+    await vans.updateStatus(driver.vanId, VanStatus.onShift);
+    return ShiftStartResult(
+      token: 'token-$driverId-$tripId',
+      tripId: tripId,
+      vanId: driver.vanId,
+    );
+  }
+
+  @override
+  Future<DateTime> endShift(String tripId) async {
+    endCalls.add(tripId);
+    if (endFailuresRemaining > 0) {
+      endFailuresRemaining--;
+      throw const ContractException(ReasonCode.internal);
+    }
+    final error = endError;
+    if (error != null) throw error;
+    final trip = trips.trips[tripId];
+    if (trip == null) throw const ContractException(ReasonCode.notFound);
+
+    final endedAt = _clock();
+    trips.markEnded(tripId, endedAt);
+    final van = vans.vans[trip.vanId];
+    if (van != null && van.currentTripId == tripId) {
+      await vans.updateCurrentTripId(trip.vanId, null);
+      await vans.updateStatus(trip.vanId, VanStatus.idle);
+    }
+    return endedAt;
+  }
+
+  @override
+  Future<void> markWardDone({
+    required String tripId,
+    required String wardId,
+    required bool flagged,
+  }) async {
+    marks.add((tripId: tripId, wardId: wardId, flagged: flagged));
+    if (markFailuresRemaining > 0) {
+      markFailuresRemaining--;
+      throw const ContractException(ReasonCode.internal);
+    }
+    final error = markError;
+    if (error != null) throw error;
+    if (!trips.trips.containsKey(tripId)) {
+      throw const ContractException(ReasonCode.notFound);
+    }
+    trips.appendWardDoneTo(
+      tripId,
+      WardDone(wardId: wardId, doneAt: _clock(), flagged: flagged),
+    );
+  }
+}
+
+
+/// In-memory `installId` seam: a stable id, never a platform channel.
+class FakeInstallIdStore implements InstallIdStore {
+  FakeInstallIdStore([this.id = 'test-install-id']);
+
+  final String id;
+
+  int reads = 0;
+
+  @override
+  Future<String> readOrCreate() async {
+    reads++;
+    return id;
+  }
 }

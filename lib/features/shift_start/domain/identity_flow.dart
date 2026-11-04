@@ -1,26 +1,39 @@
-/// Driver-identity start-shift flow controller (ticket 4, PRD-2 §0.16).
+/// Driver-identity start-shift flow controller (ticket 4, PRD-2 §0.16,
+/// CHG-0003).
 ///
-/// One Riverpod notifier drives the NEW start-shift slice: code entry →
-/// (inline format error BEFORE any lookup) → lookup through the
-/// [DriversRepository] seam → confirm card ([IdentityFlowPhase.confirmReady],
-/// which also remembers the code on-device) → Start Shift (trip created
-/// from the driver's van through [StartShift], session activated) →
-/// `onShift`, which navigates to the live route.
+/// One Riverpod notifier drives the new start-shift slice: code entry →
+/// (inline format error BEFORE any call) → `bindDeviceToVan` + custom-token
+/// sign-in → lookup through the [DriversRepository] seam → confirm card
+/// ([IdentityFlowPhase.confirmReady], which also remembers the code
+/// on-device) → Start Shift (the `startShift` callable, then a fresh token
+/// carrying `currentTripId`, session activated) → `onShift`, which navigates
+/// to the live route.
+///
+/// The sign-in moved INTO the lookup (CHG-0003): the driver's reads are
+/// scoped by the `driverId` claim, so `drivers/{code}` and `vans/{vanId}`
+/// cannot be read before the bind. The screen is unchanged; only the order of
+/// the data path changed.
 ///
 /// Distinct failure phases with retry: [IdentityFlowPhase.invalidCode]
-/// (format, no lookup), [IdentityFlowPhase.notFound] (unknown OR inactive
-/// — the seam returns inactive docs, the flow treats them as not-found),
-/// [IdentityFlowPhase.lookupFailed] (offline/outage) and
-/// [IdentityFlowPhase.startFailed] (write failure). The background
-/// tracking engine is NOT started here — the screen hands the session to
-/// the tracking auto-start after activation, same as the old D1 screen.
+/// (format, no call), [IdentityFlowPhase.notFound] (unknown OR inactive),
+/// [IdentityFlowPhase.lookupFailed] (offline/outage),
+/// [IdentityFlowPhase.accessFailed] (the bind refused: another phone holds
+/// the van, too many attempts, or the session is not allowed — the reason is
+/// on [IdentityFlowState.reason]) and [IdentityFlowPhase.startFailed] (the
+/// start call refused or failed). The background tracking engine is NOT
+/// started here — the screen hands the session to the tracking auto-start
+/// after activation, same as the old D1 screen.
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/config/firebase_bootstrap.dart'
     show MessagingGateway, sessionGateProvider;
+import '../../../core/contract/gateway_providers.dart';
+import '../../../core/contract/reason_codes.dart';
+import '../../../core/contract/shift_gateway.dart';
 import '../../../core/identity/driver_identity_controller.dart';
+import '../../../core/identity/install_id.dart';
 import '../../../core/models/models.dart';
 import '../../../core/repositories/repositories.dart';
 import '../data/fcm_topics.dart' show driverMessagingGatewayProvider;
@@ -34,10 +47,10 @@ enum IdentityFlowPhase {
   initial,
 
   /// The entered text has no valid `XX-0000` shape — inline error, and NO
-  /// lookup call was made (0.16: a bad shape never reaches Firestore).
+  /// call was made (0.16: a bad shape never reaches the platform).
   invalidCode,
 
-  /// Lookup in flight.
+  /// Bind + lookup in flight.
   lookingUp,
 
   /// Driver found and active: the confirm card shows name, van, ward
@@ -47,16 +60,21 @@ enum IdentityFlowPhase {
   /// Unknown code, or the doc exists with `active = false`. Retry.
   notFound,
 
-  /// The lookup itself failed (offline / outage). Retry.
+  /// The bind or the lookup itself failed (offline / outage). Retry.
   lookupFailed,
 
-  /// Start Shift writes in flight (trip + van marker).
+  /// The bind was refused with a contract code (another phone holds the van,
+  /// too many attempts, not authorised). The code is on
+  /// [IdentityFlowState.reason]; Retry re-attempts the bind.
+  accessFailed,
+
+  /// Start Shift call in flight.
   starting,
 
   /// Shift is running (session activated; the screen navigates away).
   onShift,
 
-  /// The start writes failed; the confirm card stays with an error line.
+  /// The start call failed; the confirm card stays with an error line.
   /// Retry re-runs the start.
   startFailed,
 }
@@ -72,6 +90,7 @@ final class IdentityFlowState {
     this.routeName,
     this.lastRawCode,
     this.session,
+    this.reason,
   });
 
   final IdentityFlowPhase phase;
@@ -98,6 +117,11 @@ final class IdentityFlowState {
   /// The running shift once [IdentityFlowPhase.onShift].
   final ShiftSession? session;
 
+  /// Why the last call was refused ([IdentityFlowPhase.accessFailed] and
+  /// [IdentityFlowPhase.startFailed]). The UI picks the localized words from
+  /// this code; a raw code is never shown to the driver.
+  final ReasonCode? reason;
+
   IdentityFlowState copyWith({
     IdentityFlowPhase? phase,
     Driver? driver,
@@ -105,6 +129,7 @@ final class IdentityFlowState {
     String? routeName,
     String? lastRawCode,
     ShiftSession? session,
+    ReasonCode? reason,
   }) =>
       IdentityFlowState(
         phase: phase ?? this.phase,
@@ -113,6 +138,7 @@ final class IdentityFlowState {
         routeName: routeName ?? this.routeName,
         lastRawCode: lastRawCode ?? this.lastRawCode,
         session: session ?? this.session,
+        reason: reason ?? this.reason,
       );
 }
 
@@ -137,19 +163,25 @@ class IdentityFlowController extends Notifier<IdentityFlowState> {
 
   VansRepository get _vans => ref.read(vansRepositoryProvider);
 
-  TripsRepository get _trips => ref.read(tripsRepositoryProvider);
-
   RoutesRepository get _routes => ref.read(routesRepositoryProvider);
+
+  DriverSessionGateway get _session => ref.read(driverSessionGatewayProvider);
 
   MessagingGateway get _messaging => ref.read(driverMessagingGatewayProvider);
 
-  StartShift get _startShift =>
-      StartShift(trips: _trips, vans: _vans, messaging: _messaging);
+  StartShift get _startShift => StartShift(
+        gateway: ref.read(shiftGatewayProvider),
+        session: _session,
+        messaging: _messaging,
+      );
 
   /// Continue tapped on the code field. Normalizes first: a bad shape
-  /// lands on [IdentityFlowPhase.invalidCode] and makes NO lookup call
-  /// (0.16). A found-but-inactive driver is [IdentityFlowPhase.notFound]
-  /// (flow rule; the seam itself does no active-filtering).
+  /// lands on [IdentityFlowPhase.invalidCode] and makes NO call (0.16).
+  ///
+  /// Then the bind: `bindDeviceToVan({driverCode, installId})` mints the
+  /// custom token, the app signs in with it, and only then may it read the
+  /// driver/van/route docs (the claims scope those reads). A found-but-
+  /// inactive driver is [IdentityFlowPhase.notFound].
   Future<void> submitCode(String raw) async {
     if (state.phase == IdentityFlowPhase.lookingUp) return;
     final code = normalizeDriverCode(raw);
@@ -164,11 +196,33 @@ class IdentityFlowController extends Notifier<IdentityFlowState> {
       phase: IdentityFlowPhase.lookingUp,
       lastRawCode: raw,
     );
-    // Issue #18: on a cold launch the anonymous session may still be signing
-    // in; the FIRST read must not race it, or it fails unauthenticated on
-    // every launch (the "Couldn't check the code" welcome bug). Immediate in
-    // unit tests and on a warm boot.
+    // Issue #18: on a cold launch Firebase may still be initializing; the
+    // bind callable and the read must not race it. Immediate in unit tests.
     await ref.read(sessionGateProvider);
+    try {
+      final installId = await ref.read(installIdStoreProvider).readOrCreate();
+      final binding = await _session.bindDeviceToVan(
+        driverCode: code,
+        installId: installId,
+      );
+      await _session.signInWithCustomToken(binding.token);
+    } on ContractException catch (error) {
+      state = state.copyWith(
+        phase: _isLookupFailure(error.code)
+            ? IdentityFlowPhase.lookupFailed
+            : IdentityFlowPhase.accessFailed,
+        lastRawCode: raw,
+        reason: error.code,
+      );
+      return;
+    } on Exception catch (error) {
+      _traceLookupFailure(code, error);
+      state = state.copyWith(
+        phase: IdentityFlowPhase.lookupFailed,
+        lastRawCode: raw,
+      );
+      return;
+    }
     try {
       final driver = await _drivers.fetchDriver(code);
       if (driver == null || !driver.active) {
@@ -178,8 +232,8 @@ class IdentityFlowController extends Notifier<IdentityFlowState> {
         );
         return;
       }
-      // The van doc backs the confirm card's plate and the Start action;
-      // a failed read is an outage, not a not-found.
+      // The van doc backs the confirm card's plate; a failed read is an
+      // outage, not a not-found.
       final van = await _vans.readVan(driver.vanId);
       // The route doc backs the welcome card's Route row (#28). A missing or
       // unreadable route is NOT a lookup failure: the row falls back to the
@@ -206,11 +260,7 @@ class IdentityFlowController extends Notifier<IdentityFlowState> {
     } on Exception catch (error) {
       // The trace that was missing when the cold-start failure had to be
       // reverse-engineered (issue #21). Debug-only, per the AVV rule.
-      assert(() {
-        // ignore: avoid_print
-        print('identity lookup failed for $code: $error');
-        return true;
-      }());
+      _traceLookupFailure(code, error);
       state = state.copyWith(
         phase: IdentityFlowPhase.lookupFailed,
         lastRawCode: raw,
@@ -218,11 +268,11 @@ class IdentityFlowController extends Notifier<IdentityFlowState> {
     }
   }
 
-  /// Start Shift on the confirm card: creates the trip from the driver's
-  /// van (via the extracted [StartShift] core), activates the shift
-  /// session, subscribes the van topic, and lands on
-  /// [IdentityFlowPhase.onShift]. Write failures keep the confirm data on
-  /// [IdentityFlowPhase.startFailed].
+  /// Start Shift on the confirm card: the `startShift` callable creates (or
+  /// resumes) the trip server-side and returns a token with
+  /// `currentTripId`; the app signs in with it, activates the shift session,
+  /// subscribes the van topic, and lands on [IdentityFlowPhase.onShift].
+  /// Refusals keep the confirm data on [IdentityFlowPhase.startFailed].
   Future<void> start() async {
     final driver = state.driver;
     final startable = state.phase == IdentityFlowPhase.confirmReady ||
@@ -230,16 +280,16 @@ class IdentityFlowController extends Notifier<IdentityFlowState> {
     if (driver == null || !startable) return;
     state = state.copyWith(phase: IdentityFlowPhase.starting);
     try {
-      final van = await _vans.readVan(driver.vanId);
-      if (van == null) {
-        state = state.copyWith(phase: IdentityFlowPhase.startFailed);
-        return;
-      }
-      final session = await _startShift.execute(van, driver, DateTime.now());
+      final session = await _startShift.execute(driver, DateTime.now());
       ref.read(shiftControllerProvider.notifier).activate(session);
       state = state.copyWith(
         phase: IdentityFlowPhase.onShift,
         session: session,
+      );
+    } on ContractException catch (error) {
+      state = state.copyWith(
+        phase: IdentityFlowPhase.startFailed,
+        reason: error.code,
       );
     } on Exception {
       state = state.copyWith(phase: IdentityFlowPhase.startFailed);
@@ -254,11 +304,11 @@ class IdentityFlowController extends Notifier<IdentityFlowState> {
   /// Returns the session when resumed. Returns `null` (and leaves the flow
   /// where it is, so the welcome card keeps its one-tap Start) when:
   /// - the van has no open shift (the driver ended it before leaving),
-  /// - the open shift belongs to another driver (never a takeover), or
   /// - the read failed (offline launch: the card must still render).
   ///
-  /// A running shift is only ever reattached through [StartShift.execute],
-  /// which reads the trip and never writes it; no trip is created here.
+  /// The reattach itself is the server's decision: `startShift` resumes the
+  /// open trip and writes nothing. A different driver's shift reaches the
+  /// caller as a refusal, never a takeover.
   Future<ShiftSession?> resumeIfActive() async {
     final driver = state.driver;
     if (driver == null) return null;
@@ -267,29 +317,24 @@ class IdentityFlowController extends Notifier<IdentityFlowState> {
     try {
       final van = await _vans.readVan(driver.vanId);
       if (van == null) return null;
-      final startShift = _startShift;
-      if (!startShift.isResumable(van)) return null;
-      final session = await startShift.execute(van, driver, DateTime.now());
-      ref.read(shiftControllerProvider.notifier).activate(session);
-      state = state.copyWith(
-        phase: IdentityFlowPhase.onShift,
-        session: session,
-      );
-      return session;
+      if (!_startShift.isResumable(van)) return null;
+      await start();
+      return state.phase == IdentityFlowPhase.onShift ? state.session : null;
     } on Exception {
-      // Another driver's shift on a shared van, or an offline read: stay on
-      // the welcome card and let the driver's one tap surface the reason.
+      // An offline read: stay on the welcome card and let the driver's one
+      // tap surface the reason.
       return null;
     }
   }
 
-  /// Retry entry point for the three failure states: not-found and
-  /// lookup-failed re-look-up the last entered code; start-failure re-runs
-  /// the start.
+  /// Retry entry point for the failure states: not-found, lookup-failed,
+  /// access-failed and start-failure. The first three re-run the bind +
+  /// lookup for the last entered code; start-failure re-runs the start.
   Future<void> retry() async {
     switch (state.phase) {
       case IdentityFlowPhase.notFound:
       case IdentityFlowPhase.lookupFailed:
+      case IdentityFlowPhase.accessFailed:
         final raw = state.lastRawCode;
         if (raw != null) await submitCode(raw);
       case IdentityFlowPhase.startFailed:
@@ -322,5 +367,22 @@ class IdentityFlowController extends Notifier<IdentityFlowState> {
   void clearNavigated() {
     if (state.phase != IdentityFlowPhase.onShift) return;
     state = const IdentityFlowState(phase: IdentityFlowPhase.initial);
+  }
+
+  /// Offline and an unknown transport failure keep the generic "couldn't
+  /// check" surface; every other bind refusal is a reason the driver can act
+  /// on and gets its own words.
+  bool _isLookupFailure(ReasonCode code) =>
+      code == ReasonCode.offline ||
+      code == ReasonCode.unknown ||
+      code == ReasonCode.internal ||
+      code == ReasonCode.invalidInput;
+
+  void _traceLookupFailure(String code, Object error) {
+    assert(() {
+      // ignore: avoid_print
+      print('identity lookup failed for $code: $error');
+      return true;
+    }());
   }
 }

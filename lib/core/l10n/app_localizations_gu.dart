@@ -534,6 +534,39 @@ class AppLocalizationsGu extends AppLocalizations {
   String get identityChangeCode => 'બીજા ડ્રાઇવર?';
 
   @override
+  String get identityShiftConflictOtherDriver =>
+      'આ ગાડી બીજા ડ્રાઇવરની શિફ્ટ પર છે. શરૂ કરતાં પહેલાં ઓફિસને પૂછો.';
+
+  @override
+  String get identityShiftConflictClaimed =>
+      'આ ગાડી પહેલેથી બીજા ફોન સાથે જોડાયેલી છે. તેને છોડવા ઓફિસને કહો.';
+
+  @override
+  String get identityShiftConflictStaleMarker =>
+      'આ ગાડીની શિફ્ટની નોંધ જૂની છે. ઓફિસને તપાસવા કહો.';
+
+  @override
+  String get identityRateLimitedTitle => 'ઘણા પ્રયત્નો થઈ ગયા';
+
+  @override
+  String get identityRateLimitedBody =>
+      'થોડી મિનિટ રાહ જુઓ, પછી તમારો કોડ ફરી નાખો.';
+
+  @override
+  String get identityNotAuthorisedTitle => 'ફરી સાઇન ઇન કરો';
+
+  @override
+  String get identityNotAuthorisedBody =>
+      'તમારું સેશન ખાતરી કરી શકાયું નહીં. તમારો કોડ ફરી નાખો.';
+
+  @override
+  String get identityShiftClosedTitle => 'આ શિફ્ટ પહેલેથી પૂરી થઈ ગઈ છે';
+
+  @override
+  String get identityShiftClosedBody =>
+      'આ ગાડી પર નવી શિફ્ટ શરૂ કરતાં પહેલાં ઓફિસને પૂછો.';
+
+  @override
   String get autoEndNoticeTitle => 'ડેપો પર શિફ્ટ પૂરી થઈ.';
 
   @override

@@ -531,10 +531,6 @@ class _FaultyVans implements VansRepository {
 
   @override
   Future<Van?> readVan(String vanId) => _inner.readVan(vanId);
-
-  @override
-  Future<void> updateCurrentTripId(String vanId, String? tripId) =>
-      _inner.updateCurrentTripId(vanId, tripId);
 }
 
 class _FaultyTrips implements TripsRepository {
@@ -563,13 +559,6 @@ class _FaultyTrips implements TripsRepository {
   final List<List<GpsPoint>> trailAppends = [];
 
   @override
-  Future<Trip> createTrip(Trip trip) => _inner.createTrip(trip);
-
-  @override
-  Future<void> appendWardDone(String tripId, WardDone entry) =>
-      _inner.appendWardDone(tripId, entry);
-
-  @override
   Future<void> appendGpsTrail(String tripId, List<GpsPoint> points) async {
     final bool failing;
     if (appendScript != null) {
@@ -586,16 +575,6 @@ class _FaultyTrips implements TripsRepository {
     await _inner.appendGpsTrail(tripId, points);
     trailAppends.add(List.of(points));
   }
-
-  @override
-  Future<void> setEndedAt(String tripId, DateTime endedAt) =>
-      _inner.setEndedAt(tripId, endedAt);
-
-  @override
-  Future<void> setMockLocationDetected(
-    String tripId, {
-    required bool detected,
-  }) => _inner.setMockLocationDetected(tripId, detected: detected);
 
   @override
   Stream<Trip?> watchTrip(String tripId) => _inner.watchTrip(tripId);

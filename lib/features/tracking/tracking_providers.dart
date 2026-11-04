@@ -14,6 +14,7 @@ library;
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:driverapp/core/contract/gateway_providers.dart';
 import 'package:driverapp/core/repositories/repository_providers.dart';
 import 'package:driverapp/features/shift_start/domain/shift_session.dart';
 
@@ -78,6 +79,7 @@ final Provider<TrackingEngine> trackingEngineProvider =
   (ref) => TrackingEngine(
     vansRepository: ref.watch(vansRepositoryProvider),
     tripsRepository: ref.watch(tripsRepositoryProvider),
+    shiftGateway: ref.watch(shiftGatewayProvider),
     positionSource: ref.watch(positionSourceProvider),
     batterySource: ref.watch(batterySourceProvider),
     serviceHandle: ref.watch(foregroundServiceProvider),
