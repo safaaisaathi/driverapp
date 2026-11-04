@@ -12,6 +12,7 @@
     "CHG-0001": {
       "status": "adopted",
       "progress": 1,
+      "verifiedBy": "safaaisaathi/driverapp#32",
       "verifiedAt": "2026-11-02T00:00:00Z",
       "checklist": [
         { "task": "Confirm every persisted field matches the frozen core shape", "done": true }
@@ -21,6 +22,7 @@
     "CHG-0002": {
       "status": "adopted",
       "progress": 1,
+      "verifiedBy": "safaaisaathi/driverapp#32",
       "urgency": "before_release",
       "verifiedAt": "2026-11-04T00:00:00Z",
       "checklist": [
@@ -32,6 +34,7 @@
     "CHG-0003": {
       "status": "adopted",
       "progress": 1,
+      "verifiedBy": "safaaisaathi/driverapp#32",
       "urgency": "immediate",
       "verifiedAt": "2026-11-04T00:00:00Z",
       "checklist": [
@@ -51,6 +54,7 @@
     "CHG-0005": {
       "status": "adopted",
       "progress": 1,
+      "verifiedBy": "safaaisaathi/driverapp#32",
       "urgency": "before_release",
       "verifiedAt": "2026-11-04T00:00:00Z",
       "checklist": [
@@ -63,6 +67,7 @@
     "CHG-0006": {
       "status": "adopted",
       "progress": 1,
+      "verifiedBy": "safaaisaathi/driverapp#32",
       "urgency": "before_release",
       "verifiedAt": "2026-11-04T00:00:00Z",
       "checklist": [
@@ -81,6 +86,7 @@
     "CHG-0008": {
       "status": "adopted",
       "progress": 1,
+      "verifiedBy": "safaaisaathi/driverapp#32",
       "urgency": "before_release",
       "verifiedAt": "2026-11-04T00:00:00Z",
       "checklist": [
@@ -92,6 +98,7 @@
     "CHG-0009": {
       "status": "adopted",
       "progress": 1,
+      "verifiedBy": "safaaisaathi/driverapp#32",
       "urgency": "before_release",
       "verifiedAt": "2026-11-04T00:00:00Z",
       "checklist": [
@@ -103,6 +110,7 @@
     "CHG-0010": {
       "status": "adopted",
       "progress": 1,
+      "verifiedBy": "safaaisaathi/driverapp#32",
       "urgency": "before_release",
       "verifiedAt": "2026-11-04T00:00:00Z",
       "checklist": [
@@ -113,6 +121,7 @@
     "CHG-0011": {
       "status": "adopted",
       "progress": 1,
+      "verifiedBy": "safaaisaathi/driverapp#32",
       "urgency": "immediate",
       "verifiedAt": "2026-11-04T00:00:00Z",
       "checklist": [
@@ -139,6 +148,7 @@
     "CHG-0015": {
       "status": "adopted",
       "progress": 1,
+      "verifiedBy": "safaaisaathi/driverapp#32",
       "verifiedAt": "2026-11-04T00:00:00Z",
       "checklist": [
         { "task": "Confirm docs/PRD-2-driver-app.md matches the platform pointer", "done": true }
@@ -155,6 +165,7 @@
     "EXT-0001": {
       "status": "adopted",
       "progress": 1,
+      "verifiedBy": "safaaisaathi/driverapp#32",
       "verifiedAt": "2026-11-02T00:00:00Z",
       "checklist": [
         { "task": "Declare trips.id in .contract/extensions/driverapp.json", "done": true },
