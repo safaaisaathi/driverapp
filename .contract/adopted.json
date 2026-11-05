@@ -159,6 +159,65 @@
       "status": "not_applicable",
       "progress": null,
       "note": "The user app's stack is the question."
+    },
+    "CHG-0017": {
+      "status": "adopted",
+      "progress": 1,
+      "verifiedBy": "safaaisaathi/driverapp#40",
+      "verifiedAt": "2026-11-05T00:00:00Z",
+      "checklist": [
+        { "task": "Call flagMockLocation({ tripId }) from the tracking engine where the direct trip write was", "done": true },
+        { "task": "Latch locally after the call succeeds, as today", "done": true },
+        { "task": "Retry the call on reconnect if it failed offline", "done": true },
+        { "task": "Never send detected: false and never try to clear the latch", "done": true }
+      ],
+      "note": "The engine keeps the local latch for the banner and persists it through the callable. A failed call retries on the regular GPS cadence, so a reconnect lands it without another mocked fix. No client trip write is attempted."
+    },
+    "CHG-0018": {
+      "status": "adopted",
+      "progress": 1,
+      "verifiedBy": "safaaisaathi/driverapp#44",
+      "verifiedAt": "2026-11-05T00:00:00Z",
+      "checklist": [
+        { "task": "Write notices/{noticeId}/receipts/{driverCode} with readAt when the driver opens a notice", "done": true },
+        { "task": "Take the receipt doc id from the driverId claim", "done": true },
+        { "task": "Keep the session-local unread set as the fallback until the write path works", "done": true },
+        { "task": "Compute the dot from the cached receipts plus the local set", "done": true },
+        { "task": "Do not add a receipt array to the notice document", "done": true }
+      ],
+      "note": "The flow writes readAt through the server clock and reads the receipt back per visible notice, because the strict rules authorize a receipt by its doc id and a collection-group query cannot be authorized that way. A denied read or write, which is what the loose PHASE 1 rules do, falls back to the session-local set; the dot clears for the session and no notice is hidden."
+    },
+    "CHG-0019": {
+      "status": "adopted",
+      "progress": 1,
+      "verifiedBy": "safaaisaathi/driverapp#43",
+      "verifiedAt": "2026-11-05T00:00:00Z",
+      "checklist": [
+        { "task": "Bound the complaints fetch with orderBy createdAt descending and limit(200)", "done": true },
+        { "task": "Switch only after the platform's composite index is live", "done": true }
+      ],
+      "note": "The code is in PR #43 and must not merge before the platform deploys 03-rules/firestore.indexes.json. The emulator cannot enforce a composite index, so a green local run is not proof of coverage."
+    },
+    "CHG-0020": {
+      "status": "not_applicable",
+      "progress": null,
+      "note": "The admin panel is the only affected app. The driver app never writes the driver document and its own driver read stays field-restricted; it never reads these audit fields."
+    },
+    "CHG-0021": {
+      "status": "adopted",
+      "progress": 1,
+      "verifiedBy": "safaaisaathi/driverapp#32",
+      "verifiedAt": "2026-11-05T00:00:00Z",
+      "checklist": [
+        { "task": "Keep the staleMarker copy for a live trip of another van", "done": true },
+        { "task": "Do not clear vans.currentTripId from the client", "done": true }
+      ],
+      "note": "No driver app code change. startShift repairs the stale marker inside its transaction; the app keeps its reason-code copy for the one case that still fails."
+    },
+    "CHG-0022": {
+      "status": "not_applicable",
+      "progress": null,
+      "note": "The admin panel is the only affected app. The alert is sent by the platform callable and the driver app neither sends nor receives it."
     }
   },
   "extensionChanges": {
