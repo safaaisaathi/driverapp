@@ -15,3 +15,21 @@ A few resources to get you started if this is your first Flutter project:
 For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
+
+## Demo data (emulator and explicit live seed)
+
+The app has no project default in its seed tools. A bare seed run exits, so it
+cannot reach production by accident.
+
+```sh
+npm --prefix scripts install
+npm --prefix scripts run seed:emulator   # local Firestore emulator on :8080
+
+# Explicit live seed. The project id is required.
+FIREBASE_PROJECT=<project-id> npm --prefix scripts run seed
+```
+
+`emulator/seed-data.json` holds the reference data: wards, routes, vans,
+drivers, staff and notices. Writes are idempotent (`merge: true`). The tools
+refuse a project id that contains `prod`.
+

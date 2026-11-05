@@ -1,16 +1,25 @@
-// Read-back verification (T9): dump today's trips with the 0.16 driver
-// identity fields — driverId + wardIds. Read-only, no writes.
-//   GOOGLE_APPLICATION_CREDENTIALS=<adc.json> node scripts/read_trip.mjs <driverCode?>
+// Read-back verification (T9): dump today's trips with the driver identity
+// fields (driverId + wardIds). Read-only, no writes.
+//
+//   FIREBASE_PROJECT=<project> node scripts/read_trip.mjs [driverCode]
+//
+// There is no project default. Pass the emulator host to read the local suite:
+//   FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 \
+//     FIREBASE_PROJECT=safaaisaathi-63a87 node scripts/read_trip.mjs
 import { createRequire } from 'node:module';
 
-const require = createRequire(
-  new URL('../functions/package.json', import.meta.url),
-);
+const require = createRequire(import.meta.url);
 const admin = require('firebase-admin');
 
-admin.initializeApp({
-  projectId: process.env.FIREBASE_PROJECT || 'safaaisaathi-63a87',
-});
+const projectId = process.env.FIREBASE_PROJECT;
+if (!projectId) {
+  console.error(
+    'Refusing to read: set FIREBASE_PROJECT. There is no project default.',
+  );
+  process.exit(1);
+}
+
+admin.initializeApp({ projectId });
 const db = admin.firestore();
 
 const code = process.argv[2];
