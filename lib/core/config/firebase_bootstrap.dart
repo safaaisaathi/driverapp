@@ -24,6 +24,7 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:driverapp/core/notifications/push_tap_router.dart';
 import 'package:driverapp/features/tracking/offline/data/hive_firestore_timestamp_adapter.dart';
 import 'package:driverapp/features/tracking/offline/offline_providers.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -312,6 +313,14 @@ Future<void> runBootstrap(ProviderContainer container) async {
         container.read(offlineSyncServiceProvider).start();
       } catch (error) {
         debugPrint('bootstrap: offline sync service not started: $error');
+      }
+      // B-21: only now can FirebaseMessaging be touched safely. The router
+      // holds a tap until a shift session exists, so a cold-launch tap is
+      // not lost.
+      try {
+        container.read(pushTapRouterProvider).start();
+      } catch (error) {
+        debugPrint('bootstrap: push tap router not started: $error');
       }
     },
     fireImmediately: true,
