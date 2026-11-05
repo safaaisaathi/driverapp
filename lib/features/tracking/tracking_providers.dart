@@ -35,6 +35,7 @@ import 'domain/foreground_service.dart';
 import 'domain/position_source.dart';
 import 'domain/tracking_engine.dart';
 import 'domain/trail_buffer.dart';
+import 'mock_location_latch.dart';
 import 'offline/offline_providers.dart';
 
 export 'data/geolocator_tracking_permission_gateway.dart';
@@ -82,11 +83,16 @@ final Provider<TrackingEngine> trackingEngineProvider =
     vansRepository: ref.watch(vansRepositoryProvider),
     tripsRepository: ref.watch(tripsRepositoryProvider),
     shiftGateway: ref.watch(shiftGatewayProvider),
+    trackingGateway: ref.watch(trackingGatewayProvider),
     positionSource: ref.watch(positionSourceProvider),
     batterySource: ref.watch(batterySourceProvider),
     serviceHandle: ref.watch(foregroundServiceProvider),
     trailBufferFactory: ref.watch(trailBufferFactoryProvider),
     offlineWriteQueue: ref.watch(offlineWriteQueueProvider),
+    // F-D9: the banner reads the local latch too, so it shows the moment the
+    // OS reports a mocked fix instead of waiting for the callable round trip.
+    onMockLocationLatchChanged: (latched) =>
+        ref.read(mockLocationLatchProvider.notifier).set(latched),
     // The depot auto-end must also leave the van topic, exactly like D5.
     messaging: ref.watch(driverMessagingGatewayProvider),
     vanTopicOf: fcmTopicVanOf,

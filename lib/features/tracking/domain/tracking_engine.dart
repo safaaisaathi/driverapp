@@ -37,6 +37,7 @@ import 'package:driverapp/core/config/constants.dart';
 import 'package:driverapp/core/config/firebase_bootstrap.dart'
     show MessagingGateway;
 import 'package:driverapp/core/contract/shift_gateway.dart';
+import 'package:driverapp/core/contract/tracking_gateway.dart';
 import 'package:driverapp/core/domain/end_shift_writes.dart';
 import 'package:driverapp/core/domain/geo_point.dart';
 import 'package:driverapp/core/domain/write_policy.dart';
@@ -163,6 +164,14 @@ class TrackingEngine {
     /// CHG-0003: the shift callables. The depot auto-end (ruling #29) closes
     /// the trip through `endShift`, the same callable D5 uses.
     required ShiftGateway shiftGateway,
+    /// CHG-0017: the tracking callables. A mocked fix latches locally at
+    /// once and is persisted through `flagMockLocation`; a failed call
+    /// retries on the regular cadence.
+    required TrackingGateway trackingGateway,
+    /// F-D9: mirrors the local mock latch into the app layer so the banner
+    /// does not wait for the network. Called with true on the first mocked
+    /// fix and false when a run starts or ends.
+    void Function(bool latched)? onMockLocationLatchChanged,
     /// Ruling #29: called with the ended trip id after the depot rule
     /// auto-ends a shift, so the app layer can clear its shift session and
     /// show the notice.
@@ -174,6 +183,7 @@ class TrackingEngine {
   })  : _vans = vansRepository,
         _trips = tripsRepository,
         _gateway = shiftGateway,
+        _trackingGateway = trackingGateway, // ignore: prefer_initializing_formals
         _position = positionSource,
         _battery = batterySource,
         _service = serviceHandle,
@@ -182,6 +192,7 @@ class TrackingEngine {
         _initialCheckInterval = checkIntervalSec ?? gpsIntervalSec,
         _flushIntervalSec = flushIntervalSec ?? trailFlushIntervalSec,
         _offlineWriteQueue = offlineWriteQueue, // ignore: prefer_initializing_formals
+        _onMockLocationLatchChanged = onMockLocationLatchChanged, // ignore: prefer_initializing_formals
         _onShiftAutoEnded = onShiftAutoEnded, // ignore: prefer_initializing_formals
         _messaging = messaging, // ignore: prefer_initializing_formals
         _vanTopicOf = vanTopicOf; // ignore: prefer_initializing_formals
@@ -189,6 +200,7 @@ class TrackingEngine {
   final VansRepository _vans;
   final TripsRepository _trips;
   final ShiftGateway _gateway;
+  final TrackingGateway _trackingGateway;
   final PositionSource _position;
   final BatterySource _battery;
   final ForegroundServiceHandle _service;
@@ -203,6 +215,9 @@ class TrackingEngine {
 
   /// F-D7 drain seam; null in tests that don't exercise the offline path.
   final OfflineWriteQueue? _offlineWriteQueue;
+
+  /// F-D9: mirrors the local latch into the app layer (banner).
+  final void Function(bool latched)? _onMockLocationLatchChanged;
 
   /// Ruling #29: app-layer hook that clears the shift session.
   final void Function(String tripId)? _onShiftAutoEnded;
@@ -239,15 +254,22 @@ class TrackingEngine {
   Van? _latestVan;
   bool _stopping = false;
 
-  /// F-D9 local latch: avoids re-calling the repository write for every mock
-  /// fix. NOT the ground truth — `trips.mockLocationDetected` in the trip doc
-  /// is (kill/restart safe, never unset by the app). Latched here after the
-  /// first mocked fix; a failed write re-arms the write for the next mock.
+  /// F-D9 local latch: drives the banner the moment a mock fix lands. NOT the
+  /// ground truth — `trips.mockLocationDetected` in the trip doc is
+  /// (kill/restart safe, never unset by the app). The durable write goes
+  /// through `flagMockLocation` (CHG-0017).
   bool _mockLocationLatched = false;
+
+  /// The trip whose `flagMockLocation` call already succeeded, so the
+  /// cadence retry stops. Null until a call lands.
+  String? _mockLocationPersistedTripId;
+
+  /// One callable attempt at a time.
+  bool _mockFlagInFlight = false;
 
   /// Test-only view of the F-D9 local latch: true after the first mocked fix
   /// of this run. The trip doc (`trips.mockLocationDetected`) is the real
-  /// ground truth, and only the server writes it (CHG-0003).
+  /// ground truth, written by the server-side callable (CHG-0017).
   @visibleForTesting
   bool get mockLocationLatched => _mockLocationLatched;
 
@@ -320,7 +342,8 @@ class TrackingEngine {
 
     // F-D9 latch is trip-scoped: a fresh run starts unlatched; the ground
     // truth (`trips.mockLocationDetected`) is never unset by the app.
-    _mockLocationLatched = false;
+    _setMockLocationLatch(false);
+    _mockLocationPersistedTripId = null;
 
     // Trail buffer for THIS trip ('trail-<tripId>').
     final buffer = await _trailBufferFactory(tripId);
@@ -415,23 +438,46 @@ class TrackingEngine {
 
   /// Position intake (F-D2 step 3): every fix updates the write-policy
   /// candidate. F-D9 rides on the same point: a mocked fix latches the local
-  /// banner flag, at most once per run.
-  ///
-  /// The latch is LOCAL ONLY now (CHG-0003): `trips` is server-owned and the
-  /// strict rules deny a client write, so there is no contract path for the
-  /// app to persist `mockLocationDetected`. The banner still shows; the
-  /// remote record is a contract request (see the adoption report).
+  /// banner at once and asks the server to set the durable latch
+  /// (`flagMockLocation`, CHG-0017).
   void _onFixIntake(VanFix fix) {
     _latestFix = fix;
     if (!fix.isMocked || _mockLocationLatched || _tripId == null) return;
-    _flagMockLocation();
+    _setMockLocationLatch(true);
+    unawaited(_persistMockLocation(_tripId!));
   }
 
-  /// Latch the F-D9 banner for this run.
-  void _flagMockLocation() {
-    if (_tripId == null) return;
-    _mockLocationLatched = true;
-    debugPrint('tracking: mock location detected (local latch only)');
+  /// Sets the local latch and mirrors it into the app layer so the banner
+  /// shows without waiting for the network.
+  void _setMockLocationLatch(bool value) {
+    if (_mockLocationLatched == value) return;
+    _mockLocationLatched = value;
+    _onMockLocationLatchChanged?.call(value);
+  }
+
+  /// `flagMockLocation({tripId})` (CHG-0017). The callable is idempotent, so
+  /// a retry after a dropped response is safe. A failure is logged and left
+  /// for the cadence retry; the local banner is already up.
+  Future<void> _persistMockLocation(String tripId) async {
+    if (_mockFlagInFlight) return;
+    _mockFlagInFlight = true;
+    try {
+      await _trackingGateway.flagMockLocation(tripId);
+      _mockLocationPersistedTripId = tripId;
+    } catch (error) {
+      debugPrint('tracking: flagMockLocation failed (will retry): $error');
+    } finally {
+      _mockFlagInFlight = false;
+    }
+  }
+
+  /// Retries the durable latch on the regular cadence, so a reconnect lands
+  /// it even when no new fix arrives.
+  void _retryMockLocationIfPending() {
+    final tripId = _tripId;
+    if (!_mockLocationLatched || tripId == null) return;
+    if (_mockLocationPersistedTripId == tripId) return;
+    unawaited(_persistMockLocation(tripId));
   }
 
   Future<void> _applyStop() async {
@@ -483,6 +529,8 @@ class TrackingEngine {
     _stopping = false;
     _depotDwell = null;
     _autoEndRetryAfter = null;
+    _setMockLocationLatch(false);
+    _mockLocationPersistedTripId = null;
 
     _applyState(TrackingEngineState(
       status: TrackingRunStatus.idle,
@@ -495,6 +543,10 @@ class TrackingEngine {
   /// battery API down): the next tick simply re-checks.
   Future<void> _guardedRunOnce() async {
     if (_tripId == null || _stopping) return;
+
+    // CHG-0017: a durable mock flag that failed offline retries here, so a
+    // reconnect lands it without waiting for another mocked fix.
+    _retryMockLocationIfPending();
 
     try {
       final fix = _latestFix;

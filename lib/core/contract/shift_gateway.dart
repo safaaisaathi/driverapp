@@ -2,9 +2,10 @@
 /// authority family the driver app calls, so the flows never touch Firebase
 /// types and tests script the server without a network.
 ///
-/// The app calls exactly these five:
+/// The app calls exactly these six:
 /// - `bindDeviceToVan` and `signInWithCustomToken` ([DriverSessionGateway]),
-/// - `startShift`, `endShift` and `markWardDone` ([ShiftGateway]).
+/// - `startShift`, `endShift` and `markWardDone` ([ShiftGateway]),
+/// - `flagMockLocation` ([TrackingGateway], in `tracking_gateway.dart`).
 ///
 /// A callable is the mechanism when a LIVE DOCUMENT is the authority
 /// (`callables.json#/x-decision-rule`). The trips and the shift markers are

@@ -11,6 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'firebase_callables.dart';
 import 'shift_gateway.dart';
+import 'tracking_gateway.dart';
 
 /// The driver's bind + custom-token sign-in.
 final driverSessionGatewayProvider = Provider<DriverSessionGateway>(
@@ -23,4 +24,9 @@ final driverSessionGatewayProvider = Provider<DriverSessionGateway>(
 /// `startShift`, `endShift`, `markWardDone`.
 final shiftGatewayProvider = Provider<ShiftGateway>(
   (ref) => FirebaseShiftGateway(FirebaseFunctions.instance),
+);
+
+/// `flagMockLocation` (CHG-0017): the durable mock-location latch.
+final trackingGatewayProvider = Provider<TrackingGateway>(
+  (ref) => FirebaseTrackingGateway(FirebaseFunctions.instance),
 );

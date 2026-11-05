@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:driverapp/core/contract/reason_codes.dart';
 import 'package:driverapp/core/contract/shift_gateway.dart';
+import 'package:driverapp/core/contract/tracking_gateway.dart';
 import 'package:driverapp/core/domain/ist_clock.dart';
 import 'package:driverapp/core/identity/install_id.dart';
 import 'package:driverapp/core/models/models.dart';
@@ -702,6 +703,35 @@ class FakeShiftGateway implements ShiftGateway {
   }
 }
 
+
+/// In-memory `flagMockLocation` seam (CHG-0017): records every call and can
+/// script outages. The durable trip field is the server's write, so this fake
+/// does not mutate the trip doc.
+class FakeTrackingGateway implements TrackingGateway {
+  final List<String> mockFlagCalls = [];
+
+  /// Every attempt, including the ones that failed.
+  int attempts = 0;
+
+  /// When > 0, the next calls fail and decrement this counter.
+  int failuresRemaining = 0;
+
+  /// A scripted refusal checked before the call is recorded as a success.
+  ContractException? error;
+
+  @override
+  Future<MockLocationFlag> flagMockLocation(String tripId) async {
+    attempts++;
+    if (failuresRemaining > 0) {
+      failuresRemaining--;
+      throw const ContractException(ReasonCode.offline);
+    }
+    final scripted = error;
+    if (scripted != null) throw scripted;
+    mockFlagCalls.add(tripId);
+    return const MockLocationFlag(flagged: true);
+  }
+}
 
 /// In-memory `installId` seam: a stable id, never a platform channel.
 class FakeInstallIdStore implements InstallIdStore {

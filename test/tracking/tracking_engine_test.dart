@@ -39,6 +39,7 @@ void main() {
   // ---------------------------------------------------------------- fakes
   late FakeVansRepository vans;
   late FakeTripsRepository trips;
+  late FakeTrackingGateway tracking;
   late _FakePositions positions;
   late _FakeBattery battery;
   late _FakeService service;
@@ -77,6 +78,7 @@ void main() {
     int check = 1,
     int? flush,
     void Function(String tripId)? onAutoEnd,
+    void Function(bool latched)? onLatchChanged,
     FakeShiftGateway? gateway,
     MessagingGateway? messaging,
   }) =>
@@ -88,11 +90,13 @@ void main() {
         serviceHandle: service,
         shiftGateway: gateway ??
             FakeShiftGateway(trips: trips, vans: vans, clock: () => clock),
+        trackingGateway: tracking,
         trailBufferFactory: (tripId) async =>
             lastBuffer = _FakeTrailBuffer(),
         clock: () => clock,
         checkIntervalSec: check,
         flushIntervalSec: flush,
+        onMockLocationLatchChanged: onLatchChanged,
         onShiftAutoEnded: onAutoEnd,
         messaging: messaging,
         vanTopicOf: (vanId) => 'van_$vanId',
@@ -121,6 +125,7 @@ void main() {
     positions = _FakePositions();
     battery = _FakeBattery(80);
     service = _FakeService();
+    tracking = FakeTrackingGateway();
   });
 
   // -------------------------------------------------- non-timer behaviour
@@ -489,7 +494,7 @@ void main() {
       return engine;
     }
 
-    test('one mock fix latches LOCALLY, the app writes no trip field',
+    test('one mock fix latches locally AND asks the server to persist',
         () async {
       final engine = await runEngine();
 
@@ -497,13 +502,16 @@ void main() {
       await oneTick();
 
       expect(engine.mockLocationLatched, isTrue); // local banner latch
-      // CHG-0003: trips is server-owned; the strict rules deny this write.
+      // CHG-0017: the durable latch goes through the callable, never a
+      // client trip write.
+      expect(tracking.mockFlagCalls, ['trip-1']);
       expect(trips.trips['trip-1']!.mockLocationDetected, isFalse);
 
       await engine.stop();
     });
 
-    test('many mock fixes → the local latch flips ONCE', () async {
+    test('many mock fixes → the latch flips ONCE and the callable runs once',
+        () async {
       final engine = await runEngine();
 
       positions.emit(mockAt(22.6780));
@@ -515,11 +523,12 @@ void main() {
       await oneTick();
 
       expect(engine.mockLocationLatched, isTrue);
+      expect(tracking.mockFlagCalls, ['trip-1']);
       expect(trips.trips['trip-1']!.mockLocationDetected, isFalse);
       await engine.stop();
     });
 
-    test('real fixes never latch', () async {
+    test('real fixes never latch and never call the server', () async {
       final engine = await runEngine();
 
       positions.emit(fixAt(22.6780)); // real (isMocked defaults false)
@@ -528,6 +537,7 @@ void main() {
       await oneTick();
 
       expect(engine.mockLocationLatched, isFalse);
+      expect(tracking.mockFlagCalls, isEmpty);
       expect(trips.trips['trip-1']!.mockLocationDetected, isFalse);
 
       await engine.stop();
@@ -546,9 +556,54 @@ void main() {
       await oneTick();
 
       expect(engine.mockLocationLatched, isTrue);
-      expect(trips.trips['trip-1']!.mockLocationDetected, isFalse);
+      expect(tracking.mockFlagCalls, ['trip-1']);
 
       await engine.stop();
+    });
+
+    test('a failed call keeps the banner up and the cadence retries the server',
+        () async {
+      // Two failures: the intake call and the first cadence retry both die.
+      tracking.failuresRemaining = 2;
+      final engine = await runEngine();
+
+      positions.emit(mockAt(22.6780));
+      await oneTick();
+
+      // The local banner does not wait for the network.
+      expect(engine.mockLocationLatched, isTrue);
+      expect(tracking.mockFlagCalls, isEmpty);
+      expect(tracking.attempts, 2); // intake + one cadence retry
+
+      // No new fix: the cadence alone lands the durable latch.
+      await oneTick();
+      expect(tracking.mockFlagCalls, ['trip-1']);
+
+      // A landed flag stops the retry.
+      await oneTick();
+      expect(tracking.mockFlagCalls, ['trip-1']);
+      expect(tracking.attempts, 3);
+
+      await engine.stop();
+    });
+
+    test('the local latch is mirrored to the app layer and cleared on stop',
+        () async {
+      final latches = <bool>[];
+      final engine = buildEngine(onLatchChanged: latches.add);
+      await engine.start(
+        tripId: 'trip-1',
+        vanId: 'van-01',
+        notificationTitle: 'T',
+        notificationBody: '',
+      );
+
+      positions.emit(mockAt(22.6780));
+      await oneTick();
+      expect(latches, [true]);
+
+      await engine.stop();
+      expect(latches, [true, false]);
     });
   });
 
@@ -569,6 +624,7 @@ void main() {
           vans: failingVans,
           clock: () => clock,
         ),
+        trackingGateway: tracking,
         trailBufferFactory: (tripId) async => buffer = _FakeTrailBuffer(),
         clock: () => clock,
         checkIntervalSec: 1,
