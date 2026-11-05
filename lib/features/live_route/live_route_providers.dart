@@ -23,6 +23,8 @@ library;
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:driverapp/core/config/firebase_bootstrap.dart'
+    show sessionGateProvider;
 import 'package:driverapp/core/models/models.dart';
 import 'package:driverapp/core/repositories/repository_providers.dart';
 import 'package:driverapp/features/tracking/offline/offline_providers.dart';
@@ -34,14 +36,20 @@ import 'domain/live_route_state.dart';
 /// over.
 final vanDocProvider =
     StreamProvider.autoDispose.family<Van?, String>(
-  (ref, vanId) => ref
-      .watch(vansRepositoryProvider)
-      .watchVan(vanId)
-      .handleError((error, stackTrace) {
-        debugPrint('live-route: vanDoc stream error: $error');
-        debugPrint(stackTrace.toString().split('\n').take(14).join(' ~ '));
-        throw error;
-      }),
+  (ref, vanId) async* {
+    // F-11: this is the root of every D2 read, so it must never race
+    // `Firebase.initializeApp` on a cold or degraded boot. The gate resolves
+    // at once when boot wiring never started (unit-test containers). The
+    // repository is read before the await; only the query waits.
+    final gate = ref.watch(sessionGateProvider);
+    final vans = ref.watch(vansRepositoryProvider);
+    await gate;
+    yield* vans.watchVan(vanId).handleError((error, stackTrace) {
+      debugPrint('live-route: vanDoc stream error: $error');
+      debugPrint(stackTrace.toString().split('\n').take(14).join(' ~ '));
+      throw error;
+    });
+  },
 );
 
 /// The open trip for the van (source of the done-tick set,

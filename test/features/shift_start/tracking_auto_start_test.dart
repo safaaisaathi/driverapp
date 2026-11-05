@@ -7,6 +7,10 @@
 /// permission flow, which is exactly the contract under test.
 library;
 
+import 'dart:async';
+
+import 'package:driverapp/core/config/firebase_bootstrap.dart'
+    show sessionGateProvider;
 import 'package:driverapp/core/models/models.dart';
 import 'package:driverapp/features/shift_start/data/shift_tracking_auto_start.dart';
 import 'package:driverapp/features/shift_start/domain/shift_session.dart';
@@ -72,6 +76,45 @@ void main() {
           notificationBody: '',
         );
     expect(service.attachedTripId, 'trip-2');
+  });
+
+  test('the auto-start waits for the boot session gate (F-11)', () async {
+    final service = OfflineSyncService(
+      vansRepository: FakeVansRepository(),
+      tripsRepository: FakeTripsRepository(),
+      writeQueue: _MemoryQueue(),
+      connectivitySource: _FakeConnectivity(),
+      trailBufferFactory: (_) async => _StubBuffer(),
+    );
+    final gate = Completer<void>();
+    final starterProvider = Provider<ShiftTrackingAutoStarter>(
+      (ref) => TrackingAutoStarter(ref),
+    );
+    final container = ProviderContainer(
+      overrides: [
+        offlineSyncServiceProvider.overrideWithValue(service),
+        sessionGateProvider.overrideWithValue(gate.future),
+        trackingPermissionGatewayProvider
+            .overrideWithValue(const _DenyAllGateway()),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final start = container.read(starterProvider).startTrackingFor(
+          session('trip-1'),
+          notificationTitle: 'Tracking active',
+          notificationBody: '',
+        );
+    await Future<void>.delayed(Duration.zero);
+    expect(
+      service.attachedTripId,
+      isNull,
+      reason: 'no sync attachment before boot',
+    );
+
+    gate.complete();
+    await start;
+    expect(service.attachedTripId, 'trip-1');
   });
 }
 

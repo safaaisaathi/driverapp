@@ -28,6 +28,8 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/config/firebase_bootstrap.dart'
+    show sessionGateProvider;
 import '../../../core/models/models.dart';
 import '../../../core/repositories/repositories.dart';
 import '../../shift_start/domain/shift_session.dart';
@@ -170,6 +172,9 @@ class NoticesFlowController extends Notifier<NoticesState> {
     }
     state = const NoticesState(phase: NoticesPhase.loading);
     try {
+      // F-11: the route read is Firestore work; never race boot on a cold or
+      // degraded launch.
+      await ref.read(sessionGateProvider);
       final route = await _routes.readRoute(session.routeId);
       if (!ref.mounted) return;
       if (route == null) {

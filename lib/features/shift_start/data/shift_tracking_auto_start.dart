@@ -24,6 +24,8 @@ import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 
+import '../../../core/config/firebase_bootstrap.dart'
+    show sessionGateProvider;
 import '../../tracking/offline/offline_providers.dart';
 import '../../tracking/tracking_providers.dart';
 import '../domain/shift_session.dart';
@@ -64,6 +66,9 @@ final class TrackingAutoStarter implements ShiftTrackingAutoStarter {
     required String notificationTitle,
     required String notificationBody,
   }) async {
+    // F-11: nothing on the tracking seam may race `Firebase.initializeApp`.
+    // The gate resolves at once when boot wiring never started (unit tests).
+    await _ref.read(sessionGateProvider);
     // F-D7: the offline sync service drains the ACTIVE trip's Trail buffer on
     // every reconnect, but nothing in the real flow ever called `attachTrip`,
     // so a shift's catch-up trail never synced (PRD F-D7 + §4 AC#4). Attach

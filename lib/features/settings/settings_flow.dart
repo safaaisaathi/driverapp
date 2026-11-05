@@ -13,6 +13,8 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/config/firebase_bootstrap.dart'
+    show sessionGateProvider;
 import '../../core/models/models.dart';
 import '../../core/repositories/repository_providers.dart';
 import '../shift_start/domain/shift_session.dart';
@@ -22,7 +24,12 @@ final FutureProvider<Van?> settingsVanProvider =
     FutureProvider.autoDispose<Van?>((ref) async {
   final session = ref.watch(shiftControllerProvider);
   if (session == null) return null;
-  return ref.watch(vansRepositoryProvider).readVan(session.vanId);
+  // F-11: a Firestore read never races boot. The dependencies are read
+  // before the await; only the query waits.
+  final gate = ref.watch(sessionGateProvider);
+  final vans = ref.watch(vansRepositoryProvider);
+  await gate;
+  return vans.readVan(session.vanId);
 });
 
 /// The route doc of the running shift (null = no session or read failed).
@@ -30,26 +37,43 @@ final FutureProvider<RouteModel?> settingsRouteProvider =
     FutureProvider.autoDispose<RouteModel?>((ref) async {
   final session = ref.watch(shiftControllerProvider);
   if (session == null) return null;
-  return ref.watch(routesRepositoryProvider).readRoute(session.routeId);
+  // F-11: a Firestore read never races boot. The dependencies are read
+  // before the await; only the query waits.
+  final gate = ref.watch(sessionGateProvider);
+  final routes = ref.watch(routesRepositoryProvider);
+  await gate;
+  return routes.readRoute(session.routeId);
 });
 
 /// Past trips of the shift van, newest first, INCLUDING today (a live
 /// trip shows as "running" — WF-22's "Today" row). Empty stream while
 /// no session is running.
 final StreamProvider<List<Trip>> tripHistoryProvider =
-    StreamProvider.autoDispose<List<Trip>>((ref) {
+    StreamProvider.autoDispose<List<Trip>>((ref) async* {
   final session = ref.watch(shiftControllerProvider);
   if (session == null) {
-    return Stream<List<Trip>>.value(const <Trip>[]);
+    yield const <Trip>[];
+    return;
   }
-  return ref.watch(tripsRepositoryProvider).watchRecentTrips(
-        vanId: session.vanId,
-        asOfDate: DateTime.now(),
-      );
+  // F-11: hold the query until Firebase is up. The dependencies are read
+  // before the await; only the query waits.
+  final gate = ref.watch(sessionGateProvider);
+  final trips = ref.watch(tripsRepositoryProvider);
+  await gate;
+  yield* trips.watchRecentTrips(
+    vanId: session.vanId,
+    asOfDate: DateTime.now(),
+  );
 });
 
 /// The ward total of one trip's route (for the "n of m wards" chips).
 /// One-shot read per route id; trips of one van usually share a route.
 final tripRouteProvider = FutureProvider.autoDispose.family<RouteModel?, String>(
-  (ref, routeId) => ref.watch(routesRepositoryProvider).readRoute(routeId),
+  (ref, routeId) async {
+    // F-11: a Firestore read never races boot.
+    final gate = ref.watch(sessionGateProvider);
+    final routes = ref.watch(routesRepositoryProvider);
+    await gate;
+    return routes.readRoute(routeId);
+  },
 );
