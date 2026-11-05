@@ -263,6 +263,10 @@ final class FakeMessagingGateway implements MessagingGateway {
   @override
   Future<void> subscribeToTopic(String topic) async =>
       subscribedTopics.add(topic);
+
+  @override
+  Future<void> unsubscribeFromTopic(String topic) async =>
+      subscribedTopics.remove(topic);
 }
 
 /// Platform double mirroring `MethodChannelFirebase`'s registry semantics:
