@@ -5,9 +5,9 @@
   "description": "Which shared-contract changes the driver app has caught up with. The driver app owns this file. The platform repo holds a report of it in 06-changes/adoption.json, never the truth.",
   "app": "driverapp",
   "repo": "safaaisaathi/driverapp",
-  "contractVersion": "2.0.0",
+  "contractVersion": "2.1.0",
   "extensionVersion": "1",
-  "updated": "2026-11-04",
+  "updated": "2026-11-05",
   "coreChanges": {
     "CHG-0001": {
       "status": "adopted",
@@ -159,6 +159,19 @@
       "status": "not_applicable",
       "progress": null,
       "note": "The user app's stack is the question."
+    },
+    "CHG-0017": {
+      "status": "adopted",
+      "progress": 1,
+      "verifiedBy": "safaaisaathi/driverapp#40",
+      "verifiedAt": "2026-11-05T00:00:00Z",
+      "checklist": [
+        { "task": "Call flagMockLocation({ tripId }) from the tracking engine where the direct trip write was", "done": true },
+        { "task": "Latch locally after the call succeeds, as today", "done": true },
+        { "task": "Retry the call on reconnect if it failed offline", "done": true },
+        { "task": "Never send detected: false and never try to clear the latch", "done": true }
+      ],
+      "note": "The engine keeps the local latch for the banner and persists it through the callable. A failed call retries on the regular GPS cadence, so a reconnect lands it without another mocked fix. No client trip write is attempted."
     }
   },
   "extensionChanges": {
