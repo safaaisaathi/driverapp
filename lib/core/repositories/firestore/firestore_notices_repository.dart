@@ -47,4 +47,45 @@ final class FirestoreNoticesRepository implements NoticesRepository {
       return notices;
     });
   }
+
+  /// One `get` per notice on its receipt doc. A collection-group query would
+  /// be cheaper, but the rules authorize a receipt by its doc id
+  /// (`isOwnDriver(driverCode)`), and a group query cannot be authorized per
+  /// doc that way.
+  @override
+  Future<Set<String>> readReceipts({
+    required String driverCode,
+    required Iterable<String> noticeIds,
+  }) async {
+    final read = <String>{};
+    final ids = noticeIds.toList();
+    if (driverCode.isEmpty || ids.isEmpty) return read;
+    await Future.wait(
+      ids.map((noticeId) async {
+        final snapshot = await _notices
+            .doc(noticeId)
+            .collection('receipts')
+            .doc(driverCode)
+            .get();
+        if (snapshot.exists) read.add(noticeId);
+      }),
+    );
+    return read;
+  }
+
+  @override
+  Future<void> writeReceipt({
+    required String driverCode,
+    required String noticeId,
+  }) {
+    // `readAt` is the only key the strict rules allow (CHG-0018). The server
+    // clock, not the device clock, stamps it.
+    return _notices
+        .doc(noticeId)
+        .collection('receipts')
+        .doc(driverCode)
+        .set(<String, Object?>{
+          'readAt': FieldValue.serverTimestamp(),
+        });
+  }
 }
