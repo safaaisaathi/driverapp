@@ -14,12 +14,6 @@ final class FirestoreVansRepository implements VansRepository {
       _db.collection('vans');
 
   @override
-  Future<List<Van>> readVans() async {
-    final snapshot = await _vans.get();
-    return snapshot.docs.map(_vanFromDoc).toList();
-  }
-
-  @override
   Future<Van?> readVan(String vanId) async {
     final snapshot = await _vans.doc(vanId).get();
     if (!snapshot.exists) return null;
@@ -63,9 +57,6 @@ final class FirestoreVansRepository implements VansRepository {
   @override
   Future<void> updateBatteryPct(String vanId, int batteryPct) =>
       _vans.doc(vanId).update(<String, Object?>{'batteryPct': batteryPct});
-
-  Van _vanFromDoc(QueryDocumentSnapshot<Map<String, Object?>> doc) =>
-      Van.fromMap(_docDataWithId(doc.id, doc.data()));
 
   Map<String, Object?> _docDataWithId(String id, Map<String, Object?> data) =>
       <String, Object?>{...data, 'id': id};
