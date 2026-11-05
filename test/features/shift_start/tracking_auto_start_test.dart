@@ -34,6 +34,45 @@ void main() {
         date: DateTime.utc(2026, 10, 30, 18, 30),
       );
 
+  test('the auto-start waits for the boot session gate (F-11)', () async {
+    final service = OfflineSyncService(
+      vansRepository: FakeVansRepository(),
+      tripsRepository: FakeTripsRepository(),
+      writeQueue: _MemoryQueue(),
+      connectivitySource: _FakeConnectivity(),
+      trailBufferFactory: (_) async => _StubBuffer(),
+    );
+    final gate = Completer<void>();
+    final starterProvider = Provider<ShiftTrackingAutoStarter>(
+      (ref) => TrackingAutoStarter(ref),
+    );
+    final container = ProviderContainer(
+      overrides: [
+        offlineSyncServiceProvider.overrideWithValue(service),
+        sessionGateProvider.overrideWithValue(gate.future),
+        trackingPermissionGatewayProvider
+            .overrideWithValue(const _DenyAllGateway()),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final start = container.read(starterProvider).startTrackingFor(
+          session('trip-1'),
+          notificationTitle: 'Tracking active',
+          notificationBody: '',
+        );
+    await Future<void>.delayed(Duration.zero);
+    expect(
+      service.attachedTripId,
+      isNull,
+      reason: 'no sync attachment before boot',
+    );
+
+    gate.complete();
+    await start;
+    expect(service.attachedTripId, 'trip-1');
+  });
+
   test('a shift session attaches its trip to the offline sync service '
       '(F-D7 catch-up drain)', () async {
     final service = OfflineSyncService(
@@ -76,45 +115,6 @@ void main() {
           notificationBody: '',
         );
     expect(service.attachedTripId, 'trip-2');
-  });
-
-  test('the auto-start waits for the boot session gate (F-11)', () async {
-    final service = OfflineSyncService(
-      vansRepository: FakeVansRepository(),
-      tripsRepository: FakeTripsRepository(),
-      writeQueue: _MemoryQueue(),
-      connectivitySource: _FakeConnectivity(),
-      trailBufferFactory: (_) async => _StubBuffer(),
-    );
-    final gate = Completer<void>();
-    final starterProvider = Provider<ShiftTrackingAutoStarter>(
-      (ref) => TrackingAutoStarter(ref),
-    );
-    final container = ProviderContainer(
-      overrides: [
-        offlineSyncServiceProvider.overrideWithValue(service),
-        sessionGateProvider.overrideWithValue(gate.future),
-        trackingPermissionGatewayProvider
-            .overrideWithValue(const _DenyAllGateway()),
-      ],
-    );
-    addTearDown(container.dispose);
-
-    final start = container.read(starterProvider).startTrackingFor(
-          session('trip-1'),
-          notificationTitle: 'Tracking active',
-          notificationBody: '',
-        );
-    await Future<void>.delayed(Duration.zero);
-    expect(
-      service.attachedTripId,
-      isNull,
-      reason: 'no sync attachment before boot',
-    );
-
-    gate.complete();
-    await start;
-    expect(service.attachedTripId, 'trip-1');
   });
 }
 
