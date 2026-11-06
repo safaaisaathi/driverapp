@@ -20,6 +20,15 @@ void main() {
       expect(options.storageBucket, isNotEmpty);
     });
 
+    test('the emulator key keeps the Firebase key shape (#45)', () {
+      // The Android Functions SDK rejects any other shape before it builds a
+      // callable request. The value stays fake; the emulator accepts any key.
+      expect(
+        emulatorFirebaseOptions().apiKey,
+        matches(RegExp(r'^AIza[0-9A-Za-z_-]{35}$')),
+      );
+    });
+
     test('options source is a single pure function over the backend', () {
       // Switching backends never rewrites call sites: one function decides.
       expect(firebaseOptions(FirebaseBackend.emulatorSuite).projectId,
