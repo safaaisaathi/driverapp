@@ -8,13 +8,12 @@
 /// fan-out mirrored client-side); the controller re-asserts the contract
 /// sort (newest first) so the screen always reads freshest on top.
 ///
-/// **Unread semantics:** the contract's `notices` shape (0.2) carries no
-/// read field and no new storage may be invented (0.15.4), so "unread" is
-/// session-local: a notice is unread from the moment the app first sees it
-/// (push or stream) until the driver opens it this session. Marking read
-/// therefore writes NOTHING to the repository — the red test pins that.
-/// Persistence is parked in the bags for the Backend Owner (contract field
-/// would be needed).
+/// **Unread semantics (CHG-0018):** a notice is unread until the driver opens
+/// it. Opening it writes `notices/{noticeId}/receipts/{driverCode}` with
+/// `readAt` (the only field the strict rules allow), and the dot is computed
+/// from the receipts read back through the cache plus this session's local
+/// set. A failed receipt read or write is not an error state: the local set
+/// keeps the dot correct for the session, so a notice is never lost.
 ///
 /// Route context comes from the shift session (F-D1 → anywhere seam):
 /// `shiftControllerProvider` → `routesRepositoryProvider.readRoute` →
@@ -28,6 +27,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/identity/driver_identity_controller.dart';
 import '../../../core/models/models.dart';
 import '../../../core/repositories/repositories.dart';
 import '../../shift_start/domain/shift_session.dart';
@@ -95,6 +95,13 @@ final unreadNoticesCountProvider = Provider.autoDispose<int>((ref) {
   return ref.watch(noticesFlowProvider).unread.length;
 });
 
+/// The receipt doc id: the confirmed driver code, which is the `driverId`
+/// claim's value. Null before a driver is confirmed, and the flow then keeps
+/// the session-local unread set only. Overridden in tests.
+final noticesDriverCodeProvider = Provider<String?>((ref) {
+  return ref.watch(driverIdentityControllerProvider).rememberedCode;
+});
+
 /// Drives D3 (public methods = events from the screen).
 // Not `final`: tests may subclass to script edge cases (ticket-10 pattern).
 class NoticesFlowController extends Notifier<NoticesState> {
@@ -105,6 +112,14 @@ class NoticesFlowController extends Notifier<NoticesState> {
   /// Ids the driver opened this session; unread derivation subtracts them
   /// on every re-emission so a fresh snapshot never resurrects a dot.
   final Set<String> _readIds = {};
+
+  /// Ids whose receipt exists in the backend (CHG-0018). Filled once per
+  /// controller from the cache, so a restart keeps the dots cleared.
+  final Set<String> _receiptIds = {};
+
+  /// One receipt read per controller: a dot only ever goes from unread to
+  /// read, so there is nothing to refresh until the flow is rebuilt.
+  bool _receiptsRequested = false;
 
   @override
   NoticesState build() {
@@ -199,10 +214,7 @@ class NoticesFlowController extends Notifier<NoticesState> {
     // against a seam drift (the same belt-and-braces as ticket 10).
     final sorted = List<Notice>.of(notices)
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    final unread = <String>{
-      for (final notice in sorted)
-        if (!_readIds.contains(notice.id)) notice.id,
-    };
+    final unread = _unreadOf(sorted);
     state = sorted.isEmpty
         ? const NoticesState(phase: NoticesPhase.empty)
         : NoticesState(
@@ -210,17 +222,34 @@ class NoticesFlowController extends Notifier<NoticesState> {
             notices: List.unmodifiable(sorted),
             unread: unread,
           );
+    // The receipts may have arrived on a previous launch; a read after the
+    // first snapshot keeps the dot stable across restarts (CHG-0018).
+    unawaited(_loadReceipts(sorted));
   }
 
-  void _onListError(Object error) => state = NoticesState(
-        phase: _isUnavailable(error)
-            ? NoticesPhase.offline
-            : NoticesPhase.error,
+  /// Reads the receipts for the visible notices once, from the cache first.
+  /// A denied read (the loose PHASE 1 rules) or a dead network changes
+  /// nothing: the session-local set stays the fallback.
+  Future<void> _loadReceipts(List<Notice> notices) async {
+    if (_receiptsRequested || notices.isEmpty) return;
+    _receiptsRequested = true;
+    final driverCode = ref.read(noticesDriverCodeProvider);
+    if (driverCode == null || driverCode.isEmpty) return;
+    try {
+      final read = await _notices.readReceipts(
+        driverCode: driverCode,
+        noticeIds: notices.map((notice) => notice.id),
       );
+      if (!ref.mounted) return;
+      _receiptIds.addAll(read);
+      _recomputeUnread();
+    } on Exception {
+      // Keep the local set; the dot stays on rather than hiding a notice.
+    }
+  }
 
-  /// Opening (tapping) a notice marks it read for this session: the dot
-  /// clears and [unreadNoticesCountProvider] drops. No repository write —
-  /// the contract's notices shape has no read field (see library doc).
+  /// Clears a notice's dot and persists the receipt. The state update is
+  /// optimistic, so a failed or queued write never re-hides the notice.
   void markRead(String noticeId) {
     final phase = state.phase;
     if (phase != NoticesPhase.ready || !state.unread.contains(noticeId)) {
@@ -233,7 +262,41 @@ class NoticesFlowController extends Notifier<NoticesState> {
           if (id != noticeId) id,
       },
     );
+    unawaited(_writeReceipt(noticeId));
   }
+
+  Future<void> _writeReceipt(String noticeId) async {
+    final driverCode = ref.read(noticesDriverCodeProvider);
+    if (driverCode == null || driverCode.isEmpty) return;
+    try {
+      await _notices.writeReceipt(
+        driverCode: driverCode,
+        noticeId: noticeId,
+      );
+      if (!ref.mounted) return;
+      _receiptIds.add(noticeId);
+    } on Exception {
+      // Offline queues the write in the SDK; a denied write keeps the dot
+      // off for this session through [_readIds]. Nothing else to do.
+    }
+  }
+
+  void _recomputeUnread() {
+    if (state.phase != NoticesPhase.ready) return;
+    state = state.copyWith(unread: _unreadOf(state.notices));
+  }
+
+  Set<String> _unreadOf(List<Notice> notices) => <String>{
+    for (final notice in notices)
+      if (!_readIds.contains(notice.id) && !_receiptIds.contains(notice.id))
+        notice.id,
+  };
+
+  void _onListError(Object error) => state = NoticesState(
+        phase: _isUnavailable(error)
+            ? NoticesPhase.offline
+            : NoticesPhase.error,
+      );
 
   /// Whether [error] is a transport-availability failure. Firestore
   /// surfaces it as a `unavailable` code; the shape is duck-typed so this

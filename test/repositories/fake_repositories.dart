@@ -298,6 +298,13 @@ class FakeNoticesRepository implements NoticesRepository {
 
   final Map<String, Notice> notices;
 
+  /// noticeId -> the driver codes that hold a receipt (CHG-0018).
+  final Map<String, Set<String>> receipts = {};
+
+  /// When true, every receipt read and write throws — the loose PHASE 1
+  /// rules deny the subcollection, and the flow must fall back cleanly.
+  bool receiptWritesDenied = false;
+
   final _changes = StreamController<void>.broadcast();
 
   @override
@@ -330,6 +337,27 @@ class FakeNoticesRepository implements NoticesRepository {
         .toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return result;
+  }
+
+  @override
+  Future<Set<String>> readReceipts({
+    required String driverCode,
+    required Iterable<String> noticeIds,
+  }) async {
+    if (receiptWritesDenied) throw Exception('receipts denied');
+    return <String>{
+      for (final noticeId in noticeIds)
+        if (receipts[noticeId]?.contains(driverCode) ?? false) noticeId,
+    };
+  }
+
+  @override
+  Future<void> writeReceipt({
+    required String driverCode,
+    required String noticeId,
+  }) async {
+    if (receiptWritesDenied) throw Exception('receipts denied');
+    (receipts[noticeId] ??= <String>{}).add(driverCode);
   }
 }
 
