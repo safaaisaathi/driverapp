@@ -18,4 +18,23 @@ abstract class NoticesRepository {
     required String vanId,
     required List<String> wardIds,
   });
+
+  /// The ids in [noticeIds] whose `notices/{noticeId}/receipts/{driverCode}`
+  /// doc exists (CHG-0018). Reads the Firestore cache first, so an offline
+  /// driver still sees the right dots; a failed read returns nothing and the
+  /// session-local set stays the fallback.
+  ///
+  /// [driverCode] must be the `driverId` claim: the strict rules compare the
+  /// receipt doc id with the claim, so any other value is denied.
+  Future<Set<String>> readReceipts({
+    required String driverCode,
+    required Iterable<String> noticeIds,
+  });
+
+  /// Writes `notices/{noticeId}/receipts/{driverCode}` with `readAt` set by
+  /// the server clock. `readAt` is the only field the rules allow.
+  Future<void> writeReceipt({
+    required String driverCode,
+    required String noticeId,
+  });
 }

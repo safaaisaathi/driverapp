@@ -33,6 +33,11 @@ final class RecordingMessagingGateway implements MessagingGateway {
     if (failSubscribeWith != null) throw failSubscribeWith!;
     subscribedTopics.add(topic);
   }
+
+  @override
+  Future<void> unsubscribeFromTopic(String topic) async {
+    subscribedTopics.remove(topic);
+  }
 }
 
 void main() {

@@ -69,8 +69,14 @@ FirebaseBackend defaultBackend() =>
 /// so the placeholder key/app id never reach real Google servers and can
 /// never leak or spend real quota. The real (non-emulator) values arrive at
 /// run time through the dart-defines in [sharedProjectFirebaseOptions].
+///
+/// The key is still fake, but it keeps the Firebase key shape (`AIza` plus 35
+/// characters). The Android Functions SDK rejects any other shape before it
+/// builds a request, so a readable placeholder like `demo-placeholder-key`
+/// breaks every callable on a device (issue #45). The emulator accepts any
+/// key, so this value still never reaches Google.
 FirebaseOptions emulatorFirebaseOptions() => const FirebaseOptions(
-      apiKey: 'demo-placeholder-key',
+      apiKey: 'AIzaSyB00000000000000000000000000000000',
       appId: '1:000000000000:android:com.sfic.driverapp',
       messagingSenderId: '000000000000',
       projectId: 'safaaisaathi-63a87',

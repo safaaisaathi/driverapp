@@ -1,0 +1,15 @@
+{
+  "name": "driverapp-dev-scripts",
+  "private": true,
+  "type": "module",
+  "description": "Local seed and read-back tools. Not part of the app build.",
+  "scripts": {
+    "seed:emulator": "node seed_reference_data.mjs --emulator --project safaaisaathi-63a87",
+    "seed": "node seed_reference_data.mjs",
+    "read-trip": "node read_trip.mjs",
+    "test:seed": "node --test seed_reference_data.test.mjs"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.0.0"
+  }
+}

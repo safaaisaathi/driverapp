@@ -34,6 +34,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart'
     show debugPrint, visibleForTesting;
 import 'package:driverapp/core/config/constants.dart';
+import 'package:driverapp/core/config/firebase_bootstrap.dart'
+    show MessagingGateway;
 import 'package:driverapp/core/contract/shift_gateway.dart';
 import 'package:driverapp/core/domain/end_shift_writes.dart';
 import 'package:driverapp/core/domain/geo_point.dart';
@@ -165,6 +167,10 @@ class TrackingEngine {
     /// auto-ends a shift, so the app layer can clear its shift session and
     /// show the notice.
     void Function(String tripId)? onShiftAutoEnded,
+    /// The shift topic seam (`van_{vanId}`): the depot auto-end runs the
+    /// SAME cleanup as D5, so no path leaves the install subscribed.
+    MessagingGateway? messaging,
+    String Function(String vanId)? vanTopicOf,
   })  : _vans = vansRepository,
         _trips = tripsRepository,
         _gateway = shiftGateway,
@@ -176,7 +182,9 @@ class TrackingEngine {
         _initialCheckInterval = checkIntervalSec ?? gpsIntervalSec,
         _flushIntervalSec = flushIntervalSec ?? trailFlushIntervalSec,
         _offlineWriteQueue = offlineWriteQueue, // ignore: prefer_initializing_formals
-        _onShiftAutoEnded = onShiftAutoEnded; // ignore: prefer_initializing_formals
+        _onShiftAutoEnded = onShiftAutoEnded, // ignore: prefer_initializing_formals
+        _messaging = messaging, // ignore: prefer_initializing_formals
+        _vanTopicOf = vanTopicOf; // ignore: prefer_initializing_formals
 
   final VansRepository _vans;
   final TripsRepository _trips;
@@ -198,6 +206,10 @@ class TrackingEngine {
 
   /// Ruling #29: app-layer hook that clears the shift session.
   final void Function(String tripId)? _onShiftAutoEnded;
+
+  /// Topic cleanup seam, used by the depot auto-end only when both are set.
+  final MessagingGateway? _messaging;
+  final String Function(String vanId)? _vanTopicOf;
 
   TrackingEngineState _state = TrackingEngineState.idle;
 
@@ -581,10 +593,14 @@ class TrackingEngine {
 
     _autoEnding = true;
     try {
+      final vanId = _vanId;
+      final topicOf = _vanTopicOf;
       await writeEndShift(
         gateway: _gateway,
         tripId: tripId,
         stopTracking: stop,
+        messaging: _messaging,
+        vanTopic: vanId != null && topicOf != null ? topicOf(vanId) : null,
       );
       debugPrint('tracking: depot auto-end wrote the end-shift set ($tripId)');
       _onShiftAutoEnded?.call(tripId);

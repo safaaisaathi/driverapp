@@ -19,21 +19,19 @@ import 'package:driverapp/core/theme/app_theme.dart';
 import 'package:driverapp/features/shift_start/data/fcm_topics.dart'
     show driverMessagingGatewayProvider;
 import 'package:driverapp/features/shift_start/domain/shift_session.dart';
-import 'package:driverapp/features/shift_start/ui/code_start_screen.dart';
-import 'package:driverapp/features/tracking/domain/tracking_engine.dart'
+import 'package:driverapp/features/shift_start/data/shift_tracking_auto_start.dart'
     show
-        TrackingEngineState,
-        TrackingStartResult,
-        TrackingStartOutcome,
-        TrackingResumeResult,
-        TrackingResumeOutcome,
-        TrackingRunStatus;
+        ShiftTrackingAutoStarter,
+        ShiftTrackingAutoStart,
+        ShiftTrackingAutoStartKind,
+        shiftTrackingAutoStarterProvider;
+import 'package:driverapp/features/shift_start/ui/code_start_screen.dart';
+import 'package:driverapp/features/tracking/domain/permission_flow.dart'
+    show PermissionFlowReport;
 import 'package:driverapp/features/tracking/tracking_providers.dart'
     show
-        trackingEngineProvider,
         trackingPermissionGatewayProvider,
         PermissionApproval,
-        TrackingEngine,
         TrackingPermissionGateway;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -120,6 +118,11 @@ class RecordingMessagingGateway implements MessagingGateway {
   Future<void> subscribeToTopic(String topic) async {
     topics.add(topic);
   }
+
+  @override
+  Future<void> unsubscribeFromTopic(String topic) async {
+    topics.remove(topic);
+  }
 }
 
 /// Permission gateway that reports every check as already granted, so the
@@ -160,43 +163,29 @@ class GrantAllPermissionGateway implements TrackingPermissionGateway {
       PermissionApproval.granted;
 }
 
-/// Tracking engine fake that starts immediately and records the hand-over.
-class RecordingTrackingEngine implements TrackingEngine {
+/// F-D2 auto-start seam fake: records the hand-over the production start
+/// path makes (F-20 / F-09: the screen calls the seam, the seam owns the
+/// attach + engine start + outcome). This keeps the widget tests off the
+/// offline drain and the engine's platform channels; the seam's own
+/// behaviour is pinned in tracking_auto_start_test.dart.
+class RecordingShiftTrackingAutoStarter implements ShiftTrackingAutoStarter {
   final List<({String tripId, String vanId})> startedWith = [];
+  final List<PermissionFlowReport> reports = [];
 
   @override
-  Stream<TrackingEngineState> get changes =>
-      const Stream<TrackingEngineState>.empty();
-
-  @override
-  TrackingEngineState get state => const TrackingEngineState(
-        status: TrackingRunStatus.idle,
-      );
-
-  @override
-  bool get mockLocationLatched => false;
-
-  @override
-  Future<TrackingStartResult> start({
-    required String tripId,
-    required String vanId,
+  Future<ShiftTrackingAutoStart> startTrackingFor(
+    ShiftSession session, {
     required String notificationTitle,
     required String notificationBody,
+    PermissionFlowReport? report,
   }) async {
-    startedWith.add((tripId: tripId, vanId: vanId));
-    return TrackingStartResult(TrackingStartOutcome.started);
+    startedWith.add((tripId: session.tripId, vanId: session.vanId));
+    if (report != null) reports.add(report);
+    return const ShiftTrackingAutoStart(ShiftTrackingAutoStartKind.started);
   }
 
   @override
-  Future<TrackingResumeResult> startForActiveShift({
-    required String vanId,
-    required String notificationTitle,
-    required String notificationBody,
-  }) async =>
-      const TrackingResumeResult(outcome: TrackingResumeOutcome.resumed);
-
-  @override
-  Future<void> stop() async {}
+  Future<void> openLocationSettings() async {}
 }
 
 class FlakyDriversRepository implements DriversRepository {
@@ -276,10 +265,11 @@ Future<ProviderContainer> pumpScreen(
       driverMessagingGatewayProvider
           .overrideWithValue(RecordingMessagingGateway()),
       // Post-activation seams: the permission flow auto-grants and the
-      // engine records, so tests never touch platform channels.
+      // auto-start starter records, so tests never touch platform channels.
       trackingPermissionGatewayProvider
           .overrideWithValue(const GrantAllPermissionGateway()),
-      trackingEngineProvider.overrideWithValue(RecordingTrackingEngine()),
+      shiftTrackingAutoStarterProvider
+          .overrideWithValue(RecordingShiftTrackingAutoStarter()),
     ],
   );
   addTearDown(container.dispose);
@@ -332,10 +322,10 @@ Future<void> pumpUntilCondition(
   expect(condition(), isTrue, reason: 'Condition not met within pump limit');
 }
 
-RecordingTrackingEngine _engineOf(WidgetTester tester) =>
+RecordingShiftTrackingAutoStarter _starterOf(WidgetTester tester) =>
     ProviderScope.containerOf(
       tester.element(find.byType(CodeStartScreen)),
-    ).read(trackingEngineProvider) as RecordingTrackingEngine;
+    ).read(shiftTrackingAutoStarterProvider) as RecordingShiftTrackingAutoStarter;
 
 RecordingMessagingGateway _messagingOf(WidgetTester tester) =>
     ProviderScope.containerOf(
@@ -448,11 +438,11 @@ void main() {
     // The confirmed code is remembered on-device (0.16).
     expect(identityStore.storedDriverCode, 'AB-1234');
 
-    // The tracking engine received the hand-over (old D1's post-activation
-    // pattern).
-    final engine = _engineOf(tester);
-    expect(engine.startedWith.single.tripId, trip.id);
-    expect(engine.startedWith.single.vanId, 'van-01');
+    // The F-D2 auto-start seam received the hand-over (F-20 / F-09: the
+    // production start path calls the seam, it does not re-implement it).
+    final starter = _starterOf(tester);
+    expect(starter.startedWith.single.tripId, trip.id);
+    expect(starter.startedWith.single.vanId, 'van-01');
   });
 
   testWidgets('not-found state with retry: seeding the driver afterwards '
@@ -1105,9 +1095,9 @@ void main() {
     expect(vans.vans['van-01']!.currentTripId, trip.id);
     expect(_messagingOf(tester).topics, ['van_van-01']);
     expect(identityStore.storedDriverCode, 'AB-1234');
-    final engine = _engineOf(tester);
-    expect(engine.startedWith.single.tripId, trip.id);
-    expect(engine.startedWith.single.vanId, 'van-01');
+    final starter = _starterOf(tester);
+    expect(starter.startedWith.single.tripId, trip.id);
+    expect(starter.startedWith.single.vanId, 'van-01');
   });
 
   testWidgets('ruling #28: the welcome card shows name, code, van, route and '
@@ -1159,7 +1149,7 @@ void main() {
       tester.element(find.byType(CodeStartScreen)),
     );
     expect(container.read(shiftControllerProvider)?.tripId, 'trip-01');
-    expect(_engineOf(tester).startedWith.single.tripId, 'trip-01');
+    expect(_starterOf(tester).startedWith.single.tripId, 'trip-01');
   });
 
   testWidgets('ruling #27: no running shift keeps the one-tap welcome card',

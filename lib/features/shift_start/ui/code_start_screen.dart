@@ -30,17 +30,11 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text.dart';
 import '../../../core/theme/app_tokens.dart';
 import '../../../features/tracking/tracking_providers.dart'
-    show
-        trackingEngineProvider,
-        trackingPermissionGatewayProvider,
-        PermissionApproval;
+    show trackingPermissionGatewayProvider;
 import '../../../features/tracking/ui/ui_permission_flow.dart'
     show UIPermissionFlowController;
 import '../data/shift_tracking_auto_start.dart'
-    show
-        ShiftTrackingAutoStart,
-        ShiftTrackingAutoStartKind,
-        shiftTrackingAutoStartStatusProvider;
+    show shiftTrackingAutoStarterProvider;
 import '../domain/identity_flow.dart';
 import '../domain/shift_session.dart';
 import 'code_keyboard.dart';
@@ -91,34 +85,20 @@ class CodeStartScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     final gateway = ref.read(trackingPermissionGatewayProvider);
 
+    // The UI layer owns the four rationale screens. The F-D2 auto-start seam
+    // owns the side effects (attach the trip to the offline drain, start the
+    // engine, write the banner outcome), so there is ONE production path
+    // (F-20 / F-09): the start path hands it the report instead of
+    // re-implementing the seam.
     final report = await UIPermissionFlowController(gateway, context)
         .requestAll();
 
-    final started = report.allGranted
-        ? await ref
-            .read(trackingEngineProvider)
-            .start(
-              tripId: session.tripId,
-              vanId: session.vanId,
-              notificationTitle: l10n.trackingNotificationTitle,
-              notificationBody: l10n.trackingNotificationBody,
-            )
-            .then((result) => result.isStarted)
-        : false;
-
-    final gpsOff = report.results.values
-        .any((approval) => approval == PermissionApproval.gpsOff);
-
-    final outcome = ShiftTrackingAutoStart(
-      started
-          ? ShiftTrackingAutoStartKind.started
-          : gpsOff
-              ? ShiftTrackingAutoStartKind.gpsOff
-              : ShiftTrackingAutoStartKind.denied,
-    );
-    ref
-        .read(shiftTrackingAutoStartStatusProvider.notifier)
-        .set(outcome);
+    await ref.read(shiftTrackingAutoStarterProvider).startTrackingFor(
+          session,
+          notificationTitle: l10n.trackingNotificationTitle,
+          notificationBody: l10n.trackingNotificationBody,
+          report: report,
+        );
 
     if (context.mounted) {
       if (onShiftStarted != null) {
