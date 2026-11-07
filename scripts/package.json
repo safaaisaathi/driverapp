@@ -7,6 +7,7 @@
     "seed:emulator": "node seed_reference_data.mjs --emulator --project safaaisaathi-63a87",
     "seed": "node seed_reference_data.mjs",
     "read-trip": "node read_trip.mjs",
+    "adoption:check": "node check-adoption.mjs",
     "test:seed": "node --test seed_reference_data.test.mjs"
   },
   "dependencies": {
