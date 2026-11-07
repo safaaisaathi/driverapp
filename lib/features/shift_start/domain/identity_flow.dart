@@ -279,6 +279,10 @@ class IdentityFlowController extends Notifier<IdentityFlowState> {
         state.phase == IdentityFlowPhase.startFailed;
     if (driver == null || !startable) return;
     state = state.copyWith(phase: IdentityFlowPhase.starting);
+    // F-11: the callable and the token exchange are Firebase work too. The
+    // gate is already resolved on the lookup path; this covers a direct
+    // start call (resume, retry) that reaches here first.
+    await ref.read(sessionGateProvider);
     try {
       final session = await _startShift.execute(driver, DateTime.now());
       ref.read(shiftControllerProvider.notifier).activate(session);
@@ -315,6 +319,9 @@ class IdentityFlowController extends Notifier<IdentityFlowState> {
     if (state.phase == IdentityFlowPhase.onShift) return state.session;
     if (state.phase != IdentityFlowPhase.confirmReady) return null;
     try {
+      // F-11: the resume read is Firestore work on the launch path. Wait for
+      // Firebase before the van read instead of racing boot.
+      await ref.read(sessionGateProvider);
       final van = await _vans.readVan(driver.vanId);
       if (van == null) return null;
       if (!_startShift.isResumable(van)) return null;

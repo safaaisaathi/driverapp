@@ -20,6 +20,8 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/config/firebase_bootstrap.dart'
+    show sessionGateProvider;
 import '../../../core/domain/ist_clock.dart';
 import '../../../core/models/models.dart';
 import '../../../core/repositories/repositories.dart';
@@ -139,6 +141,9 @@ class PendingReportsFlowController extends Notifier<PendingReportsState> {
     }
     state = const PendingReportsState(phase: PendingReportsPhase.loading);
     try {
+      // F-11: the route read is Firestore work; never race boot on a cold or
+      // degraded launch.
+      await ref.read(sessionGateProvider);
       final route = await _routes.readRoute(session.routeId);
       if (route == null) {
         // A missing route doc invents no wards — degraded state.
