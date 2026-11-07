@@ -58,7 +58,7 @@ GPS_INTERVAL_SEC=10, GPS_INTERVAL_LOW_BATTERY_SEC=30, LOW_BATTERY_PCT=20, OFFLIN
 - `missedCollectionAlert`: on `complaints` create with category `missed_collection`, if MISSED_REPORT_THRESHOLD reports exist for the same ward today, push to the ward inspector (`staff_{inspectorId}`). It never dispatches vans automatically.
 - `escalateComplaints`: scheduled every 15 min. Open complaints older than ESCALATION_L1_HOURS go to level 1, older than ESCALATION_L2_HOURS go to level 2. Set `status = escalated` and notify the new level.
 - `vanOfflineWatch`: scheduled every 5 min. A van `on_shift` with no update for OFFLINE_THRESHOLD_MIN gets `status = offline` and an admin alert.
-- `verifyDriverPin` (callable): input `vanId`, `pin`. Compares with `vanSecrets`, rate-limited to 5 tries per 10 minutes, returns a custom auth token with claim `vanId`.
+- `verifyDriverPin` (callable): input `vanId`, `pin`. Compares with `vanSecrets`, rate-limited to 5 tries per 10 minutes, returns a custom auth token with claim `vanId`. **Superseded for the driver app by 0.16: the app does not call this.**
 - `setDriverPin` (callable, admin only): writes the hashed PIN to `vanSecrets`.
 - `sendNotice`: on `notices` create, sends FCM to topic `all`, `ward_{targetId}` or `van_{targetId}` depending on `targetType`.
 
@@ -123,7 +123,7 @@ A `/docs/DESIGN.md` design-system file will be created later from a reference UI
 **Write policy:** check the position every GPS_INTERVAL_SEC (GPS_INTERVAL_LOW_BATTERY_SEC when battery is below LOW_BATTERY_PCT). Write to Firestore only if the van moved at least MIN_MOVE_M since the last written point, or HEARTBEAT_SEC has passed since the last write, so a stopped van never looks dead.
 
 **Flow A: driver to storage**
-1. Driver signs in with the PIN (`verifyDriverPin`), taps Start Shift. Trip doc created, `vans.status = on_shift`.
+1. Driver confirms the driver code and taps Start Shift (0.16: `bindDeviceToVan` + `startShift`). The server creates the trip and sets `vans.status = on_shift`.
 2. A foreground service reads GPS and applies the write policy.
 3. Each write updates `vans/{vanId}.lastLocation` (one small document, overwritten).
 4. Every 30 seconds the buffered points are appended to `trips.gpsTrail` in one batch.
@@ -158,7 +158,7 @@ Driver phone starts a shift on route R, a second phone with the user app in a wa
 
 ### 0.14 Steps to complete the project (in this order)
 - **Phase 0, Setup (everyone):** repo, Firebase project, emulators, config files, theme from 0.5, seed data (wards, routes, vans, staff). Done when every app boots and reads `wards` from the emulator.
-- **Phase 1, Location loop:** Driver F-D1, F-D2; User F-U1; Backend `verifyDriverPin`, rules for `vans`. Done when Test L1 passes.
+- **Phase 1, Location loop:** Driver F-D1, F-D2; User F-U1; Backend the 0.16 session callables (`bindDeviceToVan`, `startShift`, `endShift`, `markWardDone`), rules for `vans`. Done when Test L1 passes.
 - **Phase 2, Complaints loop:** User F-U2, F-U3; Admin F-A1, F-A4 (basic); Backend `mergeDuplicates`, rules for `complaints`. **Checkpoint 1 / Test C1:** a complaint from the user phone appears in the admin table with photo and location within 10 seconds, and the user sees its status change after the admin assigns it.
 - **Phase 3, Operations:** Driver F-D3, F-D5; Admin F-A2, F-A3; User F-U6, F-U8; Backend `arrivalAlert`, `vanOfflineWatch`.
 - **Phase 4, Alerts and escalation:** User F-U4 button; Driver F-D4; Admin F-A5, F-A6; Backend `missedCollectionAlert`, `escalateComplaints`, `sendNotice`. **Checkpoint 2 / Test E1:** with test time shortened, an old complaint escalates to level 1 and the officer sees it; three missed-collection reports in one ward alert the inspector.
@@ -190,7 +190,7 @@ Decision source: grill session 2026-10-30 + spec (GitHub issue #1, safaaisaathi/
 - **Welcome card content (ruling #28, 2026-11-01).** The card shows five rows: Name, Code, Van (plate), Route (name), and the allotted ward count. Van plate and route name are resolved at lookup time; a missing or unreadable route doc falls back to the raw route id and never fails the lookup.
 - **First-read auth gate (issues #18/#21, 2026-10-31).** The start-shift lookup waits for the anonymous session (8 s cap) before its first Firestore read: the read used to race `main()`'s fire-and-forget boot, fail unauthenticated on EVERY cold launch, and silently render as the offline state. Failure phases keep the confirm data (`copyWith`), so a failed retry keeps the driver's name on the card.
 - **Post-search edit (2026-10-31).** After a search the boxes drop focus and the result action owns the pinned CTA (Start Shift / Retry); tapping the boxes re-enters editing, hides the result card and returns the search CTA. A searched-but-wrong code is corrected this way instead of only being retried.
-- **Security stance.** The code is a badge number, NOT a secret: no OTP, no PIN. The app keeps its anonymous auth session (the PIN callable's custom-token sign-in is not load-bearing; 0.8 rules carry no custom-claim checks). The production wall is rules tightening + App Check per the production plan (GLOSSARY 2026-10-29).
+- **Security stance.** The code is a badge number, NOT a secret: no OTP, no PIN. The app signs in with the custom token `bindDeviceToVan` mints (CHG-0003): the `driverId`, `vanId` and `currentTripId` claims scope the rules. The production wall is rules tightening + App Check per the production plan (GLOSSARY 2026-10-29).
 - **Rules.** `match /drivers/{code} { allow read: if request.auth != null; }` and nothing else.
 - **Screens.** `D1 Shift Start` becomes the driver-code entry + confirm card; splash/welcome per above; the Start Duty screen is deleted.
 
@@ -200,7 +200,7 @@ Decision source: grill session 2026-10-30 + spec (GitHub issue #1, safaaisaathi/
 
 ## 1. Features
 **Core (must demo)**
-- `F-D1` PIN login, choose van, start shift (route comes from the van's `routeId`)
+- `F-D1` driver-code login and start shift (van and route come from the driver's allotment, 0.16)
 - `F-D2` Background GPS every GPS_INTERVAL_SEC writing `vans.lastLocation`
 - `F-D3` Route ward list with "Mark ward done"
 - `F-D4` Notices inbox (push via topic `van_{vanId}`)
@@ -214,20 +214,20 @@ Decision source: grill session 2026-10-30 + spec (GitHub issue #1, safaaisaathi/
 - `F-D10` Gujarati/English toggle
 
 ## 2. Screens (exact titles)
-- `D1 Shift Start`: 4-digit PIN, van picker (assigned route is shown, admin changes it in A6), "Start Shift".
+- `D1 Shift Start`: driver-code entry (2 letters + dash + 4 digits, 0.16), confirm card (allotted van and route are shown, admin changes them in A6), "Start Shift".
 - `D2 Live Route`: full-screen map with the van and ward markers, ordered ward list (done wards ticked), large "Mark Ward Done" button for the next ward.
 - `D3 Notices`: messages from admin (`notices` where target is this van, its ward, or all).
 - `D4 Pending Reports`: today's `missed_collection` complaints for this route's wards, each with "Will Revisit" and "Done".
 - `D5 End Shift`: summary (wards done, duration), confirm.
 
 ## 3. Behaviour rules
-- **Shift start:** verify PIN with the callable `verifyDriverPin` and sign in with the returned token; create a `trips` doc; set `vans.status = on_shift` and `vans.currentTripId`; subscribe to `van_{vanId}`; start the background location service with a persistent notification.
+- **Shift start:** read the driver's own doc by code, then call `bindDeviceToVan` and `startShift` (0.16); the server creates the trip and sets `vans.status = on_shift` and `vans.currentTripId`; subscribe to `van_{vanId}`; start the background location service with a persistent notification.
 - **GPS writes (follow 0.13 exactly):** update `vans.lastLocation` every GPS_INTERVAL_SEC. If battery is below LOW_BATTERY_PCT, use GPS_INTERVAL_LOW_BATTERY_SEC. Also save `batteryPct`. Append to `trips.gpsTrail` in batches (every 30 seconds), not on every ping.
 - **Offline:** keep unsent points in a local queue and sync in order when online.
 - **Mark Ward Done:** append `{wardId, doneAt}` to `trips.wardsDone`. If the van is outside that ward's `radiusM`, still allow it but set `flagged = true` on that `wardsDone` entry for admin review.
 - **Pending Reports:** "Will Revisit" sets complaint `status = assigned`; "Done" sets `status = resolved` and `resolvedAt`.
 - **End shift:** stop GPS, set `trips.endedAt`, `vans.status = idle`, `vans.currentTripId = null`.
-- **Mock location:** if Android reports mock location, set `trips.mockLocationDetected = true` and notify admin.
+- **Mock location:** if Android reports a mock fix, show the local warning at once and call `flagMockLocation({ tripId })` (CHG-0017). The server sets `trips.mockLocationDetected`; the app never writes the trip.
 
 ## 4. Acceptance criteria
 1. After "Start Shift", the user app shows the van within 15 seconds.
@@ -239,7 +239,7 @@ Decision source: grill session 2026-10-30 + spec (GitHub issue #1, safaaisaathi/
 ## 5. How to build each feature (follow in this order)
 **F-D1 Shift start**
 1. Scaffold per 0.11. Load the van list from public `vans` (id, plateNo).
-2. D1: PIN, then call `verifyDriverPin(vanId, pin)` and `signInWithCustomToken`. Wrong PIN shows a friendly message; the function locks out after 5 tries.
+2. D1: enter the driver code, then call `bindDeviceToVan` and start the shift through `startShift` (0.16). The old `verifyDriverPin` callable is not called.
 3. Start Shift: create the `trips` doc (`vanId`, `routeId` from the van, `date`, `startedAt`), set `vans.status = on_shift` and `currentTripId`, subscribe to `van_{vanId}` and `all`.
 
 **F-D2 Background GPS (the most important feature)**
@@ -247,7 +247,7 @@ Decision source: grill session 2026-10-30 + spec (GitHub issue #1, safaaisaathi/
 2. Run a foreground service with a persistent notification "Tracking active".
 3. Use a location stream with `distanceFilter = MIN_MOVE_M`. Write `vans.lastLocation` following the write policy in 0.13. Use GPS_INTERVAL_LOW_BATTERY_SEC below LOW_BATTERY_PCT.
 4. Buffer trail points locally and flush to `trips.gpsTrail` every 30 seconds and at End Shift.
-5. If the app restarts and `vans.currentTripId` exists with `status = on_shift`, resume tracking without asking for the PIN again.
+5. If the app restarts and `vans.currentTripId` exists with `status = on_shift`, resume tracking without asking for the driver code again.
 
 **F-D3 Mark ward done**
 1. D2 shows `routes.wardIds` in order with names; the next ward is highlighted.
@@ -257,20 +257,20 @@ Decision source: grill session 2026-10-30 + spec (GitHub issue #1, safaaisaathi/
 **F-D5 End shift:** flush the trail, set `trips.endedAt`, `vans.status = idle`, `currentTripId = null`, stop the service.
 **F-D6 Pending reports:** complaints for the route's wards, `category == missed_collection`, created today, status `received` or `assigned`.
 **F-D7 Offline:** Firestore persistence on; trail kept in local storage; flushed in order on reconnect. Only the latest `lastLocation` matters.
-**F-D9 Mock location:** if `Position.isMocked` is true, set `trips.mockLocationDetected = true`.
+**F-D9 Mock location:** if `Position.isMocked` is true, latch the banner locally and call `flagMockLocation({ tripId })` (CHG-0017). The server writes `trips.mockLocationDetected`.
 
 ## 6. Requirements from the Driver App Owner
 - Android only (iOS background tracking is out of scope).
 - Packages: firebase_core, firebase_auth, cloud_firestore, firebase_messaging, flutter_riverpod, flutter_map, latlong2, geolocator, flutter_foreground_task (or flutter_background_service), battery_plus, hive.
 - Buttons at least 56 dp, minimal text, simple one-hand layout.
 - Test on a real phone: 60 minutes with screen off, screen locked, battery saver on, and airplane mode for 2 minutes.
-- Needs from others: Backend Owner deploys `verifyDriverPin` and seeds `vanSecrets`, `wards`, `routes`.
+- Needs from others: Backend Owner deploys the 0.16 session callables and `flagMockLocation` (CHG-0017), and seeds `drivers`, `wards`, `routes`, `vans`.
 - Gives to others: `lastLocation`, `trips`, complaint status updates in the exact shapes of 0.2 and 0.13.
 - Done when: section 4 passes on a real phone.
 
 ## 7. Common vs only for this app
 - **Common (section 0, do not change):** collections, enums, constants, tokens, location flow 0.13, Cloud Functions, rules, architecture, team workflow, DESIGN.md.
-- **Only this app:** screens D1 to D5, foreground service, PIN sign-in, local trail buffer, mock-location check.
+- **Only this app:** screens D1 to D5, foreground service, driver-code sign-in, local trail buffer, mock-location check.
 
 ## 8. Out of scope
 Turn-by-turn navigation, route optimization, payroll.

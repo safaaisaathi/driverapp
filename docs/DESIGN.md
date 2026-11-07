@@ -29,6 +29,10 @@ CONTRACT    : Token names in PRD section 0.5 (color.primary, color.onPrimary, co
 
 All product behaviour (screens, data, flows) comes from PRD-1 (user app) and PRD-2 (driver app). This file decides only how things look and where they go.
 
+## DRIVER APP OVERRIDE (read before using any driver screen here)
+
+This file covers the user app and the shared design system. `docs/DESIGN-driver-app.md` is authoritative for every driver screen and supersedes the driver-specific parts of this file: the `PinPad` and PIN field (4.4, 4.17), the mascot on driver screens (4.20 and the D3/D4/D5 templates), the "van picker" and the driver splash. The driver app has no PIN, no mascot and no van picker (PRD-2 0.16). Where this file and `docs/DESIGN-driver-app.md` disagree on a driver screen, `docs/DESIGN-driver-app.md` wins.
+
 ---
 
 ## 0. META
@@ -353,7 +357,7 @@ If a class name differs in your Flutter version (for example `DialogThemeData` v
 | M2 | Card-list shell | page background; large `display` title; stacked cards; pill nav (bottom) | U3 My Complaints, U6 Settings, D3 Notices, D4 Pending Reports |
 | M3 | Flow shell | full-screen task; round close/back button top-left; one black pill CTA pinned bottom; no nav | U2 Report a Problem, U5 Rate, D1 Shift Start, D5 End Shift, first-run setup |
 | M4 | Detail sheet shell | tinted (green) header area with art or map; white rounded sheet (radius 32) holding content; back button top-left | U4 Complaint Detail |
-| M5 | Splash/onboarding shell | `brandMid` background with organic leaf blob, Binny, title, black pill CTA | Splash, first-run welcome |
+| M5 | Splash/onboarding shell | `brandMid` background with organic leaf blob, Binny, title, black pill CTA | User-app splash, first-run welcome. The driver splash has no mascot (`docs/DESIGN-driver-app.md`) |
 
 ### 3.3 Dimensions
 
@@ -428,9 +432,9 @@ Trailing icon 24 dp allowed on `primary` (camera icon on "Take photo" `[from-ima
 
 Height 48 (touch), radius pill, padding 16 horizontal, icon 20 + label (`label`). Unselected: `surface` fill + 1.5 `borderStrong`. Selected: `accent` fill, `onAccent` text, 1.5 `onAccent` outline (not color alone: also shows a leading check icon 20). Chips wrap with 8 dp gaps; a row never scrolls horizontally when <= 5 chips `[from-image:2]`.
 
-### 4.4 AppTextField (note, PIN)
+### 4.4 AppTextField (note)
 
-Pill-like: radius 20, height 56 (multi-line min 96), fill `surface`, 1.5 `borderStrong` outline, label above the field (8 dp gap, `label`), hint `textMuted`. Focus: outline `brand` 2.5. Error: outline `error` + helper text with `error` icon. PIN field (driver): 4 separate 56 x 64 boxes, numeric keypad, obscured.
+Pill-like: radius 20, height 56 (multi-line min 96), fill `surface`, 1.5 `borderStrong` outline, label above the field (8 dp gap, `label`), hint `textMuted`. Focus: outline `brand` 2.5. Error: outline `error` + helper text with `error` icon. The driver app has no PIN field; its driver-code entry is specified in `docs/DESIGN-driver-app.md`.
 
 ### 4.5 PillNav
 
@@ -555,7 +559,7 @@ Vertical list; node = 24 dp circle (`status.fill` for reached, `border` for futu
 |---|---|
 | BigActionButton | height 72, full width, pill, `primary`, label uses `button` (16 sp); optional leading icon 28; one per screen: "Mark Ward Done"; label swaps to "End Shift" once every ward is done (opens D5) (changed 2026-10-28: End Shift moved here from the D2 "more" menu) |
 | WardRow | height 72, `surface` card radius 28; leading 48 circle (`primary` + number if next, `brand` + check if done, `surfaceMuted` + number if pending); title `titleSmall`; done time `bodySmall` muted. Done rows have a check icon plus the word "Done" |
-| PinPad | 4 boxes + system numeric keypad; wrong PIN shows InlineError and a 120 ms flash of the outline in `error` (no shake) |
+| ~~PinPad~~ | **Removed for the driver app (PRD-2 0.16).** There is no PIN. The driver-code entry spec lives in `docs/DESIGN-driver-app.md`. |
 | TrackingBadge | pill in the glass bar: 8 dp `brand` dot + "Tracking active" text (text always present); label ellipsizes (`Flexible`) and never overflows the glass bar (changed 2026-10-28) |
 
 ### 4.18 Language toggle
@@ -577,7 +581,7 @@ M3 shell. Binny `wait` pose is NOT allowed here if the permission was denied (ru
 
 Sizes: 96 (inline in cards), 160 (empty states), 220 (splash). Gentle bob: translateY +-6 dp over `dur.ambient`, disabled when reduced motion. Informational use gets `semanticsLabel` text; decorative use is wrapped in `ExcludeSemantics`.
 
-NEVER show Binny on: errors, failed uploads, permission denied, destructive confirmations, escalated complaints, the driver's live map. NEVER animate it faster than `dur.ambient`. NEVER recolor or redraw it. One Binny per screen.
+NEVER show Binny on: errors, failed uploads, permission denied, destructive confirmations, escalated complaints, the driver's live map. **The driver app uses no mascot at all** (`docs/DESIGN-driver-app.md`). NEVER animate it faster than `dur.ambient`. NEVER recolor or redraw it. One Binny per screen.
 
 ```dart
 enum BinnyPose { wave, wait, celebrate, sleep }
@@ -932,6 +936,8 @@ Changed 2026-10-28: notices bell removed from glass bar — PillNav is the notic
 Landscape: map left (60%), panel right (40%, max 420) holding ContourCard + BigActionButton + ward list; nav pill stays bottom-left.
 
 ### 9.10 Remaining screens (compact)
+
+The D* rows below are the older driver templates. `docs/DESIGN-driver-app.md` is authoritative for driver screens and supersedes them.
 
 | Screen | Shell | Content order |
 |---|---|---|
