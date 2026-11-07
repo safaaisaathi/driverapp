@@ -8,9 +8,15 @@
 /// stop, so the two entry points can never drift.
 library;
 
+import '../config/firebase_bootstrap.dart' show MessagingGateway;
 import '../contract/shift_gateway.dart';
 
 /// Calls `endShift` and then stops tracking.
+///
+/// The shift's FCM topic (`van_{vanId}`, `topics.json` cleanupRule) is
+/// unsubscribed as part of the same end-shift set, so a shift that ends
+/// through either entry point leaves the van topic. Cleanup is best effort:
+/// a failed unsubscribe never keeps the trip open.
 ///
 /// A tracking stop failure never leaves the trip open, so [stopTracking] is
 /// best effort (the callable already landed). Rethrows any callable failure
@@ -19,8 +25,17 @@ Future<void> writeEndShift({
   required ShiftGateway gateway,
   required String tripId,
   required Future<void> Function() stopTracking,
+  MessagingGateway? messaging,
+  String? vanTopic,
 }) async {
   await gateway.endShift(tripId);
+  if (messaging != null && vanTopic != null) {
+    try {
+      await messaging.unsubscribeFromTopic(vanTopic);
+    } catch (_) {
+      // Topic cleanup must not fail an ended shift.
+    }
+  }
   try {
     await stopTracking();
   } catch (_) {

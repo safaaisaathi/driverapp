@@ -18,6 +18,8 @@ library;
 import 'dart:async';
 
 import 'package:driverapp/core/contract/reason_codes.dart';
+import 'package:driverapp/core/config/firebase_bootstrap.dart'
+    show MessagingGateway;
 import 'package:driverapp/core/domain/geo_point.dart';
 import 'package:driverapp/core/models/models.dart';
 import 'package:driverapp/features/tracking/domain/battery_source.dart';
@@ -76,6 +78,7 @@ void main() {
     int? flush,
     void Function(String tripId)? onAutoEnd,
     FakeShiftGateway? gateway,
+    MessagingGateway? messaging,
   }) =>
       TrackingEngine(
         vansRepository: vans,
@@ -91,6 +94,8 @@ void main() {
         checkIntervalSec: check,
         flushIntervalSec: flush,
         onShiftAutoEnded: onAutoEnd,
+        messaging: messaging,
+        vanTopicOf: (vanId) => 'van_$vanId',
       );
 
   setUp(() {
@@ -627,6 +632,36 @@ void main() {
       expect(notices, ['trip-1']);
     });
 
+    test('the auto-end also leaves the van topic', () async {
+      vans = FakeVansRepository([
+        van(
+          'van-01',
+          status: VanStatus.onShift,
+          tripId: 'trip-1',
+          depot: (lat: 22.6780, lng: 77.0),
+        ),
+      ]);
+      final messaging = _RecordingMessaging();
+      final engine = buildEngine(messaging: messaging);
+
+      await engine.start(
+        tripId: 'trip-1',
+        vanId: 'van-01',
+        notificationTitle: 'T',
+        notificationBody: '',
+      );
+
+      positions.emit(fixAt(22.6780));
+      await oneTick();
+
+      clock = clock.add(const Duration(hours: 3));
+      await oneTick();
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+
+      expect(messaging.unsubscribed, ['van_van-01']);
+      expect(engine.state.status, TrackingRunStatus.idle);
+    });
+
     test('no depot tag → a parked van never auto-ends', () async {
       vans = FakeVansRepository([
         van('van-01', status: VanStatus.onShift, tripId: 'trip-1'),
@@ -805,4 +840,20 @@ class _RecordingOfflineQueue implements OfflineWriteQueue {
 
   @override
   Future<int> get pendingLastLocationCount async => enqueued.length;
+}
+
+/// Records topic cleanups; never touches a platform channel.
+final class _RecordingMessaging implements MessagingGateway {
+  final unsubscribed = <String>[];
+
+  @override
+  Future<void> init() async {}
+
+  @override
+  Future<void> subscribeToTopic(String topic) async {}
+
+  @override
+  Future<void> unsubscribeFromTopic(String topic) async {
+    unsubscribed.add(topic);
+  }
 }

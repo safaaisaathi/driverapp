@@ -16,6 +16,8 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:driverapp/core/contract/gateway_providers.dart';
 import 'package:driverapp/core/repositories/repository_providers.dart';
+import 'package:driverapp/features/shift_start/data/fcm_topics.dart'
+    show driverMessagingGatewayProvider, fcmTopicVanOf;
 import 'package:driverapp/features/shift_start/domain/shift_session.dart';
 
 import 'data/battery_plus_battery_source.dart';
@@ -85,6 +87,9 @@ final Provider<TrackingEngine> trackingEngineProvider =
     serviceHandle: ref.watch(foregroundServiceProvider),
     trailBufferFactory: ref.watch(trailBufferFactoryProvider),
     offlineWriteQueue: ref.watch(offlineWriteQueueProvider),
+    // The depot auto-end must also leave the van topic, exactly like D5.
+    messaging: ref.watch(driverMessagingGatewayProvider),
+    vanTopicOf: fcmTopicVanOf,
     // Ruling #29: an auto-end is a real End Shift, so the in-memory session
     // clears exactly like D5's confirm does; D2 gets the notice below.
     onShiftAutoEnded: (tripId) {

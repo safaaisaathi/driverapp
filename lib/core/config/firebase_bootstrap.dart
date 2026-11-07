@@ -357,6 +357,10 @@ abstract interface class MessagingGateway {
 
   /// Subscribes this install to an FCM topic.
   Future<void> subscribeToTopic(String topic);
+
+  /// Removes this install from an FCM topic. The shift topic's cleanup rule
+  /// (`topics.json`: `van_{vanId}`) requires this on shift end.
+  Future<void> unsubscribeFromTopic(String topic);
 }
 
 /// Real gateway (production runs).
@@ -369,6 +373,10 @@ final class FirebaseMessagingGateway implements MessagingGateway {
   @override
   Future<void> subscribeToTopic(String topic) =>
       FirebaseMessaging.instance.subscribeToTopic(topic);
+
+  @override
+  Future<void> unsubscribeFromTopic(String topic) =>
+      FirebaseMessaging.instance.unsubscribeFromTopic(topic);
 }
 
 /// No-op double used by tests (and safe as a degraded fallback).
@@ -380,6 +388,9 @@ final class NoopMessagingGateway implements MessagingGateway {
 
   @override
   Future<void> subscribeToTopic(String topic) async {}
+
+  @override
+  Future<void> unsubscribeFromTopic(String topic) async {}
 }
 
 // ---------------------------------------------------------------------------

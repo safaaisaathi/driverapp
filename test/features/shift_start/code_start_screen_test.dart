@@ -118,6 +118,11 @@ class RecordingMessagingGateway implements MessagingGateway {
   Future<void> subscribeToTopic(String topic) async {
     topics.add(topic);
   }
+
+  @override
+  Future<void> unsubscribeFromTopic(String topic) async {
+    topics.remove(topic);
+  }
 }
 
 /// Permission gateway that reports every check as already granted, so the

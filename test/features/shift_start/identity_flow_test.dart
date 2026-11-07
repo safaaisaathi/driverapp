@@ -76,6 +76,11 @@ class RecordingMessagingGateway implements MessagingGateway {
   Future<void> subscribeToTopic(String topic) async {
     topics.add(topic);
   }
+
+  @override
+  Future<void> unsubscribeFromTopic(String topic) async {
+    topics.remove(topic);
+  }
 }
 
 class FlakyDriversRepository implements DriversRepository {

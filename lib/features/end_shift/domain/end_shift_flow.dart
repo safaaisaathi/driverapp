@@ -12,6 +12,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:driverapp/core/contract/gateway_providers.dart';
 import 'package:driverapp/core/domain/end_shift_writes.dart';
+import 'package:driverapp/features/shift_start/data/fcm_topics.dart'
+    show driverMessagingGatewayProvider, fcmTopicVanOf;
 import 'package:driverapp/features/shift_start/domain/shift_session.dart';
 import 'package:driverapp/features/tracking/tracking_providers.dart';
 
@@ -40,6 +42,8 @@ class EndShiftController extends Notifier<EndShiftPhase> {
         gateway: ref.read(shiftGatewayProvider),
         tripId: session.tripId,
         stopTracking: () => ref.read(trackingEngineProvider).stop(),
+        messaging: ref.read(driverMessagingGatewayProvider),
+        vanTopic: fcmTopicVanOf(session.vanId),
       );
       ref.read(shiftControllerProvider.notifier).end();
       state = EndShiftPhase.ended;
