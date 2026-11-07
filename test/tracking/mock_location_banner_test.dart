@@ -4,6 +4,7 @@
 /// no platform channels, no router, no D2 dependency (self-contained widget).
 library;
 
+import 'package:driverapp/core/domain/ist_clock.dart';
 import 'package:driverapp/core/l10n/app_localizations.dart';
 import 'package:driverapp/core/models/models.dart';
 import 'package:driverapp/core/repositories/repository_providers.dart';
@@ -74,8 +75,11 @@ Future<ProviderContainer> pumpBanner(
 }
 
 void main() {
-  final now = DateTime.now();
-  final today = DateTime(now.year, now.month, now.day);
+  // The banner resolves "today" in IST. The fixture must use the same
+  // calendar day, or the test breaks between 18:30 and 24:00 UTC when the
+  // local date is still yesterday and IST has already rolled over.
+  final ist = todayIST(DateTime.now());
+  final today = DateTime(ist.year, ist.month, ist.day);
 
   testWidgets('normal UX: real fixes → no warning banner', (tester) async {
     final trips = FakeTripsRepository([tripOf(today, false)]);
