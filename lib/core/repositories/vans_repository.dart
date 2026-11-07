@@ -2,15 +2,11 @@ import '../models/models.dart';
 
 /// Data access for the `vans` collection (0.2, 0.13).
 ///
-/// All the reads/writes the driver app performs on one van: the van list for
-/// the picker, the single-van watcher for the live route screen, and the
-/// driver-scoped writes (`lastLocation`, `status`, `batteryPct` per 0.8).
+/// All the reads/writes the driver app performs on one van: the single-van
+/// watcher for the live route screen, and the driver-scoped writes
+/// (`lastLocation`, `status`, `batteryPct` per 0.8).
 /// Implementations must never leak Firebase types into widgets (0.11).
 abstract class VansRepository {
-  /// Reads the van list (id, plateNo, routeId, status, lastLocation) for the
-  /// van-picker screen.
-  Future<List<Van>> readVans();
-
   /// Watch one van doc; emits `null` only before the doc exists.
   Stream<Van?> watchVan(String vanId);
 

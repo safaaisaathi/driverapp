@@ -95,11 +95,6 @@ class DevVansRepository implements VansRepository {
   _MutableStream<Van?> _store(String vanId) => _vans[vanId]!;
 
   @override
-  Future<List<Van>> readVans() async => [
-    for (final store in _vans.values) store.value!,
-  ];
-
-  @override
   Stream<Van?> watchVan(String vanId) => _store(vanId).stream;
 
   @override
@@ -516,6 +511,25 @@ class DevNoticesRepository implements NoticesRepository {
           ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     yield List.unmodifiable(visible);
   }
+
+  /// In-memory receipts: the dev/demo seed has no backend, so the session
+  /// keeps the dot behaviour it always had (CHG-0018 writes nothing here).
+  final Map<String, Set<String>> _receipts = {};
+
+  @override
+  Future<Set<String>> readReceipts({
+    required String driverCode,
+    required Iterable<String> noticeIds,
+  }) async => <String>{
+    for (final noticeId in noticeIds)
+      if (_receipts[noticeId]?.contains(driverCode) ?? false) noticeId,
+  };
+
+  @override
+  Future<void> writeReceipt({
+    required String driverCode,
+    required String noticeId,
+  }) async => (_receipts[noticeId] ??= <String>{}).add(driverCode);
 }
 
 /// ---------------------------------------------------------------------------

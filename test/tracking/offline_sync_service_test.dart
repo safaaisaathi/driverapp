@@ -489,9 +489,6 @@ class _FaultyVans implements VansRepository {
   final List<QueuedLastLocation> lastLocationWrites = [];
 
   @override
-  Future<List<Van>> readVans() => _inner.readVans();
-
-  @override
   Stream<Van?> watchVan(String vanId) => _inner.watchVan(vanId);
 
   @override
