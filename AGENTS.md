@@ -34,6 +34,16 @@ The user reads fast and does not want to decode. Write so the answer is clear on
 | Confused user | If the user says they do not understand, restart from the problem in plain words. Do not add more detail. |
 | Say who acts | Mark each step as "I do" or "you do". |
 
+## Repo write scope
+
+Write code only in the driverapp repo. Every other repo, platform, userapp, adminpanel, and any other, is read only.
+
+When a change is needed there, create a GitHub issue with four parts: the problem, the proposed change, the acceptance cases, and the files. Do not edit, commit, or push in those repos.
+
+The only override is an explicit instruction from the user in the current conversation. A past approval never carries over.
+
+See `GLOSSARY.md` standing protocol item 8.
+
 ## Agent skills
 
 ### Issue tracker
