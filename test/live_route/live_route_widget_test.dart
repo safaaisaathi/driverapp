@@ -7,11 +7,13 @@ library;
 
 import 'dart:async';
 
+import 'package:driverapp/core/contract/gateway_providers.dart';
 import 'package:driverapp/core/l10n/app_localizations.dart';
 import 'package:driverapp/core/models/models.dart';
 import 'package:driverapp/core/repositories/repositories.dart';
 import 'package:driverapp/features/live_route/live_route_providers.dart';
 import 'package:driverapp/features/live_route/live_route_screen.dart';
+import 'package:driverapp/features/shift_start/data/shift_tracking_auto_start.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -54,9 +56,6 @@ class CountingVansRepository implements VansRepository {
   }
 
   @override
-  Future<List<Van>> readVans() => inner.readVans();
-
-  @override
   Future<void> updateLastLocation({
     required String vanId,
     required double lat,
@@ -82,10 +81,6 @@ class CountingVansRepository implements VansRepository {
   // Seams added by the ticket-10 merge (interface grew) — forward through.
   @override
   Future<Van?> readVan(String vanId) => inner.readVan(vanId);
-
-  @override
-  Future<void> updateCurrentTripId(String vanId, String? tripId) =>
-      inner.updateCurrentTripId(vanId, tripId);
 }
 
 /// A vans repository that only errors — drives the error state. Emits null
@@ -98,16 +93,9 @@ class ThrowingVansRepository implements VansRepository {
     throw Exception('down');
   }
 
-  @override
-  Future<List<Van>> readVans() async => [];
-
   // Seams added by the ticket-10 merge — this fake is error-first everywhere.
   @override
   Future<Van?> readVan(String vanId) async => throw Exception('down');
-
-  @override
-  Future<void> updateCurrentTripId(String vanId, String? tripId) async =>
-      throw Exception('down');
 
   @override
   Future<void> updateLastLocation({
@@ -152,7 +140,7 @@ void main() {
         'scheduledStartTime': '07:30',
       });
 
-  Van van({DateTime? updatedAt}) => Van.fromMap({
+  Van van({DateTime? updatedAt, String? currentTripId}) => Van.fromMap({
     'id': 'van-01',
     'plateNo': 'GJ-05-AB-1234',
     'routeId': 'route-01',
@@ -165,7 +153,7 @@ void main() {
             'updatedAt': updatedAt,
             'speedKmph': 12.5,
           },
-    'currentTripId': null,
+    'currentTripId': currentTripId,
     'batteryPct': 76,
   });
 
@@ -193,14 +181,19 @@ void main() {
     WidgetTester tester,
     List<dynamic> overrides, {
     List<dynamic> extra = const [],
+    double devicePixelRatio = 2.6,
+    // The real offline default reads connectivity_plus (platform channel);
+    // every test pins it here so no test reaches the plugin.
+    bool offline = false,
   }) {
     tester.view.physicalSize = const Size(1080, 2340);
-    tester.view.devicePixelRatio = 2.6;
+    tester.view.devicePixelRatio = devicePixelRatio;
     addTearDown(tester.view.reset);
     return tester.pumpWidget(
       ProviderScope(
         overrides: [
           tileUrlTemplateProvider.overrideWithValue(null),
+          offlineStatusProvider.overrideWith((ref) => Stream.value(offline)),
           ...overrides,
           ...extra,
         ],
@@ -338,6 +331,114 @@ void main() {
     );
   });
 
+  testWidgets(
+    'stale trip (started before IST midnight) resolves through '
+    'vans.currentTripId: done ticks and the mark control stay live',
+    (tester) async {
+      // Defect 2026-11-03: the day query only looked at TODAY's `trips.date`,
+      // so a shift opened before midnight read as "no open trip" all day —
+      // Mark Ward Done stayed disabled and End Shift was unreachable.
+      final yesterday = now.subtract(const Duration(days: 1));
+      final stale = Trip.fromMap({
+        'id': 'trip-stale',
+        'vanId': 'van-01',
+        'routeId': 'route-01',
+        'date': yesterday,
+        'startedAt': yesterday,
+        'endedAt': null,
+        'wardsDone': [
+          {'wardId': 'wa', 'doneAt': yesterday, 'flagged': false},
+        ],
+        'alertedWardIds': [],
+        'gpsTrail': [],
+        'mockLocationDetected': false,
+      });
+
+      await pumpScreen(tester, [
+        vansRepositoryProvider.overrideWithValue(
+          FakeVansRepository([
+            van(updatedAt: now, currentTripId: 'trip-stale'),
+          ]),
+        ),
+        tripsRepositoryProvider.overrideWithValue(
+          FakeTripsRepository([stale]),
+        ),
+        wardsRepositoryProvider.overrideWithValue(
+          FakeWardsRepository([wardA, wardB, wardC]),
+        ),
+        routesRepositoryProvider.overrideWithValue(
+          FakeRoutesRepository([route()]),
+        ),
+      ]);
+      await settle(tester);
+
+      // The van pointer is the authority: the trip's own data renders.
+      expect(find.byKey(const Key('liveRoute.doneTick.wa')), findsOneWidget);
+      expect(find.byKey(const Key('liveRoute.wardRow.wb')), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('liveRoute.wardRow.wb')),
+          matching: find.byKey(const Key('liveRoute.nextChip')),
+        ),
+        findsOneWidget,
+        reason: 'the next ward follows the stale trip, not a empty fallback',
+      );
+      final markWc = tester.widget<IconButton>(
+        find.byKey(const Key('liveRoute.markWard.wc')),
+      );
+      expect(
+        markWc.onPressed,
+        isNotNull,
+        reason: 'a stale open trip must keep the mark control enabled',
+      );
+    },
+  );
+
+  testWidgets(
+    'stale trip without the van pointer is not invented by the day query',
+    (tester) async {
+      // Guards the fallback: with no pointer the provider keeps the old
+      // today-only rule, so a past-day trip never surfaces out of nowhere.
+      final yesterday = now.subtract(const Duration(days: 1));
+      final stale = Trip.fromMap({
+        'id': 'trip-stale',
+        'vanId': 'van-01',
+        'routeId': 'route-01',
+        'date': yesterday,
+        'startedAt': yesterday,
+        'endedAt': null,
+        'wardsDone': [
+          {'wardId': 'wa', 'doneAt': yesterday, 'flagged': false},
+        ],
+        'alertedWardIds': [],
+        'gpsTrail': [],
+        'mockLocationDetected': false,
+      });
+
+      await pumpScreen(tester, [
+        vansRepositoryProvider.overrideWithValue(
+          FakeVansRepository([van(updatedAt: now)]),
+        ),
+        tripsRepositoryProvider.overrideWithValue(
+          FakeTripsRepository([stale]),
+        ),
+        wardsRepositoryProvider.overrideWithValue(
+          FakeWardsRepository([wardA, wardB, wardC]),
+        ),
+        routesRepositoryProvider.overrideWithValue(
+          FakeRoutesRepository([route()]),
+        ),
+      ]);
+      await settle(tester);
+
+      expect(find.byKey(const Key('liveRoute.doneTick.wa')), findsNothing);
+      final markWc = tester.widget<IconButton>(
+        find.byKey(const Key('liveRoute.markWard.wc')),
+      );
+      expect(markWc.onPressed, isNull);
+    },
+  );
+
   testWidgets('route complete: the sheet primary becomes End Shift', (
     tester,
   ) async {
@@ -411,14 +512,15 @@ void main() {
   );
 
   testWidgets(
-    'trip stream: appendWardDone through the fake ticks the ward list',
+    'trip stream: the markWardDone callable ticks the ward list',
     (tester) async {
       final trips = FakeTripsRepository([]); // no trip at first → nothing done.
+      final vans = FakeVansRepository([van(updatedAt: now)]);
+      final gateway = FakeShiftGateway(trips: trips, vans: vans);
       await pumpScreen(tester, [
-        vansRepositoryProvider.overrideWithValue(
-          FakeVansRepository([van(updatedAt: now)]),
-        ),
+        vansRepositoryProvider.overrideWithValue(vans),
         tripsRepositoryProvider.overrideWithValue(trips),
+        shiftGatewayProvider.overrideWithValue(gateway),
         wardsRepositoryProvider.overrideWithValue(
           FakeWardsRepository([wardA, wardB, wardC]),
         ),
@@ -440,12 +542,15 @@ void main() {
       // No done ticks yet.
       expect(find.byKey(const Key('liveRoute.doneTick.wa')), findsNothing);
 
-      final created = await trips.createTrip(tripFrom([]));
+      // The server creates the trip and records the mark; the app only sees
+      // the stream re-emission (CHG-0003).
+      trips.seedTrip(tripFrom([]));
       await settle(tester);
       await tester.runAsync(
-        () => trips.appendWardDone(
-          created.id,
-          WardDone(wardId: 'wa', doneAt: now, flagged: false),
+        () => gateway.markWardDone(
+          tripId: 'trip-1',
+          wardId: 'wa',
+          flagged: false,
         ),
       );
       await settle(tester);
@@ -460,6 +565,40 @@ void main() {
       );
     },
   );
+
+  testWidgets('tracking banner fits a 360 dp screen with the long location '
+      'label (issue #23)', (tester) async {
+    // Physical 1080 at DPR 3 = 360 dp wide: the narrowest shipping phone.
+    // The banner used to be one Row (message + "Open location settings" +
+    // Retry) and overflowed by 20 px on the M215F.
+    await pumpScreen(tester, [
+      vansRepositoryProvider.overrideWithValue(
+        FakeVansRepository([van(updatedAt: now)]),
+      ),
+      tripsRepositoryProvider.overrideWithValue(FakeTripsRepository([])),
+      wardsRepositoryProvider.overrideWithValue(
+        FakeWardsRepository([wardA, wardB, wardC]),
+      ),
+      routesRepositoryProvider.overrideWithValue(
+        FakeRoutesRepository([route()]),
+      ),
+    ], extra: [
+      shiftTrackingAutoStartStatusProvider.overrideWith(_GpsOffController.new),
+    ], devicePixelRatio: 3.0);
+    await settle(tester);
+
+    // A layout overflow throws in tests, so reaching here already proves the
+    // fit; the seam keys pin that both actions are mounted and reachable.
+    expect(
+      find.byKey(const Key('liveRoute.trackingStateBanner')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('tracking-open-gps-settings')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('tracking-start-retry')), findsOneWidget);
+  });
 
   testWidgets('offline override shows the banner over cached data', (
     tester,
@@ -478,7 +617,7 @@ void main() {
           FakeRoutesRepository([route()]),
         ),
       ],
-      extra: [offlineStatusProvider.overrideWith((ref) => Stream.value(true))],
+      offline: true,
     );
     await settle(tester);
 
@@ -594,4 +733,12 @@ void main() {
     await tester.pump();
     expect(counted.activeListeners, 0);
   });
+}
+
+/// Drives the tracking banner into its gps-off state without Geolocator
+/// (issue #23's banner layout test).
+final class _GpsOffController extends ShiftTrackingAutoStartStatusController {
+  @override
+  ShiftTrackingAutoStart? build() =>
+      const ShiftTrackingAutoStart(ShiftTrackingAutoStartKind.gpsOff);
 }

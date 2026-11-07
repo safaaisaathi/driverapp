@@ -1,10 +1,12 @@
 /// Mark Ward Done write flow (ticket 07, PRD-2 F-D3 step 2 + section 3
-/// "Mark Ward Done").
+/// "Mark Ward Done", CHG-0003, CHG-0011).
 ///
-/// One Riverpod notifier drives the driver's write path: append
-/// `{wardId, doneAt, flagged}` into `trips.wardsDone` of TODAY'S open trip
-/// — through the trips repository ONLY ([TripsRepository.appendWardDone]),
-/// never a route/ward/van doc write (0.8 driver write scope).
+/// One Riverpod notifier drives the driver's write path: the
+/// `markWardDone({tripId, wardId, flagged})` callable appends
+/// `{wardId, doneAt, flagged}` into `trips.wardsDone` and flips the
+/// citizen's `wardDuty/{date}_{wardId}` row in the same transaction. The app
+/// writes NEITHER document directly: two phones on one van would race, and a
+/// direct `wardDuty` write would let a client mark any ward's duty.
 ///
 /// ### Guard and decision seams
 ///
@@ -29,18 +31,18 @@
 /// The flow keeps ONLY write-process state ([MarkWardDoneFlow.inFlight],
 /// [MarkWardDoneFlow.writeFailed]). The done tick and the next-chip move
 /// come purely from the open-trip stream the screen already watches — the
-/// repository re-emission after the append is the single source of truth.
-/// Offline changes nothing here: the append is a local Firestore write that
-/// persistence queues in order (PRD-2 offline behaviour, F-D7); the offline
-/// banner is the screen's concern, already wired in
-/// `live_route_providers.dart`.
+/// server's write re-emits it, which is the single source of truth.
+/// The call is a callable, so it needs a connection: offline it fails and the
+/// driver taps again (there is no local write for the server to reconcile).
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:driverapp/core/contract/gateway_providers.dart';
+import 'package:driverapp/core/contract/reason_codes.dart';
+import 'package:driverapp/core/contract/shift_gateway.dart';
 import 'package:driverapp/core/domain/geo.dart';
 import 'package:driverapp/core/models/models.dart';
-import 'package:driverapp/core/repositories/repositories.dart';
 
 import 'domain/ward_steps.dart';
 import 'live_route_providers.dart';
@@ -90,9 +92,9 @@ class MarkWardDoneController extends Notifier<MarkWardDoneFlow> {
   }
 
   // Imperative reads (the PendingReportsFlowController pattern): taps drive
-  // this controller; repository providers must NOT rebuild it — a rebuild
-  // would reset [state] mid-flight and drop the in-flight guard.
-  TripsRepository get _trips => ref.read(tripsRepositoryProvider);
+  // this controller; provider reads must NOT rebuild it — a rebuild would
+  // reset [state] mid-flight and drop the in-flight guard.
+  ShiftGateway get _gateway => ref.read(shiftGatewayProvider);
 
   void _set(MarkWardDoneFlow flow) {
     if (!_disposed) state = flow;
@@ -175,21 +177,30 @@ class MarkWardDoneController extends Notifier<MarkWardDoneFlow> {
           );
 
     try {
-      // The ONLY write (0.2 shape, exact fields): `trips.wardsDone` gains
-      // {wardId, doneAt, flagged}. No route/ward/van doc is touched. The
-      // trip id comes from the open-trip watch itself. Offline is fine —
-      // the write is local and the persistence queue syncs in order (F-D7).
-      await _trips.appendWardDone(
-        trip.id,
-        WardDone(
-          wardId: wardId,
-          doneAt: DateTime.now(),
-          flagged: decision.flagged,
-        ),
+      // The ONLY write (callables.json): the server appends
+      // `{wardId, doneAt, flagged}` to `trips.wardsDone` and flips the
+      // citizen's `wardDuty` row in the same transaction. The trip id comes
+      // from the open-trip watch itself. The trip stream re-emits on the
+      // server's write, which draws the tick.
+      await _gateway.markWardDone(
+        tripId: trip.id,
+        wardId: wardId,
+        flagged: decision.flagged,
       );
       _dropInFlight(wardId);
+    } on ContractException catch (error) {
+      // A refusal the driver can act on (closed shift, ward not in the
+      // snapshot) and an offline call look the same on this surface: the
+      // boring message shows and the driver taps again. NOTHING is cached
+      // done.
+      assert(() {
+        // ignore: avoid_print
+        print('mark ward done refused: ${error.code.value}');
+        return true;
+      }());
+      _dropInFlight(wardId, failed: true);
     } on Exception {
-      // The append failed (dead-zone hard error) — NOTHING is cached done;
+      // The call failed (dead-zone hard error) — NOTHING is cached done;
       // the boring message shows and the driver taps again.
       _dropInFlight(wardId, failed: true);
     }

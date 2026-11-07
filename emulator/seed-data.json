@@ -1,0 +1,165 @@
+{
+  "meta": {
+    "note": "Demo reference data for the local Emulator Suite and an explicit live seed. Every field is contract 2.0.0; no document ids are repeated inside the data (Firestore injects the doc id on read).",
+    "contract": "2.0.0",
+    "updatedAt": "2026-11-05"
+  },
+  "collections": {
+    "wards": {
+      "ward-1": {
+        "name": "Ghatlodia",
+        "nameGu": "ઘાટલોડિયા",
+        "code": "W-01",
+        "type": "urban",
+        "center": { "lat": 23.0342, "lng": 72.5701 },
+        "radiusM": 250,
+        "routeId": "route-01",
+        "inspectorId": "staff-1",
+        "escalationTo": "staff-9"
+      },
+      "ward-2": {
+        "name": "Vastrapur",
+        "nameGu": "વાસ્તાપુર",
+        "code": "W-02",
+        "type": "urban",
+        "center": { "lat": 23.028, "lng": 72.58 },
+        "radiusM": 250,
+        "routeId": "route-01",
+        "inspectorId": "staff-2",
+        "escalationTo": "staff-9"
+      },
+      "ward-3": {
+        "name": "Bodakdev",
+        "nameGu": "બોડકદેવ",
+        "code": "W-03",
+        "type": "urban",
+        "center": { "lat": 23.021, "lng": 72.59 },
+        "radiusM": 250,
+        "routeId": "route-01",
+        "inspectorId": "staff-3",
+        "escalationTo": "staff-9"
+      }
+    },
+    "routes": {
+      "route-01": {
+        "name": "West Loop",
+        "wardIds": ["ward-1", "ward-2", "ward-3"],
+        "scheduledStartTime": "07:30"
+      }
+    },
+    "vans": {
+      "van-01": {
+        "plateNo": "GJ-01-V-2201",
+        "routeId": "route-01",
+        "status": "idle",
+        "lastLocation": {
+          "lat": 23.03,
+          "lng": 72.58,
+          "speedKmph": 0,
+          "updatedAt": { "$date": "2026-11-05T06:00:00.000Z" }
+        },
+        "currentTripId": null,
+        "batteryPct": 100,
+        "depot": { "lat": 23.03, "lng": 72.58 }
+      },
+      "van-02": {
+        "plateNo": "GJ-01-V-2202",
+        "routeId": "route-01",
+        "status": "idle",
+        "lastLocation": {
+          "lat": 23.026,
+          "lng": 72.575,
+          "speedKmph": 0,
+          "updatedAt": { "$date": "2026-11-05T06:00:00.000Z" }
+        },
+        "currentTripId": null,
+        "batteryPct": 100,
+        "depot": { "lat": 23.03, "lng": 72.58 }
+      }
+    },
+    "drivers": {
+      "AB-1001": {
+        "name": "Ramesh Patel",
+        "phoneMasked": "98XXXXXX78",
+        "vanId": "van-01",
+        "routeId": "route-01",
+        "wardIds": ["ward-1"],
+        "active": true
+      },
+      "AB-1002": {
+        "name": "Suresh Bhai",
+        "phoneMasked": "98XXXXXX32",
+        "vanId": "van-01",
+        "routeId": "route-01",
+        "wardIds": ["ward-1", "ward-2", "ward-3"],
+        "active": true
+      },
+      "AB-1003": {
+        "name": "Kiran Shah",
+        "phoneMasked": "98XXXXXX44",
+        "vanId": "van-02",
+        "routeId": "route-01",
+        "wardIds": ["ward-2", "ward-3"],
+        "active": true
+      },
+      "AB-1004": {
+        "name": "Old Driver",
+        "phoneMasked": "98XXXXXX00",
+        "vanId": "van-01",
+        "routeId": "route-01",
+        "wardIds": ["ward-3"],
+        "active": false
+      }
+    },
+    "staff": {
+      "staff-1": {
+        "name": "Inspector Ghatlodia",
+        "role": "inspector",
+        "wardIds": ["ward-1"],
+        "talukaId": "taluka-01",
+        "phoneMasked": "97XXXXXX01",
+        "active": true
+      },
+      "staff-2": {
+        "name": "Inspector Vastrapur",
+        "role": "inspector",
+        "wardIds": ["ward-2"],
+        "talukaId": "taluka-01",
+        "phoneMasked": "97XXXXXX02",
+        "active": true
+      },
+      "staff-3": {
+        "name": "Inspector Bodakdev",
+        "role": "inspector",
+        "wardIds": ["ward-3"],
+        "talukaId": "taluka-01",
+        "phoneMasked": "97XXXXXX03",
+        "active": true
+      },
+      "staff-9": {
+        "name": "Chief Officer",
+        "role": "chief_officer",
+        "wardIds": ["ward-1", "ward-2", "ward-3"],
+        "talukaId": "taluka-01",
+        "phoneMasked": "97XXXXXX09",
+        "active": true
+      }
+    },
+    "notices": {
+      "notice-1": {
+        "targetType": "all",
+        "targetId": null,
+        "message": "Ring-road stretch is water-logged; use the service lane.",
+        "createdAt": { "$date": "2026-11-05T05:00:00.000Z" },
+        "createdBy": "staff-9"
+      },
+      "notice-2": {
+        "targetType": "van",
+        "targetId": "van-01",
+        "message": "Maintenance: your van is due for the evening check-up.",
+        "createdAt": { "$date": "2026-11-05T02:00:00.000Z" },
+        "createdBy": "staff-9"
+      }
+    }
+  }
+}

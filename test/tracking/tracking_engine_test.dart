@@ -6,8 +6,8 @@
 /// writes, trail buffering/batching order, resume reattach, stop-flush,
 /// service-failure states, and the Flow F revive (offline → on_shift on
 /// next write). Real-device behaviour (permissions, service survival) is
-/// ticket 14. F-D9 (ticket 11): the mock/real intake hook latches
-/// `trips.mockLocationDetected` exactly once per trip run.
+/// ticket 14. F-D9 (ticket 11): the mock/real intake hook latches LOCALLY
+/// exactly once per trip run; the trip doc is server-owned (CHG-0003).
 ///
 /// Timer tests run on REAL timers with the test-only cadence overrides
 /// (`checkIntervalSec: 1`) instead of fakeAsync: fakeAsync cannot pump the
@@ -17,6 +17,10 @@ library;
 
 import 'dart:async';
 
+import 'package:driverapp/core/contract/reason_codes.dart';
+import 'package:driverapp/core/config/firebase_bootstrap.dart'
+    show MessagingGateway;
+import 'package:driverapp/core/domain/geo_point.dart';
 import 'package:driverapp/core/models/models.dart';
 import 'package:driverapp/features/tracking/domain/battery_source.dart';
 import 'package:driverapp/features/tracking/domain/foreground_service.dart';
@@ -29,28 +33,13 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../repositories/fake_repositories.dart';
 
-/// The trips fake plus a call recorder: the latch acceptance is "the write
-/// happens at most once" — a doc-field read alone can't see repeat writes.
-class _RecordingTripsRepository extends FakeTripsRepository {
-  _RecordingTripsRepository([super.seed]);
-
-  /// Every `setMockLocationDetected` call, in order (latch ⇒ one call).
-  final List<bool> mockWrites = <bool>[];
-
-  @override
-  Future<void> setMockLocationDetected(
-    String tripId, {
-    required bool detected,
-  }) async {
-    mockWrites.add(detected);
-    await super.setMockLocationDetected(tripId, detected: detected);
-  }
-}
-
+/// The trips fake plus the engine latency: the F-D9 latch acceptance is "the
+/// flag flips once" — and, after CHG-0003, "the app never writes the doc".
 void main() {
   // ---------------------------------------------------------------- fakes
   late FakeVansRepository vans;
-  late _RecordingTripsRepository trips;
+  late FakeTripsRepository trips;
+  late FakeTrackingGateway tracking;
   late _FakePositions positions;
   late _FakeBattery battery;
   late _FakeService service;
@@ -60,6 +49,7 @@ void main() {
     String id, {
     VanStatus status = VanStatus.idle,
     String? tripId,
+    GeoPoint? depot,
   }) =>
       Van(
         id: id,
@@ -69,6 +59,7 @@ void main() {
         lastLocation: null,
         currentTripId: tripId,
         batteryPct: null,
+        depot: depot,
       );
 
   VanFix fixAt(double lat, {double lng = 77.0}) =>
@@ -79,21 +70,41 @@ void main() {
         const Duration(milliseconds: 1400),
       );
 
-  TrackingEngine buildEngine({int check = 1, int? flush}) => TrackingEngine(
+  /// The buffer the last [buildEngine] start opened — lets a test seed a
+  /// backlog and inspect what each flush took (issue #13).
+  _FakeTrailBuffer? lastBuffer;
+
+  TrackingEngine buildEngine({
+    int check = 1,
+    int? flush,
+    void Function(String tripId)? onAutoEnd,
+    void Function(bool latched)? onLatchChanged,
+    FakeShiftGateway? gateway,
+    MessagingGateway? messaging,
+  }) =>
+      TrackingEngine(
         vansRepository: vans,
         tripsRepository: trips,
         positionSource: positions,
         batterySource: battery,
         serviceHandle: service,
-        trailBufferFactory: (tripId) async => _FakeTrailBuffer(),
+        shiftGateway: gateway ??
+            FakeShiftGateway(trips: trips, vans: vans, clock: () => clock),
+        trackingGateway: tracking,
+        trailBufferFactory: (tripId) async =>
+            lastBuffer = _FakeTrailBuffer(),
         clock: () => clock,
         checkIntervalSec: check,
         flushIntervalSec: flush,
+        onMockLocationLatchChanged: onLatchChanged,
+        onShiftAutoEnded: onAutoEnd,
+        messaging: messaging,
+        vanTopicOf: (vanId) => 'van_$vanId',
       );
 
   setUp(() {
     vans = FakeVansRepository([van('van-01')]);
-    trips = _RecordingTripsRepository([
+    trips = FakeTripsRepository([
       // The engine never creates trips — the trip doc exists before the
       // engine starts (Start Shift / D1 creates it; ticket 04).
       Trip(
@@ -114,6 +125,7 @@ void main() {
     positions = _FakePositions();
     battery = _FakeBattery(80);
     service = _FakeService();
+    tracking = FakeTrackingGateway();
   });
 
   // -------------------------------------------------- non-timer behaviour
@@ -340,6 +352,47 @@ void main() {
       await engine.stop();
     });
 
+    test('one flush carries at most maxTrailBatchPoints, oldest first, and '
+        'stop() drains the rest (issue #13)', () async {
+      final engine = buildEngine(flush: 5);
+      await engine.start(
+        tripId: 'trip-1',
+        vanId: 'van-01',
+        notificationTitle: 'T',
+        notificationBody: '',
+      );
+
+      final buffer = lastBuffer!;
+      final base = DateTime.utc(2026, 10, 24, 8);
+      for (var i = 0; i < 2500; i++) {
+        await buffer.add(
+          GpsPoint(lat: i.toDouble(), lng: 77, t: base.add(Duration(seconds: i))),
+        );
+      }
+      expect(buffer.pendingCount, 2500);
+
+      // Wait for the FIRST flush tick only (5 s cadence; the fake write is
+      // instant, so the window to assert is wide).
+      final deadline = DateTime.now().add(const Duration(seconds: 15));
+      while (trips.trips['trip-1']!.gpsTrail.isEmpty) {
+        if (DateTime.now().isAfter(deadline)) fail('no flush within 15 s');
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+
+      final first = trips.trips['trip-1']!.gpsTrail;
+      expect(first.length, maxTrailBatchPoints);
+      expect(first.first.lat, 0);
+      expect(first.last.lat, maxTrailBatchPoints - 1);
+      expect(buffer.pendingCount, 2500 - maxTrailBatchPoints);
+
+      // End Shift drains the backlog in further measured batches, order kept.
+      await engine.stop();
+      final all = trips.trips['trip-1']!.gpsTrail;
+      expect(all.length, 2500);
+      expect(all.first.lat, 0);
+      expect(all.last.lat, 2499);
+    });
+
     test('stop() performs the FINAL flush (End Shift semantics)', () async {
       final engine = buildEngine();
       await engine.start(
@@ -377,6 +430,26 @@ void main() {
 
       expect(trips.trips['trip-1']!.gpsTrail.length, lengthAtStop);
       expect(engine.state.status, TrackingRunStatus.idle);
+    });
+
+    test('stop() stops the foreground service — End Shift must not leave the '
+        'persistent notification behind (P0 audit fix)', () async {
+      final engine = buildEngine();
+      await engine.start(
+        tripId: 'trip-1',
+        vanId: 'van-01',
+        notificationTitle: 'T',
+        notificationBody: '',
+      );
+      expect(service.startCount, 1);
+      expect(service.stopCount, 0);
+
+      await engine.stop();
+
+      expect(service.stopCount, 1);
+      // Idempotent: a second stop does not stop the service again.
+      await engine.stop();
+      expect(service.stopCount, 1);
     });
   });
 
@@ -421,33 +494,41 @@ void main() {
       return engine;
     }
 
-    test('one mock fix latches trips.mockLocationDetected = true', () async {
+    test('one mock fix latches locally AND asks the server to persist',
+        () async {
       final engine = await runEngine();
 
       positions.emit(mockAt(22.6780));
       await oneTick();
 
-      expect(trips.mockWrites, [true]); // set through the repository seam
-      expect(trips.trips['trip-1']!.mockLocationDetected, isTrue);
+      expect(engine.mockLocationLatched, isTrue); // local banner latch
+      // CHG-0017: the durable latch goes through the callable, never a
+      // client trip write.
+      expect(tracking.mockFlagCalls, ['trip-1']);
+      expect(trips.trips['trip-1']!.mockLocationDetected, isFalse);
 
       await engine.stop();
     });
 
-    test('many mock fixes → the write happens ONCE (local latch)', () async {
+    test('many mock fixes → the latch flips ONCE and the callable runs once',
+        () async {
       final engine = await runEngine();
 
       positions.emit(mockAt(22.6780));
       await oneTick();
+      expect(engine.mockLocationLatched, isTrue);
       positions.emit(mockAt(22.67817));
       await oneTick();
       positions.emit(mockAt(22.6783));
       await oneTick();
 
-      expect(trips.mockWrites, hasLength(1)); // never re-written per fix
+      expect(engine.mockLocationLatched, isTrue);
+      expect(tracking.mockFlagCalls, ['trip-1']);
+      expect(trips.trips['trip-1']!.mockLocationDetected, isFalse);
       await engine.stop();
     });
 
-    test('real fixes never set the field', () async {
+    test('real fixes never latch and never call the server', () async {
       final engine = await runEngine();
 
       positions.emit(fixAt(22.6780)); // real (isMocked defaults false)
@@ -455,28 +536,74 @@ void main() {
       positions.emit(fixAt(22.67817));
       await oneTick();
 
-      expect(trips.mockWrites, isEmpty);
+      expect(engine.mockLocationLatched, isFalse);
+      expect(tracking.mockFlagCalls, isEmpty);
       expect(trips.trips['trip-1']!.mockLocationDetected, isFalse);
 
       await engine.stop();
     });
 
-    test('latch persists across later REAL fixes (never unset)', () async {
+    test('the latch persists across later REAL fixes (never unset)', () async {
       final engine = await runEngine();
 
       positions.emit(mockAt(22.6780));
       await oneTick();
-      expect(trips.trips['trip-1']!.mockLocationDetected, isTrue);
+      expect(engine.mockLocationLatched, isTrue);
 
       positions.emit(fixAt(22.67817)); // driver stops mocking; real GPS again
       await oneTick();
       positions.emit(fixAt(22.6783));
       await oneTick();
 
-      expect(trips.mockWrites, hasLength(1)); // no write of false, ever
-      expect(trips.trips['trip-1']!.mockLocationDetected, isTrue);
+      expect(engine.mockLocationLatched, isTrue);
+      expect(tracking.mockFlagCalls, ['trip-1']);
 
       await engine.stop();
+    });
+
+    test('a failed call keeps the banner up and the cadence retries the server',
+        () async {
+      // Two failures: the intake call and the first cadence retry both die.
+      tracking.failuresRemaining = 2;
+      final engine = await runEngine();
+
+      positions.emit(mockAt(22.6780));
+      await oneTick();
+
+      // The local banner does not wait for the network.
+      expect(engine.mockLocationLatched, isTrue);
+      expect(tracking.mockFlagCalls, isEmpty);
+      expect(tracking.attempts, 2); // intake + one cadence retry
+
+      // No new fix: the cadence alone lands the durable latch.
+      await oneTick();
+      expect(tracking.mockFlagCalls, ['trip-1']);
+
+      // A landed flag stops the retry.
+      await oneTick();
+      expect(tracking.mockFlagCalls, ['trip-1']);
+      expect(tracking.attempts, 3);
+
+      await engine.stop();
+    });
+
+    test('the local latch is mirrored to the app layer and cleared on stop',
+        () async {
+      final latches = <bool>[];
+      final engine = buildEngine(onLatchChanged: latches.add);
+      await engine.start(
+        tripId: 'trip-1',
+        vanId: 'van-01',
+        notificationTitle: 'T',
+        notificationBody: '',
+      );
+
+      positions.emit(mockAt(22.6780));
+      await oneTick();
+      expect(latches, [true]);
+
+      await engine.stop();
+      expect(latches, [true, false]);
     });
   });
 
@@ -492,6 +619,12 @@ void main() {
         positionSource: positions,
         batterySource: battery,
         serviceHandle: service,
+        shiftGateway: FakeShiftGateway(
+          trips: trips,
+          vans: failingVans,
+          clock: () => clock,
+        ),
+        trackingGateway: tracking,
         trailBufferFactory: (tripId) async => buffer = _FakeTrailBuffer(),
         clock: () => clock,
         checkIntervalSec: 1,
@@ -515,6 +648,134 @@ void main() {
 
       await engine.stop(); // final flush lands the buffered point
       expect(trips.trips['trip-1']!.gpsTrail.length, 1);
+    });
+  });
+
+  group('depot auto-end (ruling #29)', () {
+    test('3 h parked inside 500 m → end-shift set, stop, one notice',
+        () async {
+      vans = FakeVansRepository([
+        van(
+          'van-01',
+          status: VanStatus.onShift,
+          tripId: 'trip-1',
+          depot: (lat: 22.6780, lng: 77.0),
+        ),
+      ]);
+      final notices = <String>[];
+      final engine = buildEngine(onAutoEnd: notices.add);
+
+      await engine.start(
+        tripId: 'trip-1',
+        vanId: 'van-01',
+        notificationTitle: 'T',
+        notificationBody: '',
+      );
+
+      positions.emit(fixAt(22.6780)); // ~0 m from the depot
+      await oneTick(); // dwell clock starts at 08:00
+
+      clock = clock.add(const Duration(hours: 3));
+      await oneTick();
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+
+      final ended = trips.trips['trip-1']!;
+      expect(ended.endedAt!.toUtc(), clock);
+      expect(vans.vans['van-01']!.status, VanStatus.idle);
+      expect(vans.vans['van-01']!.currentTripId, isNull);
+      expect(service.stopCount, 1);
+      expect(engine.state.status, TrackingRunStatus.idle);
+      expect(notices, ['trip-1']);
+    });
+
+    test('the auto-end also leaves the van topic', () async {
+      vans = FakeVansRepository([
+        van(
+          'van-01',
+          status: VanStatus.onShift,
+          tripId: 'trip-1',
+          depot: (lat: 22.6780, lng: 77.0),
+        ),
+      ]);
+      final messaging = _RecordingMessaging();
+      final engine = buildEngine(messaging: messaging);
+
+      await engine.start(
+        tripId: 'trip-1',
+        vanId: 'van-01',
+        notificationTitle: 'T',
+        notificationBody: '',
+      );
+
+      positions.emit(fixAt(22.6780));
+      await oneTick();
+
+      clock = clock.add(const Duration(hours: 3));
+      await oneTick();
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+
+      expect(messaging.unsubscribed, ['van_van-01']);
+      expect(engine.state.status, TrackingRunStatus.idle);
+    });
+
+    test('no depot tag → a parked van never auto-ends', () async {
+      vans = FakeVansRepository([
+        van('van-01', status: VanStatus.onShift, tripId: 'trip-1'),
+      ]);
+      final engine = buildEngine();
+
+      await engine.start(
+        tripId: 'trip-1',
+        vanId: 'van-01',
+        notificationTitle: 'T',
+        notificationBody: '',
+      );
+      positions.emit(fixAt(22.6780));
+      await oneTick();
+
+      clock = clock.add(const Duration(hours: 6));
+      await oneTick();
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+
+      expect(trips.trips['trip-1']!.endedAt, isNull);
+      expect(engine.state.status, TrackingRunStatus.running);
+
+      await engine.stop();
+    });
+
+    test('a failed end call keeps the shift running and silent', () async {
+      vans = FakeVansRepository([
+        van(
+          'van-01',
+          status: VanStatus.onShift,
+          tripId: 'trip-1',
+          depot: (lat: 22.6780, lng: 77.0),
+        ),
+      ]);
+      final gateway = FakeShiftGateway(trips: trips, vans: vans)
+        ..endError = const ContractException(ReasonCode.internal);
+      final notices = <String>[];
+      final engine = buildEngine(onAutoEnd: notices.add, gateway: gateway);
+
+      await engine.start(
+        tripId: 'trip-1',
+        vanId: 'van-01',
+        notificationTitle: 'T',
+        notificationBody: '',
+      );
+      positions.emit(fixAt(22.6780));
+      await oneTick();
+
+      clock = clock.add(const Duration(hours: 3));
+      await oneTick();
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+
+      expect(trips.trips['trip-1']!.endedAt, isNull);
+      expect(vans.vans['van-01']!.status, VanStatus.onShift);
+      expect(engine.state.status, TrackingRunStatus.running);
+      expect(notices, isEmpty);
+
+      await engine.stop();
     });
   });
 }
@@ -551,6 +812,7 @@ class _FakeBattery implements BatterySource {
 class _FakeService implements ForegroundServiceHandle {
   bool _failNext = false;
   int startCount = 0;
+  int stopCount = 0;
 
   void failNext() => _failNext = true;
 
@@ -567,7 +829,10 @@ class _FakeService implements ForegroundServiceHandle {
   }
 
   @override
-  Future<bool> stop() async => true;
+  Future<bool> stop() async {
+    stopCount++;
+    return true;
+  }
 }
 
 class _FakeTrailBuffer implements TrailBuffer {
@@ -581,8 +846,10 @@ class _FakeTrailBuffer implements TrailBuffer {
 
   @override
   Future<List<GpsPoint>> takeOldest({int? limit}) async {
-    final take = List<GpsPoint>.of(_points);
-    _points.clear();
+    final count =
+        limit == null || limit >= _points.length ? _points.length : limit;
+    final take = _points.sublist(0, count);
+    _points.removeRange(0, count);
     return take;
   }
 
@@ -629,4 +896,20 @@ class _RecordingOfflineQueue implements OfflineWriteQueue {
 
   @override
   Future<int> get pendingLastLocationCount async => enqueued.length;
+}
+
+/// Records topic cleanups; never touches a platform channel.
+final class _RecordingMessaging implements MessagingGateway {
+  final unsubscribed = <String>[];
+
+  @override
+  Future<void> init() async {}
+
+  @override
+  Future<void> subscribeToTopic(String topic) async {}
+
+  @override
+  Future<void> unsubscribeFromTopic(String topic) async {
+    unsubscribed.add(topic);
+  }
 }

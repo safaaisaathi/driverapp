@@ -7,6 +7,7 @@
   "offline": "You're offline",
   "retry": "Retry",
   "vanLabel": "Van",
+  "routeLabel": "Route",
   "splashTagline": "Clean city, one route at a time.",
   "welcomeTitle": "Welcome",
   "welcomeBody": "Safaai Saathi is ready for today's shift.",
@@ -206,5 +207,16 @@
   "identityWelcomeBackTitle": "Welcome back",
   "identityWelcomeBackBody": "This phone remembers you.",
   "identityStartMyShift": "Start my Shift",
-  "identityChangeCode": "Different driver?"
+  "identityChangeCode": "Different driver?",
+  "identityShiftConflictOtherDriver": "This van is on a shift with another driver. Ask the office before starting.",
+  "identityShiftConflictClaimed": "This van is already linked to another phone. Ask the office to release it.",
+  "identityShiftConflictStaleMarker": "This van's shift record is out of date. Ask the office to check it.",
+  "identityRateLimitedTitle": "Too many attempts",
+  "identityRateLimitedBody": "Wait a few minutes, then try your code again.",
+  "identityNotAuthorisedTitle": "Please sign in again",
+  "identityNotAuthorisedBody": "Your session could not be confirmed. Enter your code again.",
+  "identityShiftClosedTitle": "That shift is already closed",
+  "identityShiftClosedBody": "Ask the office before starting a new shift on this van.",
+  "autoEndNoticeTitle": "Shift ended at depot.",
+  "autoEndNoticeBody": "The van stayed within 500 m of the depot for 3 hours, so the shift ended automatically."
 }

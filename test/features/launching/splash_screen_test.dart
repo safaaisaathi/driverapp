@@ -133,7 +133,7 @@ void main() {
       identityStore: InMemoryDriverIdentityStore(),
       recorder: recorder,
     );
-    resolveBoot(container, const BootstrapStatus.ready(anonymousUid: 'uid'));
+    resolveBoot(container, const BootstrapStatus.ready());
 
     await tester.pump(const Duration(milliseconds: 1700));
     await pumpUntilFound(tester, find.byType(WelcomeScreen));
@@ -147,7 +147,7 @@ void main() {
     final store = InMemoryDriverIdentityStore();
     await store.writeSetupDone(true);
     final container = await pumpSplash(tester, identityStore: store);
-    resolveBoot(container, const BootstrapStatus.ready(anonymousUid: 'uid'));
+    resolveBoot(container, const BootstrapStatus.ready());
 
     await tester.pump(const Duration(milliseconds: 1700));
     await pumpUntilFound(tester, find.byType(CodeStartScreen));
@@ -176,7 +176,7 @@ void main() {
     expect(find.byType(SplashScreen), findsOneWidget);
 
     // The boot answers: the splash advances with no user input at all.
-    resolveBoot(container, const BootstrapStatus.ready(anonymousUid: 'uid'));
+    resolveBoot(container, const BootstrapStatus.ready());
     await tester.pump();
     await pumpUntilFound(tester, find.byType(WelcomeScreen));
 
@@ -247,7 +247,7 @@ void main() {
       ),
     );
     await tester.pump();
-    resolveBoot(container, const BootstrapStatus.ready(anonymousUid: 'uid'));
+    resolveBoot(container, const BootstrapStatus.ready());
 
     await tester.pump(const Duration(milliseconds: 1700));
     await tester.pump(const Duration(milliseconds: 300));

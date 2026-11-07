@@ -154,4 +154,45 @@ void main() {
       expect(wasCreatedTodayIST(start, now), isTrue);
     });
   });
+
+  group('istDayWindow (issue #15)', () {
+    test('brackets exactly the IST day: 18:30 UTC to the next 18:30 UTC', () {
+      final window = istDayWindow(DateTime.utc(2026, 6, 15, 8, 0, 0));
+      expect(window.start, DateTime.utc(2026, 6, 14, 18, 30, 0));
+      expect(window.endExclusive, DateTime.utc(2026, 6, 15, 18, 30, 0));
+    });
+
+    test('always spans 24 h: IST has no DST', () {
+      final window = istDayWindow(DateTime.utc(2026, 1, 15, 8, 0, 0));
+      expect(
+        window.endExclusive.difference(window.start),
+        const Duration(hours: 24),
+      );
+    });
+
+    test('contains its own instant and the IST-midnight `trips.date`', () {
+      // 00:30 IST on Nov 1 (19:00 UTC on Oct 31): the phone's LOCAL date is
+      // still Oct 31 on any zone west of IST, which is exactly the pre-fix
+      // trap.
+      final now = DateTime.utc(2026, 10, 31, 19, 0, 0);
+      final window = istDayWindow(now);
+      expect(now.isBefore(window.start), isFalse);
+      expect(now.isBefore(window.endExclusive), isTrue);
+
+      final tripDate = utcStartOfIstDay(now);
+      expect(tripDate, DateTime.utc(2026, 10, 31, 18, 30, 0));
+      expect(tripDate.isBefore(window.start), isFalse);
+      expect(tripDate.isBefore(window.endExclusive), isTrue);
+    });
+
+    test('the exclusive end keeps the next IST day out (never both days)', () {
+      final now = DateTime.utc(2026, 10, 31, 19, 0, 0);
+      final window = istDayWindow(now);
+      final nextIstMidnight = utcStartOfIstDay(
+        now.add(const Duration(days: 1)),
+      );
+      expect(nextIstMidnight, window.endExclusive);
+      expect(nextIstMidnight.isBefore(window.endExclusive), isFalse);
+    });
+  });
 }

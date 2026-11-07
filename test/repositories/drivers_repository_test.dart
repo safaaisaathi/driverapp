@@ -42,7 +42,7 @@ void main() {
       expect(model.toMap(), roundTrip.toMap());
       expect(model.id, 'AB-1234');
       expect(model.name, 'Ramesh Patel');
-      expect(model.phone, '9876543210');
+      expect(model.phoneMasked, '98XXXXXX10');
       expect(model.vanId, 'van-01');
       expect(model.routeId, 'route-01');
       expect(model.wardIds, const ['ward-01', 'ward-02']);

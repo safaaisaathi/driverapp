@@ -15,6 +15,10 @@ library;
 import 'dart:async';
 
 import 'package:driverapp/core/config/firebase_bootstrap.dart';
+import 'package:driverapp/core/contract/gateway_providers.dart';
+import 'package:driverapp/core/contract/reason_codes.dart';
+import 'package:driverapp/core/contract/shift_gateway.dart';
+import 'package:driverapp/core/identity/install_id.dart';
 import 'package:driverapp/core/domain/ist_clock.dart';
 import 'package:driverapp/core/identity/driver_identity_controller.dart';
 import 'package:driverapp/core/models/models.dart';
@@ -72,6 +76,11 @@ class RecordingMessagingGateway implements MessagingGateway {
   Future<void> subscribeToTopic(String topic) async {
     topics.add(topic);
   }
+
+  @override
+  Future<void> unsubscribeFromTopic(String topic) async {
+    topics.remove(topic);
+  }
 }
 
 class FlakyDriversRepository implements DriversRepository {
@@ -94,46 +103,61 @@ final class _LookupFailed implements Exception {
   const _LookupFailed();
 }
 
-class FlakyTripsRepository extends FakeTripsRepository {
-  FlakyTripsRepository(this.failsRemaining);
-
-  int failsRemaining;
-
-  @override
-  Future<Trip> createTrip(Trip trip) {
-    if (failsRemaining > 0) {
-      failsRemaining--;
-      throw const _CreateTripFailed();
-    }
-    return super.createTrip(trip);
-  }
-}
-
-final class _CreateTripFailed implements Exception {
-  const _CreateTripFailed();
-}
-
 /// One wired container per test: fakes in, flow controller out.
 final class Harness {
   Harness({
     Iterable<Driver>? driversSeed,
     DriversRepository? driversRepo,
     List<Van>? vansSeed,
-    TripsRepository? tripsRepo,
+    FakeTripsRepository? tripsRepo,
+    FakeShiftGateway? shiftGateway,
+    FakeDriverSessionGateway? sessionGateway,
+    Iterable<Driver>? gatewayDrivers,
     Future<void>? sessionGate,
   })  : drivers = FakeDriversRepository(driversSeed),
         vans = FakeVansRepository(vansSeed),
         trips = tripsRepo ?? FakeTripsRepository(),
         messaging = RecordingMessagingGateway(),
         identityStore = InMemoryDriverIdentityStore() {
+    final seedDrivers = gatewayDrivers ?? driversSeed ?? const <Driver>[];
+    shift = shiftGateway ??
+        FakeShiftGateway(
+          trips: trips,
+          vans: vans,
+          drivers: seedDrivers,
+          routeWardIds: {
+            'route-driver': const ['ward-01', 'ward-02'],
+            'route-01': const ['ward-01', 'ward-02'],
+          },
+        );
+    session = sessionGateway ??
+        FakeDriverSessionGateway(
+          bindingFor: (code) => DriverBinding(
+            token: 'bind-$code',
+            vanId: 'van-01',
+            driverId: code,
+            claimMode: 'firstClaim',
+          ),
+        );
     container = ProviderContainer(
       overrides: [
         driversRepositoryProvider
             .overrideWithValue(driversRepo ?? drivers),
         vansRepositoryProvider.overrideWithValue(vans),
         tripsRepositoryProvider.overrideWithValue(trips),
+        shiftGatewayProvider.overrideWithValue(shift),
+        driverSessionGatewayProvider.overrideWithValue(session),
+        // Ruling #28: the welcome card resolves the route name at lookup
+        // time; the fake keeps that read off Firestore.
+        routesRepositoryProvider.overrideWithValue(
+          FakeRoutesRepository([
+            RouteModel.fromMap(routeDocMap()),
+            RouteModel.fromMap(routeDocMap(id: 'route-driver')),
+          ]),
+        ),
         driverMessagingGatewayProvider.overrideWithValue(messaging),
         driverIdentityStoreProvider.overrideWithValue(identityStore),
+        installIdStoreProvider.overrideWithValue(FakeInstallIdStore()),
         // The cold-start gate (issue #18) defaults to immediate in tests;
         // the race test scripts it with a closed completer.
         if (sessionGate != null)
@@ -146,7 +170,9 @@ final class Harness {
 
   final FakeDriversRepository drivers;
   final FakeVansRepository vans;
-  final TripsRepository trips;
+  final FakeTripsRepository trips;
+  late final FakeShiftGateway shift;
+  late final FakeDriverSessionGateway session;
   final RecordingMessagingGateway messaging;
   final InMemoryDriverIdentityStore identityStore;
 
@@ -188,8 +214,9 @@ void main() {
 
       final submit = harness.submit('ab-1234');
       await Future<void>.delayed(Duration.zero);
-      // Gate closed: the flow is looking up, but NO read left the device.
+      // Gate closed: the flow is looking up, but NO bind/read left the device.
       expect(harness.state.phase, IdentityFlowPhase.lookingUp);
+      expect(harness.session.binds, isEmpty);
       expect(harness.drivers.lookups, isEmpty);
 
       // The session lands: the lookup proceeds and confirms.
@@ -214,7 +241,29 @@ void main() {
       expect(harness.state.driver?.wardIds, hasLength(2));
       expect(harness.state.vanPlate, 'GJ-05-AB-1234');
       expect(harness.drivers.lookups, ['AB-1234']);
+      // CHG-0003: the bind and the sign-in happen BEFORE the scoped read.
+      expect(harness.session.binds.single.driverCode, 'AB-1234');
+      expect(harness.session.signedInTokens, ['bind-AB-1234']);
       expect(harness.identityStore.storedDriverCode, 'AB-1234');
+    });
+
+    test('a refused bind lands on accessFailed with the server reason and '
+        'makes NO driver read', () async {
+      final session = FakeDriverSessionGateway();
+      session.bindError = const ContractException(ReasonCode.rateLimited);
+      final harness = Harness(
+        driversSeed: [sampleDriver()],
+        vansSeed: [sampleVan()],
+        sessionGateway: session,
+      );
+
+      await harness.submit('AB-1234');
+
+      expect(harness.state.phase, IdentityFlowPhase.accessFailed);
+      expect(harness.state.reason, ReasonCode.rateLimited);
+      expect(harness.drivers.lookups, isEmpty,
+          reason: 'the driver doc is unreadable without the claim');
+      expect(harness.session.signedInTokens, isEmpty);
     });
 
     test('unknown code: notFound (a well-formed code with no doc)',
@@ -271,9 +320,9 @@ void main() {
       expect(harness.drivers.lookups, ['ZZ-9999', 'ZZ-9999']);
     });
 
-    test('full lifecycle: start creates the trip from the VAN, marks the '
-        'van on_shift, activates the session and subscribes the topic',
-        () async {
+    test('full lifecycle: the callable creates the trip from the DRIVER doc, '
+        'marks the van on_shift, activates the session and subscribes the '
+        'topic', () async {
       final harness = Harness(
         driversSeed: [sampleDriver()],
         vansSeed: [sampleVan()],
@@ -288,15 +337,12 @@ void main() {
       expect(session, isNotNull);
       expect(session!.vanId, 'van-01');
 
-      // Trip doc: vanId + routeId come from the VAN doc, never the driver.
-      expect(harness.trips, isA<FakeTripsRepository>());
-      final trips = (harness.trips as FakeTripsRepository).trips;
+      // The server took the route and the ward snapshot from its own docs.
+      final trips = harness.trips.trips;
       expect(trips, hasLength(1));
       final trip = trips.values.single;
       expect(trip.vanId, 'van-01');
-      expect(trip.routeId, 'route-van');
-      // 0.16 trip contract: the confirmed code + the driver's allotted wards
-      // land on the trip doc (the van came from `drivers.vanId`).
+      expect(trip.routeId, 'route-driver');
       expect(trip.driverId, 'AB-1234');
       expect(trip.wardIds, const ['ward-01', 'ward-02']);
       expect(
@@ -305,10 +351,16 @@ void main() {
         reason: 'trips.date is today IST',
       );
 
-      // Van marker writes (behaviour rules 3).
+      // Van marker (server transaction, mirrored by the fake).
       final van = harness.vans.vans['van-01']!;
       expect(van.status, VanStatus.onShift);
       expect(van.currentTripId, trip.id);
+
+      // The returned token is applied before the first trail write.
+      expect(
+        harness.session.signedInTokens,
+        ['bind-AB-1234', 'token-AB-1234-${trip.id}'],
+      );
 
       // FCM topic `van_{vanId}` (0.6.6).
       expect(harness.messaging.topics, ['van_van-01']);
@@ -316,17 +368,14 @@ void main() {
       // The session reached ShiftController (the D2 seam).
       final live = harness.container.read(shiftControllerProvider);
       expect(live?.tripId, trip.id);
-      expect(live?.startedAt, trip.startedAt);
     });
 
-    test('start write failure: startFailed keeps the confirm data; retry '
+    test('start call failure: startFailed keeps the confirm data; retry '
         'starts without duplicating the trip', () async {
-      final flakyTrips = FlakyTripsRepository(1);
       final harness = Harness(
         driversSeed: [sampleDriver()],
         vansSeed: [sampleVan()],
-        tripsRepo: flakyTrips,
-      );
+      )..shift.startFailuresRemaining = 1;
       await harness.submit('AB-1234');
 
       await harness.start();
@@ -336,9 +385,9 @@ void main() {
       await harness.retry();
       expect(harness.state.phase, IdentityFlowPhase.onShift);
       expect(
-        (harness.trips as FakeTripsRepository).trips,
+        harness.trips.trips,
         hasLength(1),
-        reason: 'the failed write created no doc; the retry created one',
+        reason: 'the failed call created no doc; the retry created one',
       );
     });
 
@@ -349,7 +398,8 @@ void main() {
       await harness.start();
 
       expect(harness.state.phase, IdentityFlowPhase.initial);
-      expect((harness.trips as FakeTripsRepository).trips, isEmpty);
+      expect(harness.trips.trips, isEmpty);
+      expect(harness.shift.startCalls, isEmpty);
     });
 
     test('a shared van: another driver\'s open trip is NEVER taken over — '
@@ -381,9 +431,10 @@ void main() {
 
       await harness.start();
 
-      // The blocked resume lands on the retryable startFailed state — the
-      // same inline error a write failure shows, never a crash.
+      // The blocked resume lands on the retryable startFailed state with the
+      // server's conflict reason — never a crash, never a takeover.
       expect(harness.state.phase, IdentityFlowPhase.startFailed);
+      expect(harness.state.reason, ReasonCode.vanHeldByAnotherDriver);
       expect(harness.state.driver?.id, 'AB-1234');
       // No take-over: the other driver's trip doc is untouched.
       expect(trips.trips['trip-1']!.driverId, 'AB-1001');
@@ -422,15 +473,71 @@ void main() {
     });
   });
 
-  group('maskDriverPhone (confirm card, 0.16 masked phone)', () {
-    test('strips +91 and shows first 2 + last 2 digits', () {
-      expect(maskDriverPhone('+919876543210'), '98XXXXXX10');
-      expect(maskDriverPhone('9876543210'), '98XXXXXX10');
+  group('launch-time resume (ruling #27)', () {
+    Trip openTrip({String driverId = 'AB-1234'}) => Trip.fromMap(<String, Object?>{
+          ...tripDocMapOpen(),
+          'driverId': driverId,
+        });
+
+    test('a still-running shift reattaches with no write and no tap', () async {
+      final harness = Harness(
+        driversSeed: [sampleDriver()],
+        vansSeed: [
+          sampleVan(status: 'on_shift', currentTripId: 'trip-01'),
+        ],
+        tripsRepo: FakeTripsRepository([openTrip()]),
+      );
+
+      await harness.submit('AB-1234');
+      expect(harness.state.phase, IdentityFlowPhase.confirmReady);
+      // Ruling #28: the route name is resolved at lookup time.
+      expect(harness.state.routeName, 'Godhra Fort Route');
+
+      final session =
+          await harness.container.read(identityFlowProvider.notifier).resumeIfActive();
+
+      expect(session?.tripId, 'trip-01');
+      expect(session?.vanId, 'van-01');
+      expect(harness.state.phase, IdentityFlowPhase.onShift);
+      // Resume reads the open trip, it never creates a second one.
+      expect(harness.trips.trips.length, 1);
+      expect(harness.vans.vans['van-01']!.status, VanStatus.onShift);
+      expect(harness.shift.endCalls, isEmpty);
     });
 
-    test('non-phone junk degrades without throwing', () {
-      expect(maskDriverPhone('123'), '123');
-      expect(maskDriverPhone(''), '');
+    test('no running shift: the welcome card keeps its one-tap start', () async {
+      final harness = Harness(
+        driversSeed: [sampleDriver()],
+        vansSeed: [sampleVan()], // idle, no currentTripId
+      );
+
+      await harness.submit('AB-1234');
+      final session =
+          await harness.container.read(identityFlowProvider.notifier).resumeIfActive();
+
+      expect(session, isNull);
+      expect(harness.state.phase, IdentityFlowPhase.confirmReady);
+    });
+
+    test("another driver's shift is never taken over at launch", () async {
+      final harness = Harness(
+        driversSeed: [sampleDriver()],
+        vansSeed: [
+          sampleVan(status: 'on_shift', currentTripId: 'trip-01'),
+        ],
+        tripsRepo: FakeTripsRepository([openTrip(driverId: 'CD-5678')]),
+      );
+
+      await harness.submit('AB-1234');
+      final session =
+          await harness.container.read(identityFlowProvider.notifier).resumeIfActive();
+
+      expect(session, isNull);
+      // The server refuses the takeover; the card keeps the reason so the
+      // driver can ask the office instead of silently stealing the shift.
+      expect(harness.state.phase, IdentityFlowPhase.startFailed);
+      expect(harness.state.reason, ReasonCode.vanHeldByAnotherDriver);
+      expect(harness.trips.trips['trip-01']!.driverId, 'CD-5678');
     });
   });
 }

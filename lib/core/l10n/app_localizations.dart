@@ -140,6 +140,12 @@ abstract class AppLocalizations {
   /// **'Van'**
   String get vanLabel;
 
+  /// No description provided for @routeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Route'**
+  String get routeLabel;
+
   /// No description provided for @splashTagline.
   ///
   /// In en, this message translates to:
@@ -985,6 +991,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Different driver?'**
   String get identityChangeCode;
+
+  /// No description provided for @identityShiftConflictOtherDriver.
+  ///
+  /// In en, this message translates to:
+  /// **'This van is on a shift with another driver. Ask the office before starting.'**
+  String get identityShiftConflictOtherDriver;
+
+  /// No description provided for @identityShiftConflictClaimed.
+  ///
+  /// In en, this message translates to:
+  /// **'This van is already linked to another phone. Ask the office to release it.'**
+  String get identityShiftConflictClaimed;
+
+  /// No description provided for @identityShiftConflictStaleMarker.
+  ///
+  /// In en, this message translates to:
+  /// **'This van\'s shift record is out of date. Ask the office to check it.'**
+  String get identityShiftConflictStaleMarker;
+
+  /// No description provided for @identityRateLimitedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many attempts'**
+  String get identityRateLimitedTitle;
+
+  /// No description provided for @identityRateLimitedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Wait a few minutes, then try your code again.'**
+  String get identityRateLimitedBody;
+
+  /// No description provided for @identityNotAuthorisedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Please sign in again'**
+  String get identityNotAuthorisedTitle;
+
+  /// No description provided for @identityNotAuthorisedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your session could not be confirmed. Enter your code again.'**
+  String get identityNotAuthorisedBody;
+
+  /// No description provided for @identityShiftClosedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'That shift is already closed'**
+  String get identityShiftClosedTitle;
+
+  /// No description provided for @identityShiftClosedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask the office before starting a new shift on this van.'**
+  String get identityShiftClosedBody;
+
+  /// No description provided for @autoEndNoticeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Shift ended at depot.'**
+  String get autoEndNoticeTitle;
+
+  /// No description provided for @autoEndNoticeBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The van stayed within 500 m of the depot for 3 hours, so the shift ended automatically.'**
+  String get autoEndNoticeBody;
 }
 
 class _AppLocalizationsDelegate

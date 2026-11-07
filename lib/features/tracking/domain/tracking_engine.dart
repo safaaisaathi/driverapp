@@ -17,6 +17,12 @@
 /// 5. Flow F (silent van) driver-app side: when a write lands while the
 ///    backend has marked the van `offline`, the engine sets
 ///    `vans.status = on_shift` again (0.13 Flow F).
+/// 6. Depot auto-end (ruling #29): while a fix exists, the engine feeds the
+///    van position to [DepotDwellTracker]. Three continuous hours inside
+///    500 m of the admin-set `vans.depot` runs the SAME end-shift write set
+///    as D5 (shared core), stops the run, and reports the ended trip id to
+///    the app layer. A failed write keeps the shift open and retries after
+///    [depotAutoEndRetryDelay].
 ///
 /// Platform channels (location stream, battery, foreground service, trail
 /// box) are injectable seams: small interfaces in this folder, real
@@ -28,6 +34,11 @@ import 'dart:async';
 import 'package:flutter/foundation.dart'
     show debugPrint, visibleForTesting;
 import 'package:driverapp/core/config/constants.dart';
+import 'package:driverapp/core/config/firebase_bootstrap.dart'
+    show MessagingGateway;
+import 'package:driverapp/core/contract/shift_gateway.dart';
+import 'package:driverapp/core/contract/tracking_gateway.dart';
+import 'package:driverapp/core/domain/end_shift_writes.dart';
 import 'package:driverapp/core/domain/geo_point.dart';
 import 'package:driverapp/core/domain/write_policy.dart';
 import 'package:driverapp/core/models/models.dart';
@@ -35,6 +46,7 @@ import 'package:driverapp/core/repositories/repositories.dart';
 
 import '../offline/offline_write_queue.dart';
 import 'battery_source.dart';
+import 'depot_dwell.dart';
 import 'foreground_service.dart';
 import 'position_fix.dart';
 import 'position_source.dart';
@@ -43,11 +55,9 @@ import 'trail_buffer.dart';
 /// Seconds between trail flushes (PRD-2 0.13 Flow A step 4).
 const int trailFlushIntervalSec = 30;
 
-/// Hard cap for the local Trail buffer per trip: beyond this the OLDEST
-/// points are dropped (developer ruling, ticket report — keeps a long
-/// dead-zone from growing the batch beyond a healthy write size and memory
-/// bounds; not a contract constant).
-const int maxTrailBufferPoints = 5000;
+/// After a failed depot auto-end write (offline, rules), the next attempt
+/// waits this long; the dwell latch stays over the limit meanwhile.
+const Duration depotAutoEndRetryDelay = Duration(minutes: 5);
 
 /// Run status observable through [TrackingEngine.changes].
 enum TrackingRunStatus {
@@ -151,8 +161,29 @@ class TrackingEngine {
     /// F-D7: when wired, a failed location write queues the LATEST candidate
     /// instead of being dropped (OfflineSyncService drains it on reconnect).
     OfflineWriteQueue? offlineWriteQueue,
+    /// CHG-0003: the shift callables. The depot auto-end (ruling #29) closes
+    /// the trip through `endShift`, the same callable D5 uses.
+    required ShiftGateway shiftGateway,
+    /// CHG-0017: the tracking callables. A mocked fix latches locally at
+    /// once and is persisted through `flagMockLocation`; a failed call
+    /// retries on the regular cadence.
+    required TrackingGateway trackingGateway,
+    /// F-D9: mirrors the local mock latch into the app layer so the banner
+    /// does not wait for the network. Called with true on the first mocked
+    /// fix and false when a run starts or ends.
+    void Function(bool latched)? onMockLocationLatchChanged,
+    /// Ruling #29: called with the ended trip id after the depot rule
+    /// auto-ends a shift, so the app layer can clear its shift session and
+    /// show the notice.
+    void Function(String tripId)? onShiftAutoEnded,
+    /// The shift topic seam (`van_{vanId}`): the depot auto-end runs the
+    /// SAME cleanup as D5, so no path leaves the install subscribed.
+    MessagingGateway? messaging,
+    String Function(String vanId)? vanTopicOf,
   })  : _vans = vansRepository,
         _trips = tripsRepository,
+        _gateway = shiftGateway,
+        _trackingGateway = trackingGateway, // ignore: prefer_initializing_formals
         _position = positionSource,
         _battery = batterySource,
         _service = serviceHandle,
@@ -160,10 +191,16 @@ class TrackingEngine {
         _clock = clock ?? DateTime.now,
         _initialCheckInterval = checkIntervalSec ?? gpsIntervalSec,
         _flushIntervalSec = flushIntervalSec ?? trailFlushIntervalSec,
-        _offlineWriteQueue = offlineWriteQueue; // ignore: prefer_initializing_formals
+        _offlineWriteQueue = offlineWriteQueue, // ignore: prefer_initializing_formals
+        _onMockLocationLatchChanged = onMockLocationLatchChanged, // ignore: prefer_initializing_formals
+        _onShiftAutoEnded = onShiftAutoEnded, // ignore: prefer_initializing_formals
+        _messaging = messaging, // ignore: prefer_initializing_formals
+        _vanTopicOf = vanTopicOf; // ignore: prefer_initializing_formals
 
   final VansRepository _vans;
   final TripsRepository _trips;
+  final ShiftGateway _gateway;
+  final TrackingGateway _trackingGateway;
   final PositionSource _position;
   final BatterySource _battery;
   final ForegroundServiceHandle _service;
@@ -178,6 +215,16 @@ class TrackingEngine {
 
   /// F-D7 drain seam; null in tests that don't exercise the offline path.
   final OfflineWriteQueue? _offlineWriteQueue;
+
+  /// F-D9: mirrors the local latch into the app layer (banner).
+  final void Function(bool latched)? _onMockLocationLatchChanged;
+
+  /// Ruling #29: app-layer hook that clears the shift session.
+  final void Function(String tripId)? _onShiftAutoEnded;
+
+  /// Topic cleanup seam, used by the depot auto-end only when both are set.
+  final MessagingGateway? _messaging;
+  final String Function(String vanId)? _vanTopicOf;
 
   TrackingEngineState _state = TrackingEngineState.idle;
 
@@ -196,6 +243,10 @@ class TrackingEngine {
   StreamSubscription<Van?>? _vanDocSub;
   Timer? _checkTimer;
   Timer? _flushTimer;
+
+  /// One flush write at a time: a slow uplink can outlast the 30 s tick, and
+  /// a second overlapping batch would race the first out of order.
+  bool _flushInFlight = false;
   int _intervalSec = gpsIntervalSec;
   GeoPoint? _lastWritten;
   DateTime? _lastWriteAt;
@@ -203,11 +254,34 @@ class TrackingEngine {
   Van? _latestVan;
   bool _stopping = false;
 
-  /// F-D9 local latch: avoids re-calling the repository write for every mock
-  /// fix. NOT the ground truth — `trips.mockLocationDetected` in the trip doc
-  /// is (kill/restart safe, never unset by the app). Latched here after the
-  /// first mocked fix; a failed write re-arms the write for the next mock.
+  /// F-D9 local latch: drives the banner the moment a mock fix lands. NOT the
+  /// ground truth — `trips.mockLocationDetected` in the trip doc is
+  /// (kill/restart safe, never unset by the app). The durable write goes
+  /// through `flagMockLocation` (CHG-0017).
   bool _mockLocationLatched = false;
+
+  /// The trip whose `flagMockLocation` call already succeeded, so the
+  /// cadence retry stops. Null until a call lands.
+  String? _mockLocationPersistedTripId;
+
+  /// One callable attempt at a time.
+  bool _mockFlagInFlight = false;
+
+  /// Test-only view of the F-D9 local latch: true after the first mocked fix
+  /// of this run. The trip doc (`trips.mockLocationDetected`) is the real
+  /// ground truth, written by the server-side callable (CHG-0017).
+  @visibleForTesting
+  bool get mockLocationLatched => _mockLocationLatched;
+
+  /// Ruling #29: depot dwell state for the current run, `null` until the van
+  /// doc carries a depot.
+  DepotDwellTracker? _depotDwell;
+
+  bool _autoEnding = false;
+
+  /// Set after a failed auto-end write so an offline phone retries later
+  /// instead of hammering Firestore every tick.
+  DateTime? _autoEndRetryAfter;
 
   /// Starts tracking for a trip the caller (D1 Start Shift) has just created
   /// after switching the van on_shift.
@@ -260,17 +334,25 @@ class TrackingEngine {
     _intervalSec = _initialCheckInterval;
     _stopping = false;
 
+    // Ruling #29: a fresh run starts with no dwell clock; the van doc (read
+    // right below) brings the depot.
+    _depotDwell = null;
+    _autoEnding = false;
+    _autoEndRetryAfter = null;
+
     // F-D9 latch is trip-scoped: a fresh run starts unlatched; the ground
     // truth (`trips.mockLocationDetected`) is never unset by the app.
-    _mockLocationLatched = false;
+    _setMockLocationLatch(false);
+    _mockLocationPersistedTripId = null;
 
     // Trail buffer for THIS trip ('trail-<tripId>').
     final buffer = await _trailBufferFactory(tripId);
     _trailBuffer = buffer;
 
     // Keep the van doc, so a backend `offline` marking that lands mid-shift
-    // can flip back to on_shift at the next successful write (Flow F).
-    _vanDocSub = _vans.watchVan(vanId).listen((van) => _latestVan = van);
+    // can flip back to on_shift at the next successful write (Flow F). The
+    // same stream carries the admin-set depot for the auto-end rule (#29).
+    _vanDocSub = _vans.watchVan(vanId).listen(_onVanDoc);
 
     // distanceFilter = minMoveM (PRD-2 F-D2 step 3). Fixes only update the
     // latest candidate; writes happen on the policy cadence below
@@ -341,33 +423,61 @@ class TrackingEngine {
   // internals
   // ---------------------------------------------------------------------------
 
+  /// Keeps the van value fresh (Flow F revive) and builds the depot dwell
+  /// tracker as soon as the admin-set `vans.depot` arrives (ruling #29). A
+  /// mid-shift depot move restarts the clock on the new centre.
+  void _onVanDoc(Van? van) {
+    _latestVan = van;
+    final depot = van?.depot;
+    if (depot == null) return;
+    final tracker = _depotDwell;
+    if (tracker == null || tracker.depot != depot) {
+      _depotDwell = DepotDwellTracker(depot: depot);
+    }
+  }
+
   /// Position intake (F-D2 step 3): every fix updates the write-policy
-  /// candidate. F-D9 rides on the same point: a mocked fix latches
-  /// `trips.mockLocationDetected = true` on the open trip, at most once per
-  /// run (the local latch; the app NEVER writes `false` — the doc field is
-  /// the latch the office and the banner read).
+  /// candidate. F-D9 rides on the same point: a mocked fix latches the local
+  /// banner at once and asks the server to set the durable latch
+  /// (`flagMockLocation`, CHG-0017).
   void _onFixIntake(VanFix fix) {
     _latestFix = fix;
     if (!fix.isMocked || _mockLocationLatched || _tripId == null) return;
-    _flagMockLocation();
+    _setMockLocationLatch(true);
+    unawaited(_persistMockLocation(_tripId!));
   }
 
-  /// Write the F-D9 latch through the repository (never direct Firestore).
-  /// A failed write re-arms the local latch so the next mocked fix retries;
-  /// offline connectivity alone cannot lose it, because (ruling 7) the repo
-  /// write is the only mutation and it only ever sets `true`.
-  void _flagMockLocation() {
+  /// Sets the local latch and mirrors it into the app layer so the banner
+  /// shows without waiting for the network.
+  void _setMockLocationLatch(bool value) {
+    if (_mockLocationLatched == value) return;
+    _mockLocationLatched = value;
+    _onMockLocationLatchChanged?.call(value);
+  }
+
+  /// `flagMockLocation({tripId})` (CHG-0017). The callable is idempotent, so
+  /// a retry after a dropped response is safe. A failure is logged and left
+  /// for the cadence retry; the local banner is already up.
+  Future<void> _persistMockLocation(String tripId) async {
+    if (_mockFlagInFlight) return;
+    _mockFlagInFlight = true;
+    try {
+      await _trackingGateway.flagMockLocation(tripId);
+      _mockLocationPersistedTripId = tripId;
+    } catch (error) {
+      debugPrint('tracking: flagMockLocation failed (will retry): $error');
+    } finally {
+      _mockFlagInFlight = false;
+    }
+  }
+
+  /// Retries the durable latch on the regular cadence, so a reconnect lands
+  /// it even when no new fix arrives.
+  void _retryMockLocationIfPending() {
     final tripId = _tripId;
-    if (tripId == null) return;
-    _mockLocationLatched = true;
-    unawaited(
-      _trips.setMockLocationDetected(tripId, detected: true).catchError(
-            (Object error) {
-              debugPrint('tracking: mock-location flag failed: $error');
-              _mockLocationLatched = false; // retry on the next mock fix
-            },
-          ),
-    );
+    if (!_mockLocationLatched || tripId == null) return;
+    if (_mockLocationPersistedTripId == tripId) return;
+    unawaited(_persistMockLocation(tripId));
   }
 
   Future<void> _applyStop() async {
@@ -386,12 +496,29 @@ class TrackingEngine {
     await _vanDocSub?.cancel();
     _vanDocSub = null;
 
+    // The foreground service owns the persistent "Tracking active"
+    // notification: without this call it outlives End Shift (PRD-2 §3 +
+    // F-D5 step 4 "stop the service"), leaving a stale notification until
+    // the process dies. Best effort: a platform failure must not block the
+    // trail flush below.
+    try {
+      await _service.stop();
+    } catch (error) {
+      debugPrint('tracking: foreground service stop failed: $error');
+    }
+
     final tripId = _tripId!;
     _tripId = null;
     _vanId = null;
     final buffer = _trailBuffer;
 
     await _flushTrailBufferFor(tripId, buffer);
+    // End Shift drains the WHOLE buffer, one measured batch at a time: a
+    // final flush that wrote everything at once is the write that stalled
+    // on a slow uplink (issue #13).
+    while ((buffer?.pendingCount ?? 0) > 0) {
+      await _flushTrailBufferFor(tripId, buffer);
+    }
 
     _trailBuffer = null;
     _lastWritten = null;
@@ -400,6 +527,10 @@ class TrackingEngine {
     _latestVan = null;
     _intervalSec = _initialCheckInterval;
     _stopping = false;
+    _depotDwell = null;
+    _autoEndRetryAfter = null;
+    _setMockLocationLatch(false);
+    _mockLocationPersistedTripId = null;
 
     _applyState(TrackingEngineState(
       status: TrackingRunStatus.idle,
@@ -413,6 +544,10 @@ class TrackingEngine {
   Future<void> _guardedRunOnce() async {
     if (_tripId == null || _stopping) return;
 
+    // CHG-0017: a durable mock flag that failed offline retries here, so a
+    // reconnect lands it without waiting for another mocked fix.
+    _retryMockLocationIfPending();
+
     try {
       final fix = _latestFix;
       if (fix == null) return; // no fix yet; wait for the next tick
@@ -420,6 +555,14 @@ class TrackingEngine {
       final vanId = _vanId!;
       final battery = await _safeBatteryPct();
       final now = _clock();
+
+      // Ruling #29: depot dwell is evaluated on every cadence, independent of
+      // the write policy (a parked van may legitimately skip writes).
+      final dwell = _depotDwell;
+      if (dwell != null && dwell.update((lat: fix.lat, lng: fix.lng), now)) {
+        unawaited(_autoEndShift(now));
+        return; // the auto-end owns the run from here
+      }
 
       final decision = decideWrite(
         candidate: (lat: fix.lat, lng: fix.lng),
@@ -489,6 +632,41 @@ class TrackingEngine {
     }
   }
 
+  /// Ruling #29: the van has been parked at the depot for 3 hours. Close the
+  /// SAME shift as D5 (shared core, the `endShift` callable), stop the
+  /// engine, then tell the app layer to clear its session. A failed call
+  /// keeps the trip open and retries after [depotAutoEndRetryDelay] (an
+  /// offline phone must not lose the shift, and must not spin either).
+  Future<void> _autoEndShift(DateTime now) async {
+    final tripId = _tripId;
+    if (tripId == null || _autoEnding) return;
+    final retryAfter = _autoEndRetryAfter;
+    if (retryAfter != null && now.isBefore(retryAfter)) return;
+
+    _autoEnding = true;
+    try {
+      final vanId = _vanId;
+      final topicOf = _vanTopicOf;
+      await writeEndShift(
+        gateway: _gateway,
+        tripId: tripId,
+        stopTracking: stop,
+        messaging: _messaging,
+        vanTopic: vanId != null && topicOf != null ? topicOf(vanId) : null,
+      );
+      debugPrint('tracking: depot auto-end wrote the end-shift set ($tripId)');
+      _onShiftAutoEnded?.call(tripId);
+    } catch (error) {
+      _autoEndRetryAfter = now.add(depotAutoEndRetryDelay);
+      debugPrint(
+        'tracking: depot auto-end failed, retry in '
+        '${depotAutoEndRetryDelay.inMinutes} min: $error',
+      );
+    } finally {
+      _autoEnding = false;
+    }
+  }
+
   /// 0.13 Flow F driver side: a backend `vanOfflineWatch` may have marked
   /// the van offline while writes were silent; the very next successful
   /// write must set `status = on_shift` again.
@@ -540,11 +718,14 @@ class TrackingEngine {
   /// to the FRONT of the buffer, order preserved, so catch-up data keeps
   /// the trail in order on the next flush.
   Future<void> _guardedFlushTrail() async {
-    if (_tripId == null || _stopping) return;
+    if (_tripId == null || _stopping || _flushInFlight) return;
+    _flushInFlight = true;
     try {
       await _flushTrailBuffer();
     } catch (error) {
       debugPrint('tracking: trail flush failed (will retry): $error');
+    } finally {
+      _flushInFlight = false;
     }
   }
 
@@ -561,7 +742,7 @@ class TrackingEngine {
   ) async {
     if (buffer == null) return;
 
-    final batch = await buffer.takeOldest();
+    final batch = await buffer.takeOldest(limit: maxTrailBatchPoints);
     if (batch.isEmpty) return;
     debugPrint('tracking: flush ${batch.length} points');
 

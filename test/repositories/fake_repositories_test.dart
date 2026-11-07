@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
+import 'package:driverapp/core/domain/ist_clock.dart';
 import 'package:driverapp/core/models/models.dart';
 import 'package:driverapp/core/repositories/repositories.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -22,17 +23,6 @@ void main() {
     test('implements the seam interface so ProviderScope overrides type-check',
         () {
       expect(repo, isA<VansRepository>());
-    });
-
-    test(
-        'readVans returns the list ({id, plateNo, routeId, status, lastLocation})',
-        () async {
-      final vans = await repo.readVans();
-      expect(vans.map((element) => element.id), const ['van-01', 'van-02']);
-      expect(vans.first.plateNo, 'GJ-05-AB-1234');
-      expect(vans.first.routeId, 'route-01');
-      expect(vans.first.status, VanStatus.onShift);
-      expect(vans.first.lastLocation, isNotNull);
     });
 
     test('watchVan first emits the seeded van, then changes after updates',
@@ -86,22 +76,23 @@ void main() {
       repo = FakeTripsRepository([trip]);
     });
 
-    test('createTrip assigns a fresh contract id and stores the trip',
+    test('seedTrip stores a server-created trip (the app cannot create one)',
         () async {
-      final created = await repo.createTrip(trip);
-      expect(created.id, isNot('trip-01')); // fresh id, not the seed's
-      expect(created.id, isNotEmpty);
-      expect(created.vanId, 'van-01');
-      expect(created.routeId, 'route-01');
-      expect(repo.trips.containsKey(created.id), isTrue);
+      final created = Trip.fromMap({
+        ...tripDocMapOpen(id: 'trip-created'),
+        'driverId': 'AB-1234',
+      });
+      repo.seedTrip(created);
+      expect(repo.trips['trip-created'], created);
 
-      final second = await repo.createTrip(trip);
-      expect(second.id, isNot(created.id)); // resume-never-duplicate seam
+      final second = Trip.fromMap(tripDocMapOpen(id: 'trip-second'));
+      repo.seedTrip(second);
+      expect(repo.trips.keys, containsAll(['trip-created', 'trip-second']));
     });
 
     test('watchTripByVanIdAndDate streams the fresh trip through updates',
         () async {
-      final created = await repo.createTrip(trip);
+      final created = repo.trips.values.single;
       final events = <Trip?>[];
       final subscription = repo
           .watchTripByVanIdAndDate(vanId: 'van-01', date: DateTime(2026, 10, 20))
@@ -111,7 +102,7 @@ void main() {
       expect(events.single!.id, created.id);
       expect(events.single!.endedAt, isNull); // tripDocMapOpen shape
 
-      await repo.appendWardDone(
+      repo.appendWardDoneTo(
         created.id,
         WardDone(
           wardId: 'ward-02',
@@ -128,9 +119,116 @@ void main() {
       await subscription.cancel();
     });
 
-    test('appendWardDone appends in order and keeps flagged semantics', () async {
-      final created = await repo.createTrip(trip);
-      await repo.appendWardDone(
+    test('watchTripByVanIdAndDate matches the IST day, not the phone zone '
+        '(issue #15)', () async {
+      // `trips.date` is the IST-midnight instant: 2026-11-01 IST starts at
+      // 18:30 UTC on Oct 31. A query made late on that IST day (17:30 UTC on
+      // Nov 1) is the SAME IST day, but a different LOCAL day on any zone at
+      // or west of UTC, which is exactly where the local-field day match
+      // dropped today's trip.
+      final istDay = DateTime.utc(2026, 10, 31, 18, 30);
+      final lateInThatIstDay = DateTime.utc(2026, 11, 1, 17, 30);
+      expect(istDayWindow(lateInThatIstDay).start, istDay);
+      final seeded = FakeTripsRepository([
+        Trip.fromMap({...tripDocMapOpen(), 'date': ts(istDay)}),
+      ]);
+
+      final events = <Trip?>[];
+      final subscription = seeded
+          .watchTripByVanIdAndDate(vanId: 'van-01', date: lateInThatIstDay)
+          .listen(events.add);
+      await pumpEventQueue();
+      expect(events.single?.id, 'trip-01');
+      await subscription.cancel();
+    });
+
+    test('watchRecentTrips ends at the next IST midnight, never including '
+        'the next day (issue #15)', () async {
+      final novFirst = DateTime.utc(2026, 10, 31, 18, 30); // 00:00 IST Nov 1
+      final novSecond = DateTime.utc(2026, 11, 1, 18, 30); // 00:00 IST Nov 2
+      final seeded = FakeTripsRepository([
+        Trip.fromMap({...tripDocMapOpen(id: 'trip-01'), 'date': ts(novFirst)}),
+        Trip.fromMap({...tripDocMapOpen(id: 'trip-02'), 'date': ts(novSecond)}),
+      ]);
+
+      final events = <List<Trip>>[];
+      final subscription = seeded
+          .watchRecentTrips(
+            vanId: 'van-01',
+            asOfDate: DateTime.utc(2026, 11, 1, 17, 30),
+          )
+          .listen(events.add);
+      await pumpEventQueue();
+      expect(
+        events.single.map((trip) => trip.id),
+        ['trip-01'],
+        reason: 'the next IST day is outside the history window',
+      );
+      await subscription.cancel();
+    });
+
+    test('an open trip beats a closed same-day sibling (issue #25)', () async {
+      // Both docs share the IST day; the CLOSED one started later, so a
+      // plain startedAt sort would surface it and leak its done ticks.
+      final day = DateTime(2026, 11, 1);
+      final open = Trip.fromMap({
+        ...tripDocMapOpen(id: 'trip-open'),
+        'date': ts(utcStartOfIstDay(day)),
+        'startedAt': ts(DateTime.utc(2026, 11, 1, 4, 0)),
+        'endedAt': null,
+      });
+      final closed = Trip.fromMap({
+        ...tripDocMapOpen(id: 'trip-closed'),
+        'date': ts(utcStartOfIstDay(day)),
+        'startedAt': ts(DateTime.utc(2026, 11, 1, 9, 0)),
+        'endedAt': ts(DateTime.utc(2026, 11, 1, 10, 0)),
+      });
+      final seeded = FakeTripsRepository([closed, open]);
+
+      final events = <Trip?>[];
+      final subscription = seeded
+          .watchTripByVanIdAndDate(vanId: 'van-01', date: day)
+          .listen(events.add);
+      await pumpEventQueue();
+      expect(
+        events.single?.id,
+        'trip-open',
+        reason: 'the open trip is today\'s trip, not its closed sibling',
+      );
+      await subscription.cancel();
+    });
+
+    test('closed-only day surfaces the most recently started trip (issue #25)',
+        () async {
+      final day = DateTime(2026, 11, 1);
+      Trip closedAt(String id, int hour) => Trip.fromMap({
+            ...tripDocMapOpen(id: id),
+            'date': ts(utcStartOfIstDay(day)),
+            'startedAt': ts(DateTime.utc(2026, 11, 1, hour)),
+            'endedAt': ts(DateTime.utc(2026, 11, 1, hour + 1)),
+          });
+      final seeded = FakeTripsRepository([
+        closedAt('trip-morning', 4),
+        closedAt('trip-late', 9),
+      ]);
+
+      final events = <Trip?>[];
+      final subscription = seeded
+          .watchTripByVanIdAndDate(vanId: 'van-01', date: day)
+          .listen(events.add);
+      await pumpEventQueue();
+      expect(
+        events.single?.id,
+        'trip-late',
+        reason: 'End Shift keeps the just-closed trip watchable',
+      );
+      await subscription.cancel();
+    });
+
+    test('appendWardDoneTo appends in order and keeps flagged semantics',
+        () async {
+      final created = repo.trips.values.single;
+      repo.appendWardDoneTo(
         created.id,
         WardDone(
           wardId: 'ward-02',
@@ -149,37 +247,53 @@ void main() {
           flagged: true,
         ),
       );
-
-      await repo.appendGpsTrail(
-        created.id,
-        [
-          GpsPoint(lat: 22.7759, lng: 73.7092, t: DateTime(2026, 10, 20, 9, 6)),
-        ],
-      );
-      expect(repo.trips[created.id]!.gpsTrail, hasLength(3));
-      expect(
-        repo.trips[created.id]!.gpsTrail.last,
-        GpsPoint(lat: 22.7759, lng: 73.7092, t: DateTime(2026, 10, 20, 9, 6)),
-      );
     });
 
-    test('appendGpsTrail batches several points in one call', () async {
-      final created = await repo.createTrip(trip);
+    test('appendGpsTrail writes contract trail chunks, never gpsTrail', () async {
+      final created = repo.trips.values.single;
       final points = [
         GpsPoint(lat: 22.7759, lng: 73.7092, t: DateTime(2026, 10, 20, 9, 6)),
         GpsPoint(lat: 22.7761, lng: 73.7094, t: DateTime(2026, 10, 20, 9, 7)),
       ];
       await repo.appendGpsTrail(created.id, points);
-      final stored = repo.trips[created.id]!.gpsTrail;
-      expect(stored, hasLength(4)); // 2 seeded by tripDocMapOpen + batch of 2
-      expect(stored.skip(2).map((point) => point.t), points.map((point) => point.t));
+
+      final chunks = repo.trailChunks[created.id]!;
+      expect(chunks, hasLength(1));
+      expect(chunks.single.from, 0);
+      expect(chunks.single.to, 2);
+      expect(chunks.single.points, points);
+      // The aggregate is a TEST convenience only; the real repo writes chunks.
+      expect(repo.trips[created.id]!.gpsTrail, hasLength(4));
     });
 
-    test('setEndedAt / setMockLocationDetected update the trip doc', () async {
-      final created = await repo.createTrip(trip);
+    test('appendGpsTrail splits at the 1000-point chunk cap', () async {
+      final created = repo.trips.values.single;
+      final points = List<GpsPoint>.generate(
+        1001,
+        (index) => GpsPoint(
+          lat: 22.77 + index / 100000,
+          lng: 73.71,
+          t: DateTime(2026, 10, 20, 9).add(Duration(seconds: index)),
+        ),
+      );
+
+      await repo.appendGpsTrail(created.id, points);
+
+      final chunks = repo.trailChunks[created.id]!;
+      expect(chunks, hasLength(2));
+      expect(chunks[0].points, hasLength(1000));
+      expect(chunks[0].to, 1000);
+      expect(chunks[1].points, hasLength(1));
+      expect(chunks[1].from, 1000);
+      expect(chunks[1].to, 1001);
+    });
+
+    test('server-sim helpers stamp endedAt and the mock-location latch',
+        () async {
+      final created = repo.trips.values.single;
       final end = DateTime(2026, 10, 20, 13, 30);
-      await repo.setEndedAt(created.id, end);
-      await repo.setMockLocationDetected(created.id, detected: true);
+      repo.markEnded(created.id, end);
+      repo.setMockLocationDetected(created.id, detected: true);
 
       final stored = repo.trips[created.id]!;
       expect(stored.endedAt, end);
@@ -187,7 +301,6 @@ void main() {
     });
 
     test('watchTripByVanIdAndDate ignores other vans and other days', () async {
-      await repo.createTrip(trip);
       final otherVan = await repo
           .watchTripByVanIdAndDate(vanId: 'van-99', date: DateTime(2026, 10, 20))
           .first;

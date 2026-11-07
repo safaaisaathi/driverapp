@@ -53,7 +53,7 @@ const int kFunctionsEmulatorPort = 5001;
 
 /// THE single options source. Everything else calls this.
 FirebaseOptions firebaseOptions(FirebaseBackend backend) => switch (backend) {
-      FirebaseBackend.emulatorSuite => demoFirebaseOptions(),
+      FirebaseBackend.emulatorSuite => emulatorFirebaseOptions(),
       FirebaseBackend.sharedProject => sharedProjectFirebaseOptions(),
     };
 
@@ -61,20 +61,27 @@ FirebaseOptions firebaseOptions(FirebaseBackend backend) => switch (backend) {
 FirebaseBackend defaultBackend() =>
     kUseFirebaseEmulator ? FirebaseBackend.emulatorSuite : FirebaseBackend.sharedProject;
 
-/// PLACEHOLDER — replace via firebase_options/real config when the owner
-/// supplies keys, contract 0.10 secrets rule.
+/// PLACEHOLDER — the emulator suite only, contract 0.10 secrets rule.
 ///
-/// Targets the project id `driver-app-demo` assigned by Ticket 02. Every
-/// endpoint talk target is wired explicitly to the Emulator Suite
-/// (firebase_bootstrap.dart), so this placeholder configuration never
-/// reaches real Google servers and can never leak or spend real quota.
-FirebaseOptions demoFirebaseOptions() => const FirebaseOptions(
-      apiKey: 'demo-placeholder-key',
+/// EVERY backend is the one shared project `safaaisaathi-63a87` (CHG-0008);
+/// there is no second project id anywhere in the app. Every endpoint talk
+/// target is wired explicitly to the Emulator Suite (firebase_bootstrap.dart),
+/// so the placeholder key/app id never reach real Google servers and can
+/// never leak or spend real quota. The real (non-emulator) values arrive at
+/// run time through the dart-defines in [sharedProjectFirebaseOptions].
+///
+/// The key is still fake, but it keeps the Firebase key shape (`AIza` plus 35
+/// characters). The Android Functions SDK rejects any other shape before it
+/// builds a request, so a readable placeholder like `demo-placeholder-key`
+/// breaks every callable on a device (issue #45). The emulator accepts any
+/// key, so this value still never reaches Google.
+FirebaseOptions emulatorFirebaseOptions() => const FirebaseOptions(
+      apiKey: 'AIzaSyB00000000000000000000000000000000',
       appId: '1:000000000000:android:com.sfic.driverapp',
       messagingSenderId: '000000000000',
-      projectId: 'driver-app-demo',
-      storageBucket: 'driver-app-demo.appspot.com',
-      authDomain: 'driver-app-demo.firebaseapp.com',
+      projectId: 'safaaisaathi-63a87',
+      storageBucket: 'safaaisaathi-63a87.firebasestorage.app',
+      authDomain: 'safaaisaathi-63a87.firebaseapp.com',
     );
 
 /// Real (shared) project options — supplied at RUN TIME via dart-define

@@ -10,6 +10,8 @@
 library;
 
 import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
+import 'package:driverapp/core/contract/gateway_providers.dart';
+import 'package:driverapp/core/contract/reason_codes.dart';
 import 'package:driverapp/core/l10n/app_localizations.dart';
 import 'package:driverapp/core/models/models.dart';
 import 'package:driverapp/core/repositories/repositories.dart';
@@ -126,6 +128,9 @@ void main() {
     WidgetTester tester,
     List<dynamic> overrides, {
     List<dynamic> extra = const [],
+    // The real offline default reads connectivity_plus (platform channel);
+    // every test pins it here so no test reaches the plugin.
+    bool offline = false,
   }) {
     tester.view.physicalSize = const Size(1080, 2340);
     tester.view.devicePixelRatio = 2.6;
@@ -134,6 +139,7 @@ void main() {
       ProviderScope(
         overrides: [
           tileUrlTemplateProvider.overrideWithValue(null),
+          offlineStatusProvider.overrideWith((ref) => Stream.value(offline)),
           ...overrides,
           ...extra,
         ],
@@ -204,16 +210,21 @@ void main() {
     FakeTripsRepository trips, {
     double vanLat = 22.7759,
     bool withFix = true,
-  }) =>
-      [
-        vansRepositoryProvider
-            .overrideWithValue(vansFor(vanLat, withFix: withFix)),
-        tripsRepositoryProvider.overrideWithValue(trips),
-        wardsRepositoryProvider
-            .overrideWithValue(FakeWardsRepository([wardA, wardB, wardC])),
-        routesRepositoryProvider
-            .overrideWithValue(FakeRoutesRepository([route()])),
-      ];
+    FakeShiftGateway? gateway,
+  }) {
+    final vans = vansFor(vanLat, withFix: withFix);
+    return [
+      vansRepositoryProvider.overrideWithValue(vans),
+      tripsRepositoryProvider.overrideWithValue(trips),
+      shiftGatewayProvider.overrideWithValue(
+        gateway ?? FakeShiftGateway(trips: trips, vans: vans),
+      ),
+      wardsRepositoryProvider
+          .overrideWithValue(FakeWardsRepository([wardA, wardB, wardC])),
+      routesRepositoryProvider
+          .overrideWithValue(FakeRoutesRepository([route()])),
+    ];
+  }
 
   testWidgets(
       'big next-ward button, inside radius: appends exactly {wardId, doneAt, '
@@ -389,15 +400,16 @@ void main() {
         reason: 'writing without an open trip must not happen');
   });
 
-  testWidgets('offline: the write still goes through (PRD offline: local '
-      'write, sync later) and no failure shows', (tester) async {
+  testWidgets('offline: the callable cannot reach the server, so the mark '
+      'fails and NOTHING is cached done (CHG-0003)', (tester) async {
     final trips = FakeTripsRepository([emptyTrip()]);
+    final vans = vansFor(22.7005);
+    final gateway = FakeShiftGateway(trips: trips, vans: vans)
+      ..markError = const ContractException(ReasonCode.offline);
     await pumpScreen(
       tester,
-      standardOverrides(trips, vanLat: 22.7005),
-      extra: [
-        offlineStatusProvider.overrideWith((ref) => Stream.value(true)),
-      ],
+      standardOverrides(trips, vanLat: 22.7005, gateway: gateway),
+      offline: true,
     );
     await settle(tester);
 
@@ -406,16 +418,23 @@ void main() {
     await tester.tap(find.byKey(const Key('liveRoute.markNextWard')));
     await settle(tester);
 
-    final raw = trips.trips['trip-1']!.toMap()['wardsDone'] as List<Object?>;
-    expect(raw, hasLength(1), reason: 'offline never blocks the mark');
-    expect(find.byKey(const Key('liveRoute.markError')), findsNothing);
+    expect(find.byKey(const Key('liveRoute.markError')), findsOneWidget);
+    expect(find.byKey(const Key('liveRoute.doneTick.wa')), findsNothing);
+    expect(trips.trips['trip-1']!.wardsDone, isEmpty,
+        reason: 'a callable needs a connection; there is no local queue');
   });
 
   testWidgets('write failure: a boring message appears, no tick caches '
       'locally, and the screen stays out of the global error state',
       (tester) async {
-    final trips = _ThrowingTripsRepository([emptyTrip()]);
-    await pumpScreen(tester, standardOverrides(trips, vanLat: 22.7005));
+    final trips = FakeTripsRepository([emptyTrip()]);
+    final vans = vansFor(22.7005);
+    final gateway = FakeShiftGateway(trips: trips, vans: vans)
+      ..markError = const ContractException(ReasonCode.internal);
+    await pumpScreen(
+      tester,
+      standardOverrides(trips, vanLat: 22.7005, gateway: gateway),
+    );
     await settle(tester);
     await pullSheetFull(tester);
 
@@ -550,15 +569,3 @@ Map<String, Object?> _doneEntry(String wardId) => {
       'doneAt': dateTimeToDocTime(DateTime.now()),
       'flagged': false,
     };
-
-/// A trips fake whose append ALWAYS fails — the watch stream itself stays
-/// healthy, proving a write failure surfaces WITHOUT tripping the screen's
-/// global error state (time-only: no tick appears).
-class _ThrowingTripsRepository extends FakeTripsRepository {
-  _ThrowingTripsRepository([super.seed]);
-
-  @override
-  Future<void> appendWardDone(String tripId, WardDone entry) async {
-    throw Exception('dead-zone write');
-  }
-}

@@ -1,11 +1,15 @@
-/// Start Shift core tests (ticket 7, PRD-2 §0.16): `StartShift.execute`
-/// now takes the confirmed `Driver` and writes `trip.driverId` +
-/// `trip.wardIds` on a fresh start. Pure Dart — fakes only, no Firebase,
-/// no platform channels.
+/// Start Shift core tests (ticket 7, PRD-2 §0.16, CHG-0003):
+/// `StartShift.execute` takes the confirmed `Driver`, calls the `startShift`
+/// callable, signs in with the returned token and subscribes the van topic.
+/// The trip, the van marker and the ward snapshot are the SERVER's writes, so
+/// the fake gateway is what proves them. Pure Dart — no Firebase, no platform
+/// channels.
 library;
 
 import 'package:driverapp/core/config/firebase_bootstrap.dart'
     show MessagingGateway;
+import 'package:driverapp/core/contract/reason_codes.dart';
+import 'package:driverapp/core/contract/shift_gateway.dart';
 import 'package:driverapp/core/domain/ist_clock.dart';
 import 'package:driverapp/core/models/models.dart';
 import 'package:driverapp/features/shift_start/domain/start_shift.dart';
@@ -14,14 +18,19 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../models/sample_maps.dart';
 import '../../repositories/fake_repositories.dart';
 
-Van sampleVan({String id = 'van-01', String routeId = 'route-van'}) =>
+Van sampleVan({
+  String id = 'van-01',
+  String routeId = 'route-van',
+  String status = 'idle',
+  String? currentTripId,
+}) =>
     Van.fromMap(<String, Object?>{
       'id': id,
       'plateNo': 'GJ-05-AB-1234',
       'routeId': routeId,
-      'status': 'idle',
+      'status': status,
       'lastLocation': null,
-      'currentTripId': null,
+      'currentTripId': currentTripId,
       'batteryPct': 80,
     });
 
@@ -39,28 +48,63 @@ class RecordingMessagingGateway implements MessagingGateway {
   Future<void> subscribeToTopic(String topic) async {
     topics.add(topic);
   }
+
+  @override
+  Future<void> unsubscribeFromTopic(String topic) async {
+    topics.remove(topic);
+  }
 }
 
 void main() {
-  group('StartShift.execute takes the driver (0.16)', () {
-    test('fresh start writes trip.driverId + trip.wardIds from the driver '
-        'and vanId/routeId from the van', () async {
-      final trips = FakeTripsRepository();
-      final vans = FakeVansRepository([sampleVan()]);
-      final messaging = RecordingMessagingGateway();
-      final startShift = StartShift(trips: trips, vans: vans, messaging: messaging);
+  late FakeTripsRepository trips;
+  late FakeVansRepository vans;
+  late FakeDriverSessionGateway session;
+  late FakeShiftGateway gateway;
+  late RecordingMessagingGateway messaging;
+  late StartShift startShift;
+
+  setUp(() {
+    trips = FakeTripsRepository();
+    vans = FakeVansRepository([sampleVan()]);
+    session = FakeDriverSessionGateway(
+      bindingFor: (code) => DriverBinding(
+        token: 'bind-$code',
+        vanId: 'van-01',
+        driverId: code,
+        claimMode: 'firstClaim',
+      ),
+    );
+    gateway = FakeShiftGateway(
+      trips: trips,
+      vans: vans,
+      drivers: [sampleDriver()],
+      clock: () => DateTime.utc(2026, 10, 20, 2),
+    );
+    messaging = RecordingMessagingGateway();
+    startShift = StartShift(
+      gateway: gateway,
+      session: session,
+      messaging: messaging,
+    );
+  });
+
+  group('StartShift.execute goes through the callable (CHG-0003)', () {
+    test('sends the driver id and the IST day instant, signs in with the '
+        'returned token and builds the session', () async {
       final driver = sampleDriver(wardIds: const ['ward-01', 'ward-02']);
-      final now = DateTime(2026, 10, 20, 7, 30);
+      final now = DateTime.utc(2026, 10, 20, 2, 30); // 08:00 IST
 
-      final session = await startShift.execute(sampleVan(), driver, now);
+      final result = await startShift.execute(driver, now);
 
-      expect(session.vanId, 'van-01');
-      expect(session.routeId, 'route-van');
-      expect(session.tripId, isNotEmpty);
+      // The callable received the confirmed driver and the IST midnight.
+      expect(gateway.startCalls, hasLength(1));
+      expect(gateway.startCalls.single.driverId, 'AB-1234');
+      expect(gateway.startCalls.single.date, utcStartOfIstDay(now));
 
+      // The trip is the SERVER's write (mirrored by the fake).
       final trip = trips.trips.values.single;
       expect(trip.vanId, 'van-01');
-      expect(trip.routeId, 'route-van');
+      expect(trip.routeId, 'route-01'); // from the driver doc, server-side
       expect(trip.driverId, 'AB-1234');
       expect(trip.wardIds, const ['ward-01', 'ward-02']);
       expect(isSameDayIST(trip.date, now), isTrue);
@@ -69,165 +113,56 @@ void main() {
       expect(van.status, VanStatus.onShift);
       expect(van.currentTripId, trip.id);
 
+      // The fresh token carries the trip claim: the app must sign in with it
+      // before the first trail write.
+      expect(session.signedInTokens, ['token-AB-1234-${trip.id}']);
+
+      expect(result.vanId, 'van-01');
+      expect(result.tripId, trip.id);
+      expect(result.routeId, 'route-01');
+      expect(result.date, utcStartOfIstDay(now));
+
       expect(messaging.topics, ['van_van-01']);
     });
 
-    test('fresh start with a driver allotted a single ward', () async {
-      final trips = FakeTripsRepository();
-      final vans = FakeVansRepository([sampleVan()]);
-      final messaging = RecordingMessagingGateway();
-      final startShift = StartShift(trips: trips, vans: vans, messaging: messaging);
-      final driver = sampleDriver(wardIds: const ['ward-03']);
-
-      await startShift.execute(sampleVan(), driver, DateTime(2026, 10, 20, 7, 30));
-
-      final trip = trips.trips.values.single;
-      expect(trip.driverId, 'AB-1234');
-      expect(trip.wardIds, const ['ward-03']);
-    });
-
-    test('resume branch reattaches the existing trip (no driver writes, no '
-        'duplicate trip)', () async {
-      final existingTrip = Trip.fromMap(<String, Object?>{
-        ...tripDocMap(id: 'trip-resume'),
-        'driverId': 'AB-1234',
-        'wardIds': <String>['ward-01', 'ward-02'],
-        'startedAt': DateTime(2026, 10, 20, 6, 0),
-        'date': DateTime(2026, 10, 20),
-      });
-      final trips = FakeTripsRepository([existingTrip]);
-      final vans = FakeVansRepository([
-        Van.fromMap(<String, Object?>{
-          ...vanDocMap(),
-          'status': 'on_shift',
-          'currentTripId': 'trip-resume',
-        }),
-      ]);
-      final messaging = RecordingMessagingGateway();
-      final startShift = StartShift(trips: trips, vans: vans, messaging: messaging);
-      final driver = sampleDriver();
-
-      final now = DateTime(2026, 10, 20, 8, 0);
-      final session = await startShift.execute(
-        vans.vans['van-01']!,
-        driver,
-        now,
-      );
-
-      // No second trip created.
-      expect(trips.trips, hasLength(1));
-      expect(session.tripId, 'trip-resume');
-      expect(session.startedAt, existingTrip.startedAt);
-      expect(session.date, existingTrip.date);
-      expect(vans.vans['van-01']!.currentTripId, 'trip-resume');
-      expect(messaging.topics, ['van_van-01']);
-    });
-
-    test('resume is BLOCKED when the open trip belongs to another driver '
-        '(a van is shared — never take over)', () async {
-      final existingTrip = Trip.fromMap(<String, Object?>{
-        ...tripDocMap(id: 'trip-resume'),
-        'driverId': 'AB-1001',
-        'wardIds': <String>['ward-01'],
-        'startedAt': DateTime(2026, 10, 20, 6, 0),
-        'date': DateTime(2026, 10, 20),
-      });
-      final trips = FakeTripsRepository([existingTrip]);
-      final vans = FakeVansRepository([
-        Van.fromMap(<String, Object?>{
-          ...vanDocMap(),
-          'status': 'on_shift',
-          'currentTripId': 'trip-resume',
-        }),
-      ]);
-      final startShift = StartShift(
-        trips: trips,
-        vans: vans,
-        messaging: RecordingMessagingGateway(),
-      );
-
-      // AB-1002 sits on the same van — the shift is not theirs.
-      await expectLater(
-        startShift.execute(
-          vans.vans['van-01']!,
-          sampleDriver(id: 'AB-1002'),
-          DateTime(2026, 10, 20, 8, 0),
-        ),
-        throwsA(isA<ShiftStartConflict>()),
-      );
-
-      // The other driver's trip doc is untouched — no take-over, no write.
-      expect(trips.trips['trip-resume']!.driverId, 'AB-1001');
-      expect(trips.trips, hasLength(1));
-    });
-
-    test('resume is ALLOWED when the open trip carries no driverId (a '
-        'pre-0.16 trip keeps working)', () async {
-      final existingTrip = Trip.fromMap(<String, Object?>{
-        ...tripDocMap(id: 'trip-resume'),
-        'startedAt': DateTime(2026, 10, 20, 6, 0),
-        'date': DateTime(2026, 10, 20),
-      });
-      final trips = FakeTripsRepository([existingTrip]);
-      final vans = FakeVansRepository([
-        Van.fromMap(<String, Object?>{
-          ...vanDocMap(),
-          'status': 'on_shift',
-          'currentTripId': 'trip-resume',
-        }),
-      ]);
-      final startShift = StartShift(
-        trips: trips,
-        vans: vans,
-        messaging: RecordingMessagingGateway(),
-      );
-
-      final session = await startShift.execute(
-        vans.vans['van-01']!,
-        sampleDriver(id: 'AB-1002'),
-        DateTime(2026, 10, 20, 8, 0),
-      );
-
-      expect(session.tripId, 'trip-resume');
-      expect(trips.trips, hasLength(1));
-    });
-
-    test('resume is BLOCKED when the marker points at another van\u2019s trip '
-        '(a stale marker is a conflict, never invented state)', () async {
-      final otherVanTrip = Trip.fromMap(<String, Object?>{
-        ...tripDocMap(id: 'trip-other-van'),
-        'vanId': 'van-09',
-        'driverId': 'AB-1001',
-        'wardIds': <String>['ward-01'],
-        'startedAt': DateTime(2026, 10, 20, 6, 0),
-        'date': DateTime(2026, 10, 20),
-      });
-      final trips = FakeTripsRepository([otherVanTrip]);
-      final vans = FakeVansRepository([
-        Van.fromMap(<String, Object?>{
-          ...vanDocMap(),
-          'status': 'on_shift',
-          'currentTripId': 'trip-other-van',
-        }),
-      ]);
-      final startShift = StartShift(
-        trips: trips,
-        vans: vans,
-        messaging: RecordingMessagingGateway(),
-      );
+    test('a callable refusal surfaces as a ContractException with the '
+        'server reason code', () async {
+      gateway.startError =
+          const ContractException(ReasonCode.vanHeldByAnotherDriver);
 
       await expectLater(
-        startShift.execute(
-          vans.vans['van-01']!,
-          sampleDriver(id: 'AB-1001'), // even the trip's own driver
-          DateTime(2026, 10, 20, 8, 0),
+        startShift.execute(sampleDriver(), DateTime.utc(2026, 10, 20, 2)),
+        throwsA(
+          isA<ContractException>().having(
+            (error) => error.code,
+            'code',
+            ReasonCode.vanHeldByAnotherDriver,
+          ),
         ),
-        throwsA(isA<ShiftStartConflict>()),
       );
+      expect(trips.trips, isEmpty, reason: 'the server wrote nothing');
+      expect(session.signedInTokens, isEmpty);
+    });
+  });
 
-      // Nothing was written to the mismatched trip.
-      expect(trips.trips['trip-other-van']!.vanId, 'van-09');
-      expect(trips.trips, hasLength(1));
+  group('isResumable', () {
+    test('only an on_shift van with an open-trip marker is resumable', () {
+      expect(
+        startShift.isResumable(
+          sampleVan(
+            status: 'on_shift',
+            currentTripId: 'trip-1',
+          ),
+        ),
+        isTrue,
+      );
+      expect(startShift.isResumable(sampleVan()), isFalse);
+      expect(
+        startShift.isResumable(
+          sampleVan(status: 'on_shift'),
+        ),
+        isFalse,
+      );
     });
   });
 }

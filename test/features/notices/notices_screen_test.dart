@@ -177,6 +177,34 @@ class RecordingNoticesRepository implements NoticesRepository {
   /// Last watch arguments, verbatim from the controller.
   ({String vanId, List<String> wardIds})? lastQuery;
 
+  /// noticeId -> the driver codes that hold a receipt (CHG-0018).
+  final Map<String, Set<String>> receipts = {};
+
+  /// When true, the receipt read and write throw like the loose PHASE 1
+  /// rules would: the flow must keep the session-local dot behaviour.
+  bool receiptsDenied = false;
+
+  @override
+  Future<Set<String>> readReceipts({
+    required String driverCode,
+    required Iterable<String> noticeIds,
+  }) async {
+    if (receiptsDenied) throw Exception('receipts denied');
+    return <String>{
+      for (final noticeId in noticeIds)
+        if (receipts[noticeId]?.contains(driverCode) ?? false) noticeId,
+    };
+  }
+
+  @override
+  Future<void> writeReceipt({
+    required String driverCode,
+    required String noticeId,
+  }) async {
+    if (receiptsDenied) throw Exception('receipts denied');
+    (receipts[noticeId] ??= <String>{}).add(driverCode);
+  }
+
   final _controllers =
       <
         ({
@@ -298,10 +326,12 @@ Future<ProviderContainer> pumpNotices(
   required NoticesRepository notices,
   bool activateShift = true,
   RoutesRepository? routes,
+  String? driverCode = 'AB-1001',
 }) async {
   final container = ProviderContainer(
     overrides: [
       noticesRepositoryProvider.overrideWithValue(notices),
+      noticesDriverCodeProvider.overrideWithValue(driverCode),
       routesRepositoryProvider.overrideWithValue(
         routes ?? FakeRoutesRepository([devRoute()]),
       ),
@@ -443,8 +473,8 @@ void main() {
     expect(find.byKey(unreadDotKey(allNotice.id)), findsOneWidget);
   });
 
-  testWidgets('mark-read writes NOTHING to the repository — the contract '
-      'carries no read field and none may be invented', (tester) async {
+  testWidgets('mark-read writes only the receipt, never a notice field '
+      '(CHG-0018)', (tester) async {
     final notices = RecordingNoticesRepository([vanNotice]);
     await pumpNotices(tester, notices: notices);
     await pumpUntil(tester, find.text(vanNotice.message));
@@ -457,9 +487,75 @@ void main() {
       notices.notices,
       before,
       reason:
-          'mark-read must not touch a single stored field — the '
+          'mark-read must not touch a single stored notice field: the '
           '`notices` shape belongs to the contract (0.2), not the app',
     );
+    expect(
+      notices.receipts[vanNotice.id],
+      <String>{'AB-1001'},
+      reason:
+          'the receipt doc id is the driverId claim and readAt is the only '
+          'field the strict rules allow',
+    );
+  });
+
+  testWidgets('a receipt from an earlier launch keeps the dot cleared on a '
+      'fresh flow, so read state survives a restart', (tester) async {
+    final notices = RecordingNoticesRepository([vanNotice, allNotice]);
+    notices.receipts[vanNotice.id] = <String>{'AB-1001'};
+
+    final container = await pumpNotices(tester, notices: notices);
+    await pumpUntil(tester, find.text(vanNotice.message));
+    await pumpFrames(tester);
+
+    expect(container.read(unreadNoticesCountProvider), 1);
+    expect(find.byKey(unreadDotKey(vanNotice.id)), findsNothing);
+    expect(find.byKey(unreadDotKey(allNotice.id)), findsOneWidget);
+  });
+
+  testWidgets("another driver's receipt must not clear this driver's dot", (
+    tester,
+  ) async {
+    final notices = RecordingNoticesRepository([allNotice])
+      ..receipts[allNotice.id] = <String>{'AB-9999'};
+    final container = await pumpNotices(tester, notices: notices);
+    await pumpUntil(tester, find.text(allNotice.message));
+    await pumpFrames(tester);
+
+    expect(container.read(unreadNoticesCountProvider), 1);
+    expect(find.byKey(unreadDotKey(allNotice.id)), findsOneWidget);
+  });
+
+  testWidgets('a denied receipt write keeps the session-local behaviour: '
+      'the dot clears and the screen stays ready', (tester) async {
+    final notices = RecordingNoticesRepository([vanNotice]);
+    notices.receiptsDenied = true;
+
+    final container = await pumpNotices(tester, notices: notices);
+    await pumpUntil(tester, find.text(vanNotice.message));
+    await pumpFrames(tester);
+
+    expect(container.read(unreadNoticesCountProvider), 1);
+    await tester.tap(find.byKey(tapKey(vanNotice.id)));
+    await pumpFrames(tester);
+
+    expect(container.read(unreadNoticesCountProvider), 0);
+    expect(find.byKey(unreadDotKey(vanNotice.id)), findsNothing);
+    expect(find.text(enError), findsNothing);
+    expect(find.text(enOffline), findsNothing);
+  });
+
+  testWidgets('without a confirmed driver code the dot still clears locally '
+      'and no receipt is invented', (tester) async {
+    final notices = RecordingNoticesRepository([vanNotice]);
+    await pumpNotices(tester, notices: notices, driverCode: null);
+    await pumpUntil(tester, find.text(vanNotice.message));
+
+    await tester.tap(find.byKey(tapKey(vanNotice.id)));
+    await pumpFrames(tester);
+
+    expect(notices.receipts, isEmpty);
+    expect(find.byKey(unreadDotKey(vanNotice.id)), findsNothing);
   });
 
   testWidgets('a re-emission after a push keeps read notices read and '

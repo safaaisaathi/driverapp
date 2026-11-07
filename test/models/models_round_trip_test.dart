@@ -55,6 +55,31 @@ void main() {
       expect(model.batteryPct, isNull);
     });
 
+    test('vans: admin depot tag (ruling #29) parses and round-trips', () {
+      final model = Van.fromMap(<String, Object?>{
+        ...vanDocMap(),
+        'depot': {'lat': 22.678, 'lng': 77.0},
+      });
+      expect(model.depot, (lat: 22.678, lng: 77.0));
+      expect(Van.fromMap(model.toMap()).depot, model.depot);
+    });
+
+    test('vans: no depot → null and toMap never writes one', () {
+      final model = Van.fromMap(vanDocMap());
+      expect(model.depot, isNull);
+      expect(model.toMap().containsKey('depot'), isFalse);
+    });
+
+    test('vans: malformed depot throws instead of silently disabling', () {
+      expect(
+        () => Van.fromMap(<String, Object?>{
+          ...vanDocMap(),
+          'depot': {'lat': 22.678},
+        }),
+        throwsFormatException,
+      );
+    });
+
     test('trips (closed shift, Timestamp encodings)', () {
       final model = Trip.fromMap(tripDocMap());
       final roundTrip = Trip.fromMap(model.toMap());
@@ -234,9 +259,18 @@ void main() {
     });
 
     test('complaint.status', () {
+      // CHG-0010 widened the set with the cross-verification loop.
       expect(
         ComplaintStatus.values.map((value) => value.value),
-        const ['received', 'assigned', 'resolved', 'escalated'],
+        const [
+          'received',
+          'assigned',
+          'resolved',
+          'escalated',
+          'pending_verification',
+          'auto_resolved',
+          'reopened',
+        ],
       );
     });
 

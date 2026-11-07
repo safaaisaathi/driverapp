@@ -8,6 +8,9 @@
 library;
 
 import 'package:driverapp/core/identity/driver_identity_controller.dart';
+import 'package:driverapp/core/contract/gateway_providers.dart';
+import 'package:driverapp/core/identity/install_id.dart';
+import 'package:driverapp/core/contract/shift_gateway.dart';
 import 'package:driverapp/core/l10n/app_localizations.dart';
 import 'package:driverapp/core/models/models.dart';
 import 'package:driverapp/core/repositories/repositories.dart';
@@ -16,21 +19,19 @@ import 'package:driverapp/core/theme/app_theme.dart';
 import 'package:driverapp/features/shift_start/data/fcm_topics.dart'
     show driverMessagingGatewayProvider;
 import 'package:driverapp/features/shift_start/domain/shift_session.dart';
-import 'package:driverapp/features/shift_start/ui/code_start_screen.dart';
-import 'package:driverapp/features/tracking/domain/tracking_engine.dart'
+import 'package:driverapp/features/shift_start/data/shift_tracking_auto_start.dart'
     show
-        TrackingEngineState,
-        TrackingStartResult,
-        TrackingStartOutcome,
-        TrackingResumeResult,
-        TrackingResumeOutcome,
-        TrackingRunStatus;
+        ShiftTrackingAutoStarter,
+        ShiftTrackingAutoStart,
+        ShiftTrackingAutoStartKind,
+        shiftTrackingAutoStarterProvider;
+import 'package:driverapp/features/shift_start/ui/code_start_screen.dart';
+import 'package:driverapp/features/tracking/domain/permission_flow.dart'
+    show PermissionFlowReport;
 import 'package:driverapp/features/tracking/tracking_providers.dart'
     show
-        trackingEngineProvider,
         trackingPermissionGatewayProvider,
         PermissionApproval,
-        TrackingEngine,
         TrackingPermissionGateway;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -71,14 +72,16 @@ Van sampleVan({
   String id = 'van-01',
   String plateNo = 'GJ-05-AB-1234',
   String routeId = 'route-van',
+  String status = 'idle',
+  String? currentTripId,
 }) =>
     Van.fromMap(<String, Object?>{
       'id': id,
       'plateNo': plateNo,
       'routeId': routeId,
-      'status': 'idle',
+      'status': status,
       'lastLocation': null,
-      'currentTripId': null,
+      'currentTripId': currentTripId,
       'batteryPct': 80,
     });
 
@@ -114,6 +117,11 @@ class RecordingMessagingGateway implements MessagingGateway {
   @override
   Future<void> subscribeToTopic(String topic) async {
     topics.add(topic);
+  }
+
+  @override
+  Future<void> unsubscribeFromTopic(String topic) async {
+    topics.remove(topic);
   }
 }
 
@@ -155,40 +163,29 @@ class GrantAllPermissionGateway implements TrackingPermissionGateway {
       PermissionApproval.granted;
 }
 
-/// Tracking engine fake that starts immediately and records the hand-over.
-class RecordingTrackingEngine implements TrackingEngine {
+/// F-D2 auto-start seam fake: records the hand-over the production start
+/// path makes (F-20 / F-09: the screen calls the seam, the seam owns the
+/// attach + engine start + outcome). This keeps the widget tests off the
+/// offline drain and the engine's platform channels; the seam's own
+/// behaviour is pinned in tracking_auto_start_test.dart.
+class RecordingShiftTrackingAutoStarter implements ShiftTrackingAutoStarter {
   final List<({String tripId, String vanId})> startedWith = [];
+  final List<PermissionFlowReport> reports = [];
 
   @override
-  Stream<TrackingEngineState> get changes =>
-      const Stream<TrackingEngineState>.empty();
-
-  @override
-  TrackingEngineState get state => const TrackingEngineState(
-        status: TrackingRunStatus.idle,
-      );
-
-  @override
-  Future<TrackingStartResult> start({
-    required String tripId,
-    required String vanId,
+  Future<ShiftTrackingAutoStart> startTrackingFor(
+    ShiftSession session, {
     required String notificationTitle,
     required String notificationBody,
+    PermissionFlowReport? report,
   }) async {
-    startedWith.add((tripId: tripId, vanId: vanId));
-    return TrackingStartResult(TrackingStartOutcome.started);
+    startedWith.add((tripId: session.tripId, vanId: session.vanId));
+    if (report != null) reports.add(report);
+    return const ShiftTrackingAutoStart(ShiftTrackingAutoStartKind.started);
   }
 
   @override
-  Future<TrackingResumeResult> startForActiveShift({
-    required String vanId,
-    required String notificationTitle,
-    required String notificationBody,
-  }) async =>
-      const TrackingResumeResult(outcome: TrackingResumeOutcome.resumed);
-
-  @override
-  Future<void> stop() async {}
+  Future<void> openLocationSettings() async {}
 }
 
 class FlakyDriversRepository implements DriversRepository {
@@ -211,44 +208,68 @@ final class _LookupFailed implements Exception {
   const _LookupFailed();
 }
 
-class FailingCreateTripsRepository extends FakeTripsRepository {
-  bool fail = true;
-
-  @override
-  Future<Trip> createTrip(Trip trip) async {
-    if (fail) throw const _CreateTripFailed();
-    return super.createTrip(trip);
-  }
-}
-
-final class _CreateTripFailed implements Exception {
-  const _CreateTripFailed();
-}
-
 // -- harness -----------------------------------------------------------------
 
 Future<ProviderContainer> pumpScreen(
   WidgetTester tester, {
   required DriversRepository driversRepo,
   required FakeVansRepository vans,
-  required TripsRepository trips,
+  required FakeTripsRepository trips,
+  FakeDriverSessionGateway? sessionGateway,
+  FakeShiftGateway? shiftGateway,
+  Iterable<Driver>? gatewayDrivers,
   InMemoryDriverIdentityStore? identityStore,
   void Function(BuildContext context)? onShiftStarted,
+  RoutesRepository? routesRepo,
 }) async {
+  final gateway = shiftGateway ??
+      FakeShiftGateway(
+        trips: trips,
+        vans: vans,
+        drivers: gatewayDrivers ?? [sampleDriver(), otherDriver()],
+        routeWardIds: {
+          'route-driver': const ['ward-01', 'ward-02'],
+          'route-01': const ['ward-01', 'ward-02'],
+        },
+      );
   final container = ProviderContainer(
     overrides: [
       driversRepositoryProvider.overrideWithValue(driversRepo),
+      installIdStoreProvider.overrideWithValue(FakeInstallIdStore()),
       vansRepositoryProvider.overrideWithValue(vans),
       tripsRepositoryProvider.overrideWithValue(trips),
+      shiftGatewayProvider.overrideWithValue(gateway),
+      driverSessionGatewayProvider.overrideWithValue(
+        sessionGateway ??
+            FakeDriverSessionGateway(
+              bindingFor: (code) => DriverBinding(
+                token: 'bind-$code',
+                vanId: 'van-01',
+                driverId: code,
+                claimMode: 'firstClaim',
+              ),
+            ),
+      ),
+      // Ruling #28: the welcome card resolves the route name at lookup
+      // time; the fake keeps that read off Firestore.
+      routesRepositoryProvider.overrideWithValue(
+        routesRepo ??
+            FakeRoutesRepository([
+              RouteModel.fromMap(routeDocMap()),
+              RouteModel.fromMap(routeDocMap(id: 'route-driver')),
+              RouteModel.fromMap(routeDocMap(id: 'route-van')),
+            ]),
+      ),
       driverIdentityStoreProvider
           .overrideWithValue(identityStore ?? InMemoryDriverIdentityStore()),
       driverMessagingGatewayProvider
           .overrideWithValue(RecordingMessagingGateway()),
       // Post-activation seams: the permission flow auto-grants and the
-      // engine records, so tests never touch platform channels.
+      // auto-start starter records, so tests never touch platform channels.
       trackingPermissionGatewayProvider
           .overrideWithValue(const GrantAllPermissionGateway()),
-      trackingEngineProvider.overrideWithValue(RecordingTrackingEngine()),
+      shiftTrackingAutoStarterProvider
+          .overrideWithValue(RecordingShiftTrackingAutoStarter()),
     ],
   );
   addTearDown(container.dispose);
@@ -277,6 +298,18 @@ Future<void> pumpUntil(WidgetTester tester, Finder finder,
   expect(finder, findsOneWidget);
 }
 
+/// Taps the welcome card's "Different driver?" link. Ruling #28 gave the
+/// card five rows, so at the 800x600 test viewport the link can sit below
+/// the fold: scroll it into view first (the screen itself is one scroll
+/// view, so this mirrors what a driver does on a short screen).
+Future<void> tapChangeCode(WidgetTester tester) async {
+  final link = find.byKey(const ValueKey('d1-change-code'));
+  await tester.ensureVisible(link);
+  await tester.pumpAndSettle();
+  await tester.tap(link);
+  await tester.pumpAndSettle();
+}
+
 /// Pumps until [condition] holds (async navigation hand-over).
 Future<void> pumpUntilCondition(
   WidgetTester tester,
@@ -289,10 +322,10 @@ Future<void> pumpUntilCondition(
   expect(condition(), isTrue, reason: 'Condition not met within pump limit');
 }
 
-RecordingTrackingEngine _engineOf(WidgetTester tester) =>
+RecordingShiftTrackingAutoStarter _starterOf(WidgetTester tester) =>
     ProviderScope.containerOf(
       tester.element(find.byType(CodeStartScreen)),
-    ).read(trackingEngineProvider) as RecordingTrackingEngine;
+    ).read(shiftTrackingAutoStarterProvider) as RecordingShiftTrackingAutoStarter;
 
 RecordingMessagingGateway _messagingOf(WidgetTester tester) =>
     ProviderScope.containerOf(
@@ -393,7 +426,8 @@ void main() {
     expect(session!.vanId, 'van-01');
     final trip = trips.trips.values.single;
     expect(trip.vanId, 'van-01');
-    expect(trip.routeId, 'route-van', reason: 'routeId comes from the van');
+    expect(trip.routeId, 'route-driver',
+        reason: 'the server takes routeId from the driver doc');
     expect(session.tripId, trip.id);
 
     // Van marker writes + topic subscription (0.13 / 0.6.6).
@@ -404,11 +438,11 @@ void main() {
     // The confirmed code is remembered on-device (0.16).
     expect(identityStore.storedDriverCode, 'AB-1234');
 
-    // The tracking engine received the hand-over (old D1's post-activation
-    // pattern).
-    final engine = _engineOf(tester);
-    expect(engine.startedWith.single.tripId, trip.id);
-    expect(engine.startedWith.single.vanId, 'van-01');
+    // The F-D2 auto-start seam received the hand-over (F-20 / F-09: the
+    // production start path calls the seam, it does not re-implement it).
+    final starter = _starterOf(tester);
+    expect(starter.startedWith.single.tripId, trip.id);
+    expect(starter.startedWith.single.vanId, 'van-01');
   });
 
   testWidgets('not-found state with retry: seeding the driver afterwards '
@@ -454,15 +488,25 @@ void main() {
     expect(find.text(enDriverName), findsOneWidget);
   });
 
-  testWidgets('start write failure: localized error, the CTA stays '
-      'available and retry starts once the write succeeds', (tester) async {
-    final trips = FailingCreateTripsRepository();
+  testWidgets('start call failure: localized error, the CTA stays '
+      'available and retry starts once the call succeeds', (tester) async {
+    final trips = FakeTripsRepository();
+    final vans = FakeVansRepository([sampleVan()]);
+    final gateway = FakeShiftGateway(
+      trips: trips,
+      vans: vans,
+      drivers: [sampleDriver()],
+      routeWardIds: {
+        'route-driver': const ['ward-01', 'ward-02'],
+      },
+    )..startFailuresRemaining = 1;
     var navigated = false;
     await pumpScreen(
       tester,
       driversRepo: FakeDriversRepository([sampleDriver()]),
-      vans: FakeVansRepository([sampleVan()]),
+      vans: vans,
       trips: trips,
+      shiftGateway: gateway,
       onShiftStarted: (_) => navigated = true,
     );
 
@@ -470,9 +514,8 @@ void main() {
     await pumpUntil(tester, find.byKey(const ValueKey('d1-confirm-card')));
     await tester.tap(find.byKey(const ValueKey('d1-confirm-start')));
     await pumpUntil(tester, find.text(enStartFailed));
-    expect(trips.trips, isEmpty, reason: 'the failed write created no doc');
+    expect(trips.trips, isEmpty, reason: 'the failed call created no doc');
 
-    trips.fail = false;
     await tester.tap(
       find.byKey(const ValueKey('d1-confirm-start')).hitTestable(),
     );
@@ -722,7 +765,7 @@ void main() {
     );
     await pumpUntil(tester, find.text(enDriverName));
 
-    await tester.tap(find.byKey(const ValueKey('d1-change-code')));
+    await tapChangeCode(tester);
     await tester.pump();
     expect(find.byKey(const ValueKey('d1-code-field')), findsOneWidget);
 
@@ -803,7 +846,7 @@ void main() {
     );
     await pumpUntil(tester, find.text(enDriverName));
 
-    await tester.tap(find.byKey(const ValueKey('d1-change-code')));
+    await tapChangeCode(tester);
     await tester.pump();
 
     // The regular entry form; the remembered code is NOT cleared (only a
@@ -905,7 +948,7 @@ void main() {
     );
     await pumpUntil(tester, find.text(enDriverName));
 
-    await tester.tap(find.byKey(const ValueKey('d1-change-code')));
+    await tapChangeCode(tester);
     await tester.pump();
     // The new-user form carries the top-left back button.
     expect(find.byKey(const ValueKey('d1-change-back')), findsOneWidget);
@@ -930,7 +973,7 @@ void main() {
     );
     await pumpUntil(tester, find.text(enDriverName));
 
-    await tester.tap(find.byKey(const ValueKey('d1-change-code')));
+    await tapChangeCode(tester);
     await tester.pump();
     expect(find.byKey(const ValueKey('d1-change-back')), findsOneWidget);
 
@@ -978,13 +1021,23 @@ void main() {
 
   testWidgets('welcome start failure keeps the card with the start error '
       'inside and retries the start (issue #19)', (tester) async {
-    final trips = FailingCreateTripsRepository();
+    final trips = FakeTripsRepository();
+    final vans = FakeVansRepository([sampleVan()]);
+    final gateway = FakeShiftGateway(
+      trips: trips,
+      vans: vans,
+      drivers: [sampleDriver()],
+      routeWardIds: {
+        'route-driver': const ['ward-01', 'ward-02'],
+      },
+    )..startFailuresRemaining = 1;
     var navigated = false;
     await pumpScreen(
       tester,
       driversRepo: FakeDriversRepository([sampleDriver()]),
-      vans: FakeVansRepository([sampleVan()]),
+      vans: vans,
       trips: trips,
+      shiftGateway: gateway,
       identityStore: returningStore('AB-1234'),
       onShiftStarted: (_) => navigated = true,
     );
@@ -999,8 +1052,7 @@ void main() {
     expect(find.byKey(const ValueKey('d1-code-field')), findsNothing);
     expect(find.byKey(const ValueKey('d1-welcome-start')), findsOneWidget);
 
-    // The write goes through: the same pill retries the start.
-    trips.fail = false;
+    // The call goes through: the same pill retries the start.
     await tester.tap(find.byKey(const ValueKey('d1-welcome-start')));
     await pumpUntilCondition(tester, () => navigated);
     expect(trips.trips, hasLength(1));
@@ -1036,15 +1088,87 @@ void main() {
     expect(session!.vanId, 'van-01');
     final trip = trips.trips.values.single;
     expect(trip.vanId, 'van-01');
-    expect(trip.routeId, 'route-van', reason: 'routeId comes from the van');
+    expect(trip.routeId, 'route-driver',
+        reason: 'the server takes routeId from the driver doc');
     expect(session.tripId, trip.id);
     expect(vans.vans['van-01']!.status, VanStatus.onShift);
     expect(vans.vans['van-01']!.currentTripId, trip.id);
     expect(_messagingOf(tester).topics, ['van_van-01']);
     expect(identityStore.storedDriverCode, 'AB-1234');
-    final engine = _engineOf(tester);
-    expect(engine.startedWith.single.tripId, trip.id);
-    expect(engine.startedWith.single.vanId, 'van-01');
+    final starter = _starterOf(tester);
+    expect(starter.startedWith.single.tripId, trip.id);
+    expect(starter.startedWith.single.vanId, 'van-01');
+  });
+
+  testWidgets('ruling #28: the welcome card shows name, code, van, route and '
+      'wards (five rows)', (tester) async {
+    await pumpScreen(
+      tester,
+      driversRepo: FakeDriversRepository([sampleDriver()]),
+      vans: FakeVansRepository([sampleVan()]),
+      trips: FakeTripsRepository(),
+      identityStore: returningStore('AB-1234'),
+    );
+    await pumpUntil(tester, find.text(enDriverName));
+
+    expect(find.text('Name'), findsOneWidget);
+    expect(find.text('Code'), findsOneWidget);
+    expect(find.text('Van'), findsOneWidget);
+    expect(find.text('Route'), findsOneWidget);
+    expect(find.text('Wards'), findsOneWidget);
+    // Values resolved at lookup time: real plate + real route name.
+    expect(find.text('GJ-05-AB-1234'), findsOneWidget);
+    expect(find.text('Godhra Fort Route'), findsOneWidget);
+    expect(find.text('2 wards allotted'), findsOneWidget);
+  });
+
+  testWidgets('ruling #27: a still-running shift goes straight to D2 with '
+      'no tap', (tester) async {
+    final openTrip = Trip.fromMap(<String, Object?>{
+      ...tripDocMapOpen(),
+      'driverId': 'AB-1234',
+    });
+    final trips = FakeTripsRepository([openTrip]);
+    var navigated = false;
+    await pumpScreen(
+      tester,
+      driversRepo: FakeDriversRepository([sampleDriver()]),
+      vans: FakeVansRepository(
+        [sampleVan(status: 'on_shift', currentTripId: 'trip-01')],
+      ),
+      trips: trips,
+      identityStore: returningStore('AB-1234'),
+      onShiftStarted: (_) => navigated = true,
+    );
+
+    // No tap on "Start my Shift": the launch-time resume reattaches the
+    // open trip and hands over to D2.
+    await pumpUntilCondition(tester, () => navigated);
+    expect(trips.trips, hasLength(1), reason: 'resume never duplicates');
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(CodeStartScreen)),
+    );
+    expect(container.read(shiftControllerProvider)?.tripId, 'trip-01');
+    expect(_starterOf(tester).startedWith.single.tripId, 'trip-01');
+  });
+
+  testWidgets('ruling #27: no running shift keeps the one-tap welcome card',
+      (tester) async {
+    var navigated = false;
+    await pumpScreen(
+      tester,
+      driversRepo: FakeDriversRepository([sampleDriver()]),
+      vans: FakeVansRepository([sampleVan()]),
+      trips: FakeTripsRepository(),
+      identityStore: returningStore('AB-1234'),
+      onShiftStarted: (_) => navigated = true,
+    );
+    await pumpUntil(tester, find.text(enDriverName));
+    // Give the launch-time resume check room to (wrongly) fire.
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(navigated, isFalse);
+    expect(find.byKey(const ValueKey('d1-welcome-start')), findsOneWidget);
   });
 
   // OTP-box rendering (driver demo feedback 2026-10-30): the code entry

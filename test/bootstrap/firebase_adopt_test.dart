@@ -54,7 +54,7 @@ void main() {
         reason: 'the winner\'s app must be adopted, not retried forever',
       );
       final ready = status as BootstrapReady;
-      expect(ready.anonymousUid, 'anon-test-uid');
+      expect(ready.uid, isNull, reason: 'boot is wired but signed out');
       expect(
         harness.platform.initializeAppCalls,
         1,
@@ -94,7 +94,7 @@ void main() {
           reason: 'the re-sync must surface the winner\'s app',
         );
         final ready = status as BootstrapReady;
-        expect(ready.anonymousUid, 'anon-test-uid');
+        expect(ready.uid, isNull, reason: 'boot is wired but signed out');
         expect(
           platform.initializeAppCalls,
           2,
@@ -144,8 +144,8 @@ void main() {
     );
   });
 
-  group('first-read gate milestone (issues #18/#21)', () {
-    test('a ready boot completes sessionReady the moment the session lands, '
+  group('first-use gate milestone (issues #18/#21, CHG-0003)', () {
+    test('a ready boot completes sessionReady the moment Firebase is up, '
         'and bootStarted tracks run()', () async {
       final harness = _boot(FakeFirebasePlatform(registrySynced: true));
       final controller = harness.container.read(bootstrapProvider.notifier);
@@ -168,7 +168,7 @@ void main() {
       expect(
         sessionReady,
         isTrue,
-        reason: 'the first-read gate opens as soon as the session exists',
+        reason: 'the first-use gate opens as soon as Firebase is up',
       );
       harness.dispose();
     });
@@ -206,10 +206,9 @@ final class _BootHarness {
         apiKey: 'test',
         appId: 'test-app-id',
         messagingSenderId: 'test-sender',
-        projectId: 'test-project',
+        projectId: 'safaaisaathi-63a87',
       ),
     );
-    controller.signInAnonymously = (app) async => 'anon-test-uid';
     controller.messagingGateway = messaging;
     container = ProviderContainer(
       overrides: [bootstrapProvider.overrideWith(() => controller)],
@@ -264,6 +263,10 @@ final class FakeMessagingGateway implements MessagingGateway {
   @override
   Future<void> subscribeToTopic(String topic) async =>
       subscribedTopics.add(topic);
+
+  @override
+  Future<void> unsubscribeFromTopic(String topic) async =>
+      subscribedTopics.remove(topic);
 }
 
 /// Platform double mirroring `MethodChannelFirebase`'s registry semantics:
@@ -285,7 +288,7 @@ final class FakeFirebasePlatform extends FirebasePlatform {
       apiKey: 'test',
       appId: 'test-app-id',
       messagingSenderId: 'test-sender',
-      projectId: 'test-project',
+      projectId: 'safaaisaathi-63a87',
     ),
   );
 

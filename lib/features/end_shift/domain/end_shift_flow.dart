@@ -1,20 +1,19 @@
-/// End Shift (ticket 08, PRD-2 F-D5 / DESIGN §9.10).
+/// End Shift (ticket 08, PRD-2 F-D5 / DESIGN §9.10, CHG-0003).
 ///
 /// Summary → confirm → success, all through the state the app already
-/// watches: the open trip and the shift session. The confirm performs
-/// exactly the PRD's end-shift write set:
-/// 1. `trips.endedAt` = now (trail flush already happens batch-wise in the
-///    tracking engine; the engine's stop is called below too),
-/// 2. `vans.status = idle`,
-/// 3. `vans.currentTripId = null`,
-/// 4. stop the tracking engine (persistent-notification service on device),
-/// 5. clear the shift session.
+/// watches: the open trip and the shift session. The confirm performs the
+/// server-owned close:
+/// 1. the `endShift` callable closes `trips` and clears `vans.currentTripId`,
+/// 2. stop the tracking engine (persistent-notification service on device),
+/// 3. clear the shift session.
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:driverapp/core/models/models.dart';
-import 'package:driverapp/core/repositories/repository_providers.dart';
+import 'package:driverapp/core/contract/gateway_providers.dart';
+import 'package:driverapp/core/domain/end_shift_writes.dart';
+import 'package:driverapp/features/shift_start/data/fcm_topics.dart'
+    show driverMessagingGatewayProvider, fcmTopicVanOf;
 import 'package:driverapp/features/shift_start/domain/shift_session.dart';
 import 'package:driverapp/features/tracking/tracking_providers.dart';
 
@@ -39,21 +38,13 @@ class EndShiftController extends Notifier<EndShiftPhase> {
       return;
     }
     try {
-      await ref
-          .read(tripsRepositoryProvider)
-          .setEndedAt(session.tripId, DateTime.now());
-      await ref
-          .read(vansRepositoryProvider)
-          .updateStatus(session.vanId, VanStatus.idle);
-      await ref
-          .read(vansRepositoryProvider)
-          .updateCurrentTripId(session.vanId, null);
-      // The engine may already be down (desktop); stop is safe to call.
-      try {
-        await ref.read(trackingEngineProvider).stop();
-      } catch (_) {
-        // Service stop failure must not leave the trip open.
-      }
+      await writeEndShift(
+        gateway: ref.read(shiftGatewayProvider),
+        tripId: session.tripId,
+        stopTracking: () => ref.read(trackingEngineProvider).stop(),
+        messaging: ref.read(driverMessagingGatewayProvider),
+        vanTopic: fcmTopicVanOf(session.vanId),
+      );
       ref.read(shiftControllerProvider.notifier).end();
       state = EndShiftPhase.ended;
     } catch (_) {

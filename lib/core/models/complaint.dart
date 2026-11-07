@@ -24,12 +24,16 @@ enum ComplaintCategory {
   }
 }
 
-/// `complaint.status` (0.3). Contract strings only.
+/// `complaint.status` (0.3, CHG-0010). Contract strings only: the seven
+/// values in `enums.json#/$defs/complaint.status`.
 enum ComplaintStatus {
   received('received'),
   assigned('assigned'),
   resolved('resolved'),
-  escalated('escalated');
+  escalated('escalated'),
+  pendingVerification('pending_verification'),
+  autoResolved('auto_resolved'),
+  reopened('reopened');
 
   const ComplaintStatus(this.value);
 

@@ -45,3 +45,15 @@ const int minMoveM = 15;
 
 /// Seconds after the last write when a heartbeat write is made anyway.
 const int heartbeatSec = 30;
+
+/// Metres around `vans.depot` that count as "at the depot" for the auto-end
+/// rule (ruling #29).
+const double depotRadiusM = 500;
+
+/// Continuous hours inside [depotRadiusM] after which the shift auto-ends
+/// (ruling #29).
+const int depotDwellLimitHours = 3;
+
+/// Metres a van must move from its dwell anchor to restart the depot dwell
+/// clock (ruling #29).
+const double depotDwellResetM = 100;

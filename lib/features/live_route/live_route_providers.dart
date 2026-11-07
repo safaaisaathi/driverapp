@@ -23,8 +23,11 @@ library;
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:driverapp/core/config/firebase_bootstrap.dart'
+    show sessionGateProvider;
 import 'package:driverapp/core/models/models.dart';
 import 'package:driverapp/core/repositories/repository_providers.dart';
+import 'package:driverapp/features/tracking/offline/offline_providers.dart';
 
 import 'domain/live_route_state.dart';
 
@@ -33,26 +36,63 @@ import 'domain/live_route_state.dart';
 /// over.
 final vanDocProvider =
     StreamProvider.autoDispose.family<Van?, String>(
-  (ref, vanId) => ref
-      .watch(vansRepositoryProvider)
-      .watchVan(vanId)
-      .handleError((error, stackTrace) {
-        debugPrint('live-route: vanDoc stream error: $error');
-        debugPrint(stackTrace.toString().split('\n').take(14).join(' ~ '));
-        throw error;
-      }),
+  (ref, vanId) async* {
+    // F-11: this is the root of every D2 read, so it must never race
+    // `Firebase.initializeApp` on a cold or degraded boot. The gate resolves
+    // at once when boot wiring never started (unit-test containers). The
+    // repository is read before the await; only the query waits.
+    final gate = ref.watch(sessionGateProvider);
+    final vans = ref.watch(vansRepositoryProvider);
+    await gate;
+    yield* vans.watchVan(vanId).handleError((error, stackTrace) {
+      debugPrint('live-route: vanDoc stream error: $error');
+      debugPrint(stackTrace.toString().split('\n').take(14).join(' ~ '));
+      throw error;
+    });
+  },
 );
 
-/// Today's open trip for the van (source of the done-tick set,
-/// `trips.wardsDone`). The repository bounds the query to `today` in IST
-/// (0.13 "Today"); a null emission means no trip (yet) today.
+/// The open trip for the van (source of the done-tick set,
+/// `trips.wardsDone`).
+///
+/// The van's own pointer, `vans/{vanId}.currentTripId`, is the authority
+/// (defect 2026-11-03): the day query alone made a shift invisible whenever
+/// the trip's `date` was not today's IST day. It is written at shift start
+/// and cleared at shift end (0.13), so while it is set that trip IS the open
+/// one, no matter which calendar day the shift began on.
+///
+/// With the pointer set the provider watches that exact doc. A missing doc,
+/// or a trip that is already closed, falls back to the old day query: the
+/// just-closed trip stays visible for the End Shift summary, and a stale
+/// pointer from a past day resolves to null instead of a dead trip.
 final openTripProvider =
-    StreamProvider.autoDispose.family<Trip?, String>(
-  (ref, vanId) => ref.watch(tripsRepositoryProvider).watchTripByVanIdAndDate(
+    StreamProvider.autoDispose.family<Trip?, String>((ref, vanId) async* {
+  final trips = ref.watch(tripsRepositoryProvider);
+  final currentTripId = ref.watch(
+    vanDocProvider(vanId).select((van) => van.value?.currentTripId),
+  );
+
+  if (currentTripId == null) {
+    yield* trips.watchTripByVanIdAndDate(
+      vanId: vanId,
+      date: DateTime.now(),
+    );
+    return;
+  }
+
+  await for (final trip in trips.watchTrip(currentTripId)) {
+    if (trip == null || trip.endedAt != null) {
+      // Pointer set but no open trip behind it: today's trip (if any) is
+      // the only remaining candidate.
+      yield* trips.watchTripByVanIdAndDate(
         vanId: vanId,
         date: DateTime.now(),
-      ),
-);
+      );
+      return;
+    }
+    yield trip;
+  }
+});
 
 /// The route doc (the visiting order lives ONLY in `routes.wardIds`, 0.2).
 /// One shot read — route order is a seeded contract list, not live data.
@@ -93,23 +133,24 @@ final routeWardsProvider =
 /// Offline seam (0.13: dead zones are normal; the screen keeps rendering
 /// cached data with an offline badge instead of failing).
 ///
-/// The default is "online": Firestore persistence (F-D7) already keeps data
-/// fresh from cache, and detectable connectivity needs a platform channel
-/// (e.g. connectivity_plus — NOT allowed here, pubspec changes are only for
-/// the map package). The F-D7 offline-sync ticket owns the real detector and
-/// swaps this provider's default over; feature tests override it to drive
-/// the offline state hermetically.
+/// The F-D7 offline ticket (ticket 12) shipped the real detector
+/// (connectivity_plus, [connectivitySourceProvider]) but never flipped this
+/// default, so the badge was permanently hidden. Interface presence is
+/// enough here: a dead zone shows the badge while Firestore persistence
+/// keeps the cached data rendering. The source emits `true` = reachable, so
+/// the offline value is its inverse. Feature tests override this provider
+/// (the pump harnesses do it for every test) to drive the state
+/// hermetically.
 final StreamProvider<bool> offlineStatusProvider =
     StreamProvider.autoDispose<bool>((ref) {
-  // TODO(F-D7 offline ticket): replace with a real connectivity source.
-  return const Stream<bool>.empty();
+  return ref.watch(connectivitySourceProvider).status.map((online) => !online);
 });
 
 /// Whether the device is currently offline, from [offlineStatusProvider] —
-/// an empty stream (no detector) means online.
+/// an errored/not-yet-emitted stream means online.
 final Provider<bool> isOfflineProvider = Provider.autoDispose<bool>((ref) {
   final status = ref.watch(offlineStatusProvider);
-  // An errored/empty offline stream means "no detector wired" → online.
+  // An errored/pending offline stream means "no reading yet" → online.
   return status.hasValue ? status.value! : false;
 });
 
