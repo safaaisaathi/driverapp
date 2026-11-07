@@ -48,6 +48,22 @@ jobs:
       - name: Unit and widget tests
         run: flutter test
 
+  adoption-record:
+    name: adoption record does not regress
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          # The check reads the base commit's .contract/adopted.json, so the
+          # base object has to be present in the clone.
+          fetch-depth: 0
+
+      - name: Compare the adoption record with the base
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: node scripts/check-adoption.mjs
+
   build-debug-apk:
     name: build the debug apk
     runs-on: ubuntu-latest
