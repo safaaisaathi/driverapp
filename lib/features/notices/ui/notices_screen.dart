@@ -21,7 +21,11 @@ import 'notice_detail_screen.dart';
 /// D3 entry widget. Reachable from D2's app-bar notices badge (the keyed
 /// slot); the flow needs the running shift's van + route context.
 class NoticesScreen extends ConsumerWidget {
-  const NoticesScreen({super.key});
+  const NoticesScreen({super.key, this.initialNoticeId});
+
+  /// A notice to open when the inbox first has it (FCM tap, B-21). Null for
+  /// a normal open from the D2 badge.
+  final String? initialNoticeId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -40,7 +44,10 @@ class NoticesScreen extends ConsumerWidget {
           message: l10n.offline,
           icon: Icons.cloud_off,
         ),
-        NoticesPhase.ready => _NoticeList(flow: flow),
+        NoticesPhase.ready => _NoticeList(
+          flow: flow,
+          initialNoticeId: initialNoticeId,
+        ),
       },
     );
   }
@@ -111,18 +118,70 @@ class _NoticesListDegraded extends ConsumerWidget {
 }
 
 /// The notice rows, newest first (the flow guarantees the order).
-class _NoticeList extends StatelessWidget {
-  const _NoticeList({required this.flow});
+class _NoticeList extends ConsumerStatefulWidget {
+  const _NoticeList({required this.flow, this.initialNoticeId});
 
   final NoticesState flow;
+
+  /// Opens this notice once, after an FCM tap (B-21).
+  final String? initialNoticeId;
+
+  @override
+  ConsumerState<_NoticeList> createState() => _NoticeListState();
+}
+
+class _NoticeListState extends ConsumerState<_NoticeList> {
+  bool _openedInitial = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _openInitialNotice();
+  }
+
+  @override
+  void didUpdateWidget(covariant _NoticeList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _openInitialNotice();
+  }
+
+  /// The tapped notice may arrive in a later snapshot, so this runs on every
+  /// rebuild until the id is found. It opens exactly once.
+  void _openInitialNotice() {
+    if (_openedInitial) return;
+    final noticeId = widget.initialNoticeId;
+    if (noticeId == null) return;
+    Notice? notice;
+    for (final candidate in widget.flow.notices) {
+      if (candidate.id == noticeId) {
+        notice = candidate;
+        break;
+      }
+    }
+    if (notice == null) return;
+    _openedInitial = true;
+    final opened = notice;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(noticesFlowProvider.notifier).markRead(opened.id);
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => NoticeDetailScreen(notice: opened),
+        ),
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(AppTheme.spacingUnit * 2),
       children: [
-        for (final notice in flow.notices)
-          _NoticeRow(notice: notice, isUnread: flow.unread.contains(notice.id)),
+        for (final notice in widget.flow.notices)
+          _NoticeRow(
+            notice: notice,
+            isUnread: widget.flow.unread.contains(notice.id),
+          ),
       ],
     );
   }

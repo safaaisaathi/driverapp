@@ -7,6 +7,9 @@ import 'core/config/firebase_bootstrap.dart';
 import 'core/identity/driver_identity_controller.dart';
 import 'core/l10n/app_localizations.dart';
 import 'core/l10n/locale_controller.dart';
+import 'core/navigation/app_navigator.dart';
+import 'core/notifications/push_notifications.dart'
+    show registerPushBackgroundHandler;
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_mode_controller.dart';
 import 'features/launching/splash_screen.dart';
@@ -18,6 +21,8 @@ Future<void> main() async {
   // degrade the app to silent retries, observable/awaitable through
   // bootstrapProvider.
   WidgetsFlutterBinding.ensureInitialized();
+  // B-21: the background isolate handler must be registered before runApp.
+  registerPushBackgroundHandler();
   final container = ProviderContainer();
   unawaited(runBootstrap(container));
   // Bug Bag fix (2026-10-29): the locale restore used to race the first
@@ -40,6 +45,9 @@ class DriverApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp(
+      // B-21: push taps arrive outside the tree; the router pushes the
+      // notices inbox through this key.
+      navigatorKey: appNavigatorKey,
       // The DEBUG ribbon is a debug-build-only cosmetic (no contract
       // impact); drawing it over the driver's top-right corner hurts
       // taste and covers content (DESIGN.md line 365 rules the corners).
