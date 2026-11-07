@@ -8,7 +8,9 @@
     "seed": "node seed_reference_data.mjs",
     "read-trip": "node read_trip.mjs",
     "adoption:check": "node check-adoption.mjs",
-    "test:seed": "node --test seed_reference_data.test.mjs"
+    "test:seed": "node --test seed_reference_data.test.mjs",
+    "test:adoption": "node --test check-adoption.test.mjs",
+    "test": "node --test *.test.mjs"
   },
   "dependencies": {
     "firebase-admin": "^13.0.0"

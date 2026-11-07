@@ -1,6 +1,6 @@
 # Issue tracker: GitHub
 
-> **Status:** not yet connected. This directory is not a git repository; run `git init`, create the GitHub repo, and add the remote (`git remote add origin …`) before using the commands below.
+> **Status:** connected. This repo is `safaaisaathi/driverapp` on GitHub; the commands below work as written.
 
 Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
 
@@ -11,6 +11,7 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 - **List issues**: `gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'` with appropriate `--label` and `--state` filters.
 - **Make an issue a sub-issue of a parent**: `gh issue create --parent <parent> ...`, or `gh issue edit <parent> --add-sub-issue <child>` afterwards (`gh` 2.94+). Older `gh`: `gh api --method POST repos/<owner>/<repo>/issues/<parent>/sub_issues -F sub_issue_id=<child-db-id>` (database id, as in **Blocking** below). Without sub-issues, put `Part of #<parent>` at the top of the child body.
 - **Comment on an issue**: `gh issue comment <number> --body "..."`
+- **Update a PR body**: `gh pr edit` can fail on this repo with a Projects classic GraphQL error. Use the REST API: `gh api --method PATCH repos/<owner>/<repo>/pulls/<n> --input <json>`, and build the JSON with `python3` because `jq` is not installed.
 - **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
 - **Close**: `gh issue close <number> --comment "..."`
 
