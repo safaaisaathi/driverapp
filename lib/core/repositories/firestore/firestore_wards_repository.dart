@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../models/models.dart';
 import '../wards_repository.dart';
+import '../where_in_chunks.dart';
 
 /// Firestore-backed [WardsRepository]: `wards` loads for the route map and the
 /// single-route watcher.
@@ -18,12 +19,21 @@ final class FirestoreWardsRepository implements WardsRepository {
     if (ids.isEmpty) {
       return const <Ward>[];
     }
-    final snapshot = await _wards
-        .where(FieldPath.documentId, whereIn: ids)
-        .get();
-    return snapshot.docs
-        .map((doc) => Ward.fromMap(<String, Object?>{...doc.data(), 'id': doc.id}))
-        .toList();
+    // B-06: Firestore caps one `whereIn` at 30 values. Deduplicate first so a
+    // repeated id cannot appear once per chunk.
+    final uniqueIds = ids.toSet().toList();
+    final wards = <Ward>[];
+    for (final chunk in chunkWhereIn(uniqueIds)) {
+      final snapshot = await _wards
+          .where(FieldPath.documentId, whereIn: chunk)
+          .get();
+      wards.addAll(
+        snapshot.docs.map(
+          (doc) => Ward.fromMap(<String, Object?>{...doc.data(), 'id': doc.id}),
+        ),
+      );
+    }
+    return wards;
   }
 
   @override

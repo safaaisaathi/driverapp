@@ -95,11 +95,6 @@ class DevVansRepository implements VansRepository {
   _MutableStream<Van?> _store(String vanId) => _vans[vanId]!;
 
   @override
-  Future<List<Van>> readVans() async => [
-    for (final store in _vans.values) store.value!,
-  ];
-
-  @override
   Stream<Van?> watchVan(String vanId) => _store(vanId).stream;
 
   @override

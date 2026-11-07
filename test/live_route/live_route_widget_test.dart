@@ -56,9 +56,6 @@ class CountingVansRepository implements VansRepository {
   }
 
   @override
-  Future<List<Van>> readVans() => inner.readVans();
-
-  @override
   Future<void> updateLastLocation({
     required String vanId,
     required double lat,
@@ -95,9 +92,6 @@ class ThrowingVansRepository implements VansRepository {
     yield null;
     throw Exception('down');
   }
-
-  @override
-  Future<List<Van>> readVans() async => [];
 
   // Seams added by the ticket-10 merge — this fake is error-first everywhere.
   @override

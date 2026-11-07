@@ -25,17 +25,6 @@ void main() {
       expect(repo, isA<VansRepository>());
     });
 
-    test(
-        'readVans returns the list ({id, plateNo, routeId, status, lastLocation})',
-        () async {
-      final vans = await repo.readVans();
-      expect(vans.map((element) => element.id), const ['van-01', 'van-02']);
-      expect(vans.first.plateNo, 'GJ-05-AB-1234');
-      expect(vans.first.routeId, 'route-01');
-      expect(vans.first.status, VanStatus.onShift);
-      expect(vans.first.lastLocation, isNotNull);
-    });
-
     test('watchVan first emits the seeded van, then changes after updates',
         () async {
       final events = <Van?>[];

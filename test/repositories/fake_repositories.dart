@@ -37,9 +37,6 @@ class FakeVansRepository implements VansRepository {
   final _changes = StreamController<void>.broadcast();
 
   @override
-  Future<List<Van>> readVans() async => vans.values.toList();
-
-  @override
   Future<Van?> readVan(String vanId) async => vans[vanId];
 
   @override
