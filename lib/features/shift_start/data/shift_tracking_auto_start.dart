@@ -41,10 +41,15 @@ final class ShiftTrackingAutoStart {
 /// engine for this session's trip, and open location settings when the
 /// GPS master switch stands between the flow and its prompts.
 abstract interface class ShiftTrackingAutoStarter {
+  /// [report] is the pre-computed permission result when the caller already
+  /// ran the flow (the UI layer runs the UI permission controller for its
+  /// rationale screens and hands the report in). When it is omitted the seam
+  /// runs the domain flow itself (the D2 banner's Retry).
   Future<ShiftTrackingAutoStart> startTrackingFor(
     ShiftSession session, {
     required String notificationTitle,
     required String notificationBody,
+    PermissionFlowReport? report,
   });
 
   /// System path to the location (GPS) settings — the [gpsOff] recovery.
@@ -63,6 +68,7 @@ final class TrackingAutoStarter implements ShiftTrackingAutoStarter {
     ShiftSession session, {
     required String notificationTitle,
     required String notificationBody,
+    PermissionFlowReport? report,
   }) async {
     // F-D7: the offline sync service drains the ACTIVE trip's Trail buffer on
     // every reconnect, but nothing in the real flow ever called `attachTrip`,
@@ -71,11 +77,14 @@ final class TrackingAutoStarter implements ShiftTrackingAutoStarter {
     // does, even if the driver denies a permission now.
     _ref.read(offlineSyncServiceProvider).attachTrip(session.tripId);
 
-    final report = await PermissionFlowController(
-      _ref.read(trackingPermissionGatewayProvider),
-    ).requestAll();
+    // F-09: the UI layer owns the four rationale screens, so the start path
+    // hands the report in. When it does not, run the domain flow here.
+    final flowReport = report ??
+        await PermissionFlowController(
+          _ref.read(trackingPermissionGatewayProvider),
+        ).requestAll();
 
-    final started = report.allGranted
+    final started = flowReport.allGranted
         ? await _ref
             .read(trackingEngineProvider)
             .start(
@@ -90,7 +99,7 @@ final class TrackingAutoStarter implements ShiftTrackingAutoStarter {
             })
         : false;
 
-    final gpsOff = report.results.values
+    final gpsOff = flowReport.results.values
         .any((approval) => approval == PermissionApproval.gpsOff);
 
     // The screen renders this — silence is never a state (defect note).
