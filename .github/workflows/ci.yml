@@ -64,6 +64,18 @@ jobs:
           BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
         run: node scripts/check-adoption.mjs
 
+  scripts-tests:
+    name: scripts tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      # The seed and adoption guard tests use node builtins only, so there is
+      # no install step. They read tracked JSON files.
+      - name: Run the seed and adoption guard tests
+        run: node --test scripts/*.test.mjs
+
   build-debug-apk:
     name: build the debug apk
     runs-on: ubuntu-latest

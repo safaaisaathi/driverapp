@@ -97,4 +97,4 @@ Every spawn brief carries these lines, so the agent self-checks and the mechanic
 
 Watch a run with `gh run watch <id> --exit-status`. Do not sleep-poll.
 
-Merge with `gh pr merge <n> --auto --merge` when the PR is ready, so the merge waits for the required checks. Auto-merge is enabled on both repos.
+Merge with `gh pr merge <n> --auto --merge` when the PR is ready, so the merge waits for the required checks. If the repo rejects auto-merge, merge directly after the checks pass. Branch protection requires the CI checks.
