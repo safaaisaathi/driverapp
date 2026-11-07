@@ -19,6 +19,8 @@ import 'package:driverapp/core/l10n/app_localizations.dart';
 import 'package:driverapp/core/repositories/repository_providers.dart';
 import 'package:driverapp/features/shift_start/domain/shift_session.dart';
 
+import 'mock_location_latch.dart';
+
 /// The mock-location LATCH for the van's open trip, read where it lives:
 /// `trips.mockLocationDetected` (contract field). `true` for the rest of the
 /// shift once a mock fix lands; never unset by the app.
@@ -59,8 +61,11 @@ class MockLocationWarningBanner extends ConsumerWidget {
     // session. Gate on the shift session: same van, still running.
     final session = ref.watch(shiftControllerProvider);
     final liveShift = session != null && session.vanId == vanId;
-    final latched =
-        ref.watch(mockLocationWarningProvider(vanId)).value ?? false;
+    // F-D9 / CHG-0017: the local latch shows the banner the moment the OS
+    // reports a mocked fix; the trip-doc watch keeps it after a restart, when
+    // the local latch is gone.
+    final latched = ref.watch(mockLocationLatchProvider) ||
+        (ref.watch(mockLocationWarningProvider(vanId)).value ?? false);
     if (!liveShift || !latched) return const SizedBox.shrink();
 
     final l10n = AppLocalizations.of(context)!;

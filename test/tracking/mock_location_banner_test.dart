@@ -9,6 +9,7 @@ import 'package:driverapp/core/models/models.dart';
 import 'package:driverapp/core/repositories/repository_providers.dart';
 import 'package:driverapp/features/shift_start/domain/shift_session.dart';
 import 'package:driverapp/features/tracking/mock_location_banner.dart';
+import 'package:driverapp/features/tracking/mock_location_latch.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -108,6 +109,24 @@ void main() {
     // The app stays open when the engine latches mid-shift; the banner must
     // appear without any rebuild (the doc watch IS the state).
     trips.setMockLocationDetected('trip-1', detected: true);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('mock_location_banner')), findsOneWidget);
+  });
+
+  testWidgets('the LOCAL latch alone shows the banner (no doc write yet)',
+      (tester) async {
+    // CHG-0017: the banner must not wait for the callable round trip. The
+    // engine sets the local latch the moment the OS reports a mocked fix.
+    final trips = FakeTripsRepository([tripOf(today, false)]);
+    final container = await pumpBanner(
+      tester,
+      trips,
+      session: sessionFor(today, 'van-01'),
+    );
+    expect(find.byKey(const Key('mock_location_banner')), findsNothing);
+
+    container.read(mockLocationLatchProvider.notifier).set(true);
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('mock_location_banner')), findsOneWidget);

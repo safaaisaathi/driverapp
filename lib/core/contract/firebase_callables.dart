@@ -12,6 +12,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import 'reason_codes.dart';
 import 'shift_gateway.dart';
+import 'tracking_gateway.dart';
 
 /// Maps a callable failure to a contract code. `unavailable` and a dead
 /// network are the client-only `offline`; anything else the server did not
@@ -132,6 +133,30 @@ final class FirebaseShiftGateway implements ShiftGateway {
         'wardId': wardId,
         'flagged': flagged,
       });
+    } on Exception catch (error) {
+      throw ContractException(reasonCodeOfCallableError(error), cause: error);
+    }
+  }
+}
+
+/// `flagMockLocation` (CHG-0017): the durable mock-location latch.
+final class FirebaseTrackingGateway implements TrackingGateway {
+  FirebaseTrackingGateway(this._functions);
+
+  final FirebaseFunctions _functions;
+
+  @override
+  Future<MockLocationFlag> flagMockLocation(String tripId) async {
+    try {
+      final result = await _functions
+          .httpsCallable('flagMockLocation')
+          .call<Map<String, dynamic>>(<String, Object?>{'tripId': tripId});
+      final data = result.data;
+      final flaggedAt = data['flaggedAt'];
+      return MockLocationFlag(
+        flagged: data['flagged'] is bool ? data['flagged'] as bool : false,
+        flaggedAt: flaggedAt is String ? DateTime.tryParse(flaggedAt) : null,
+      );
     } on Exception catch (error) {
       throw ContractException(reasonCodeOfCallableError(error), cause: error);
     }
